@@ -1,0 +1,77 @@
+## Context
+
+<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。引用 GA IDs。 -->
+
+## Goals / Non-Goals
+
+<!-- Goals 和 Non-Goals 均必须追溯到 Global Atoms。 -->
+
+## Production Source Map
+
+<!-- 将此 change 映射到 Global Atom IDs、source files、line ranges 与 exact original sources。不要用整篇文档代替精准 line ranges。 -->
+
+| Global Atom ID | Source Document / Lines | Design Consumption | Implementation Boundary |
+| --- | --- | --- | --- |
+| `GA-0001` | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
+
+## Decisions
+
+<!-- 记录 source-backed implementation decisions。若 source 只定义行为未定义技术形态，说明 source gap、选择的最小 source-compatible 形态、对应 GA IDs，以及为避免扩大 scope 而拒绝的更大替代方案。 -->
+
+## Architecture / Module Boundary Design
+
+<!-- packages/apps/modules ownership、import direction、exported entry points、forbidden imports、cross-package contracts。 -->
+
+## Domain / Data / Migration Design
+
+<!-- tables/entities/DTOs/commands/migrations/transactions/idempotency/locks/repository contracts/data invariants。 -->
+
+## API / Auth / Security Design
+
+<!-- route handlers、request/response DTO、validation、session/cookie、actor resolver、authorization、return target、redaction、安全失败体。 -->
+
+## Async / Realtime / AI / Worker Design
+
+<!-- jobs、queues、SSE/outbox、provider/sandbox、payloads、retry/recovery、reconciler、locking、deferred boundaries。 -->
+
+## Frontend / UX / Prototype Fidelity Design
+
+<!-- routes、page surfaces、components、objects、state model、events、disabled/failure/retry、responsive、a11y、local-vs-server state。 -->
+
+## Observability / Ops / Deployment Design
+
+<!-- log/event names or categories、allowed/forbidden fields、config/env、migration ordering、smoke、rollback、runbook。 -->
+
+## Verification Design
+
+<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / static guard / smoke。 -->
+
+## Rollout / Compatibility
+
+<!-- migration ordering、backfill、compatibility、staging/production rollout、rollback constraints。 -->
+
+## Production Alignment Gate
+
+- Global Atom IDs implemented / preserved / deferred: <!-- GA-0001 implemented, GA-0002 preserved, GA-0003 deferred；逐个枚举 exact IDs，不使用 ranges -->
+- Spec scenarios covered by design: <!-- requirement/scenario names -->
+- Orphan direct atoms: <!-- none / exact GA blockers -->
+- Source-backed implementation decisions minimal: <!-- 是 / blocker；列出关键 decision 与 rejected expansion -->
+- Source-defined identifiers used: <!-- workflows/routes/states/data keys/tables/commands/APIs/jobs/events/object keys/entitlements/environments/lifecycle terms -->
+- Source trace complete: <!-- 是 / blocker -->
+- New identifiers introduced: <!-- 无，或列出并说明 source-backed implementation decision -->
+- Interaction trace complete: <!-- 是 / blocker -->
+- Data mutation ownership complete: <!-- 是 / 不适用 / blocker -->
+- Auth/security/privacy complete: <!-- 是 / 不适用 / blocker -->
+- Async/realtime/worker complete: <!-- 是 / 不适用 / blocker -->
+- UI/prototype/responsive complete: <!-- 是 / 不适用 / blocker -->
+- Observability/ops/deployment complete: <!-- 是 / 不适用 / blocker -->
+- Later-change boundaries preserved: <!-- 是 / blocker -->
+- Implementation inference remaining: <!-- 无 / open question -->
+
+## Risks / Trade-offs
+
+<!-- 记录 source-compatible trade-offs，不得扩大 scope。 -->
+
+## Open Questions
+
+<!-- 没有剩余问题时写“无”。 -->

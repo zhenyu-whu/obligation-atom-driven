@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obligation Atom Driven"
+  short_description: "Sync obligation-atom OpenSpec schema"
+  default_prompt: "Use $obligation-atom-driven to install the production-obligation-atom-driven OpenSpec schema and agent runtime constraints for this repository."
