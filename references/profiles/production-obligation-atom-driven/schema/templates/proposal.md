@@ -26,11 +26,11 @@
 
 ## Change Atom Coverage Register
 
-<!-- 每个 final change packet 的 direct atom 一行。Global Atom ID 必须来自 `obligation-atom-index.md`，每行只能一个 GA ID，不重新编号，不使用 ranges。Downstream Coverage 先写 proposal/spec/design/tasks/proof expected coverage；后续 artifacts 必须引用这些 exact GA IDs。Direct atom 不得留下 orphan downstream coverage。 -->
+<!-- 每个 final change packet 的 direct atom 一行。Global Atom ID 必须来自 `obligation-atom-index.md`，每行只能一个 GA ID，不重新编号，不使用 ranges。Artifact Projection 使用 spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only；Projection Source 写 final-packet、global-index 或 inferred-from-legacy-packet。Downstream Coverage 必须匹配 projection；后续 artifacts 必须引用这些 exact GA IDs。Direct atom 不得留下 orphan downstream coverage。 -->
 
-| Global Atom ID | Source Document | Lines | Atom Type | Normativity | Coverage Status | Packet Capability | Source Fact | Propose Use | Evidence Need | Downstream Coverage |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `GA-0001` | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- atom type --> | <!-- must / should / must-not / context --> | <!-- direct / explicit-non-goal / contextual-preserve / ... --> | <!-- planned capability --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- canonical propose use --> | <!-- browser-e2e / integration / contract / ... --> | <!-- proposal/spec/design/tasks coverage expectation --> |
+| Global Atom ID | Source Document | Lines | Atom Type | Artifact Projection | Projection Source | Normativity | Coverage Status | Packet Capability | Source Fact | Propose Use | Evidence Need | Downstream Coverage |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `GA-0001` | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- atom type --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- final-packet / global-index / inferred-from-legacy-packet --> | <!-- must / should / must-not / context --> | <!-- direct / explicit-non-goal / contextual-preserve / ... --> | <!-- planned capability --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- canonical propose use --> | <!-- browser-e2e / integration / contract / ... --> | <!-- proposal/spec/design/tasks coverage expectation，必须匹配 projection --> |
 
 ## Production Source Coverage
 
@@ -65,6 +65,7 @@
 - Final change packet consumed: <!-- path -->
 - Capability atom view files consumed: <!-- paths / 未额外读取，按 final packet 分组 -->
 - Direct atoms covered by proposal: <!-- GA-0001, GA-0002, ...；逐个枚举，不使用 ranges -->
+- Artifact projection coverage: <!-- 每个 direct GA 的 projection 已记录；design/verification atoms 未被强制列为 spec requirement -->
 - Contextual / preserve / non-goal atoms captured: <!-- GA-...；逐个枚举或说明无 -->
 - Source windows re-read for direct atoms: <!-- GA-0001 -> path Lx-Ly, GA-0002 -> path Lx-Ly；无遗漏或列 blocker -->
 - Orphan direct atoms: <!-- none / 具体 GA blocker -->

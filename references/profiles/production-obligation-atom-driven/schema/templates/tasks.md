@@ -8,21 +8,21 @@
 
 ### Obligation Atom Coverage
 
-| Global Atom ID | Atom Summary | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
-| --- | --- | --- | --- | --- | --- |
-| <!-- GA-0001；每行只能有一个 ID，不使用 GA-0001-GA-0010 这类 ranges，也不把多个 GA 放一格。 --> | <!-- 概述 source-backed obligation / preserve / forbidden-drift boundary。 --> | <!-- AC-001 --> | <!-- AC-001.1, AC-001.2；必须是实际 checkbox ID --> | <!-- AC-001.3；必须是实际 checkbox ID --> | <!-- user interaction、API test、data assertion、worker/realtime path、security check、rendered layout check 等。 --> |
+| Global Atom ID | Artifact Projection | Atom Summary | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
+| --- | --- | --- | --- | --- | --- | --- |
+| <!-- GA-0001；每行只能有一个 ID，不使用 GA-0001-GA-0010 这类 ranges，也不把多个 GA 放一格。 --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- 概述 source-backed obligation / preserve / forbidden-drift boundary。 --> | <!-- AC-001 --> | <!-- AC-001.1, AC-001.2；必须是实际 checkbox ID --> | <!-- AC-001.3；必须是实际 checkbox ID --> | <!-- user interaction、API test、data assertion、worker/realtime path、security check、rendered layout check 等。 --> |
 
 ### Requirement / Scenario Coverage
 
-| Capability | Requirement | Scenario | Global Atom IDs | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- GA-0001, GA-0002；逐个枚举 exact IDs，不使用 ranges --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.3 --> | <!-- scenario-level observable proof。 --> |
+| Capability | Requirement | Scenario | Global Atom IDs | Artifact Projection Handling | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- GA-0001, GA-0002；逐个枚举 exact IDs，不使用 ranges --> | <!-- spec-requirement scenario；或说明 spec-guard/design/verification atom 不伪造 scenario --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.3 --> | <!-- scenario-level observable proof。 --> |
 
 ### Design Obligation Coverage
 
-| Design Section | Design Obligation | Global Atom IDs | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
-| --- | --- | --- | --- | --- | --- | --- |
-| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification obligation。 --> | <!-- GA-0001, GA-0002, 或 Not applicable；逐个枚举 exact IDs，不使用 ranges --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.3 --> | <!-- design-obligation proof。 --> |
+| Design Section | Design Obligation | Global Atom IDs | Artifact Projection Handling | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification obligation。 --> | <!-- GA-0001, GA-0002, 或 Not applicable；逐个枚举 exact IDs，不使用 ranges --> | <!-- design-obligation / verification-obligation / spec-guard handling --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.3 --> | <!-- design-obligation proof。 --> |
 
 <!-- 每个 checkbox task block（checkbox + Source Atoms/Spec/Design/Acceptance/Source/Preserve/Proof/Mock Policy trace fields）与下一个 checkbox task block 之间必须保留一个空行；不要在同一 task block 的 trace fields 之间插入空行。 -->
 
@@ -33,6 +33,9 @@ Acceptance:
 
 Source Atoms:
 - <!-- GA-0001, GA-0002；逐个枚举 exact IDs，不使用 ranges。 -->
+
+Projection:
+- <!-- linked GA IDs 的 artifact projection；例如 GA-0001: spec-requirement。 -->
 
 Spec:
 - <!-- Capability / Requirement / Scenario names。 -->
@@ -54,6 +57,7 @@ Mock Policy:
 
 - [ ] AC-001.1 <!-- 用中文描述此 acceptance slice 下的具体实现或验证任务。 -->
   Source Atoms: <!-- exact GA IDs，逐个枚举，不使用 ranges。 -->
+  Projection: <!-- linked GA IDs 的 artifact projection；如有多个，逐个列出。 -->
   Spec: <!-- Requirement / scenario names。 -->
   Design: <!-- Design section / decision / obligation。 -->
   Acceptance: <!-- 此任务贡献哪个可验收行为。 -->

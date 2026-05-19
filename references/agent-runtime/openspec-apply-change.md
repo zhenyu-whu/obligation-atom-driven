@@ -9,10 +9,10 @@
 1. 严格先执行 `openspec-apply-change` 技能原有流程：选择 change、读取 `openspec status --change "<name>" --json`、读取 `openspec instructions apply --change "<name>" --json`，并从 apply instructions 中获取 `contextFiles`、进度、任务列表和动态指令。
 2. 对 `production-obligation-atom-driven` schema，apply instructions 必须只要求 `tasks` 作为 apply requirement，并且 context files 应包含 `proposal.md`、delta specs、`design.md`、`tasks.md`。
 3. 若新 change 的 apply instructions 仍要求 `source-truth`、`acceptance`、旧版 source coverage、`change-source-map` 或任何 proposal 前置 source artifact，必须暂停并修正 schema/config/artifacts，而不是按旧流程实现。
-4. 主 agent 先读取 `tasks.md`，解析 `Acceptance-Driven Coverage`、所有 `AC-###` section、每个未完成 checkbox 的 `Source Atoms` / `Spec` / `Design` / `Acceptance` / `Source` / `Preserve` / `Proof` / `Mock Policy` trace 字段。
-5. 主 agent 同时读取 proposal 的 `Change Atom Coverage Register`、相关 specs 和 design。不要批量展开所有原始 source docs；只有任务 trace、coverage gate、冲突协调或 proof 失败定位需要时，才通过 `GA-####` 注册的 source document + line range 定点读取。
+4. 主 agent 先读取 `tasks.md`，解析 `Acceptance-Driven Coverage`、所有 `AC-###` section、每个未完成 checkbox 的 `Source Atoms` / `Projection` / `Spec` / `Design` / `Acceptance` / `Source` / `Preserve` / `Proof` / `Mock Policy` trace 字段。
+5. 主 agent 同时读取 proposal 的 `Change Atom Coverage Register`、artifact projection map、相关 specs 和 design。不要批量展开所有原始 source docs；只有任务 trace、coverage gate、冲突协调或 proof 失败定位需要时，才通过 `GA-####` 注册的 source document + line range 定点读取。
 6. 主 agent 在分派 worker 或开始实现前，必须构建 apply preflight index：
-   - proposal register rows、direct atoms、guard/boundary atoms、source line ranges。
+   - proposal register rows、direct atoms、guard/boundary atoms、artifact projection、source line ranges。
    - spec requirements/scenarios 及其 `GA-####` 引用。
    - design obligations 及其 `GA-####` 引用。
    - AC sections、checkbox task IDs、trace fields、coverage table rows、proof/evidence requirements。
@@ -22,9 +22,9 @@
 
 ## Implementation + Acceptance Gates
 
-1. **Gate 1 / Artifact 完整性**：`tasks.md` 必须包含 `## Acceptance-Driven Coverage` 和三张 coverage 表；每个 AC section 必须包含 `Acceptance`、`Source Atoms`、`Spec`、`Design`、`Primary Proof`、`Required Evidence`、`Mock Policy`；每个未完成 task 必须有完整 trace 字段。
+1. **Gate 1 / Artifact 完整性**：`tasks.md` 必须包含 `## Acceptance-Driven Coverage` 和三张 coverage 表；每个 AC section 必须包含 `Acceptance`、`Source Atoms`、`Projection`、`Spec`、`Design`、`Primary Proof`、`Required Evidence`、`Mock Policy`；每个未完成 task 必须有包含 `Projection` 的完整 trace 字段。
 2. **Gate 2 / 语言门禁检查**：checkbox task description、Acceptance、Preserve、Proof、Mock Policy 等 agent 填写的解释性内容必须是中文；固定字段名、ID、路径、命令和精确 requirement/scenario 名称可保持英文。
-3. **Gate 3 / Obligation Atom 覆盖检查**：每个 direct `GA-####` 必须在 `Obligation Atom Coverage` 中有一行，并映射到 acceptance slice、implementation task、verification task 和 acceptance proof。Direct atom 指 proposal register 中来自 final change packet `Direct Owning Atoms` 的 atom。禁止 GA ranges；`Obligation Atom Coverage` 每行只能一个 `GA-####`，禁止 aggregate row 或多 ID 单元格。
+3. **Gate 3 / Obligation Atom 覆盖检查**：每个 direct `GA-####` 必须在 `Obligation Atom Coverage` 中有一行，并带有与 proposal register 一致的 `Artifact Projection`，映射到 acceptance slice、implementation task、verification task、guard/design handoff 或 acceptance proof。Direct atom 指 proposal register 中来自 final change packet `Direct Owning Atoms` 的 atom。禁止 GA ranges；`Obligation Atom Coverage` 每行只能一个 `GA-####`，禁止 aggregate row 或多 ID 单元格；不得为纯 `design-obligation` 或 `verification-obligation` atom 伪造 spec scenario。
 4. **Gate 4 / Coverage task ID 解析检查**：三张 coverage 表中的每个 `Implementation Task IDs` 和 `Verification Task IDs` 必须解析到实际 checkbox task。每个 AC section 必须至少有一个 final verification / acceptance checkbox，并被 `Primary Proof`、`Required Evidence` 和相关 coverage rows 引用。
 5. **Gate 5 / Design obligation 提取检查**：worker 在实现某个 task 前，必须从 task trace 指向的 design/source 片段中提取可执行设计义务 checklist。若 design 义务比 task 摘要或 proof 更强，必须停止并报告 artifact mismatch。
 6. **Gate 6 / 任务级 TDD 与 proof 检查**：worker 应优先按任务 `Proof:` 建立或补齐对应验证。实现完成前 proof 应能失败或暴露缺口；实现后必须通过。无法让 proof 与 task trace 对应时不得勾选。
@@ -66,10 +66,10 @@
 2. 主 agent 在 worker 开发期间不得替代某个已分派 AC section 完成实现，除非 worker 返回明确 blocker 且用户同意主 agent 接手。
 3. 主 agent 应避免批量读取 docs；需要核对时只做与冲突协调、结果审查、任务勾选或 proof 失败定位直接相关的定点读取。
 4. 统一 audit 至少确认：
-   - 相关代码改动符合 AC section、task trace、Global Atom IDs、spec/design 和原始 source docs。
+   - 相关代码改动符合 AC section、task trace、Global Atom IDs、artifact projection、spec/design 和原始 source docs。
    - 每个已勾选 task 都有实现证据和 proof 证据。
    - 每个 AC section 的 primary proof 和 required evidence 已满足。
-   - 三张 coverage 表的每一行都有已勾选任务、真实存在的 verification task ID、验证证据和验收 proof。
+   - 三张 coverage 表的每一行都有已勾选任务、真实存在的 verification task ID、验证证据、artifact projection handling 和验收 proof。
    - 涉及 runtime wiring 的默认导出/default dependency/default config 已被验证。
    - evidence ledger 覆盖每个 AC 的 required evidence，不存在只用 broad test command 代替 source-equivalent proof 的 AC。
    - 未引入明显跨 AC 冲突。
@@ -78,7 +78,7 @@
 ## 状态更新
 
 1. task checkbox 由负责对应 AC section 的 worker 执行。
-2. worker 只能勾选自己 section 内已经完成且满足 `Proof`、linked spec scenario、linked design obligation、default runtime path verification、`Preserve` 和 `Mock Policy` 约束的任务。
+2. worker 只能勾选自己 section 内已经完成且满足 `Projection`、`Proof`、linked spec scenario、linked design obligation、default runtime path verification、`Preserve` 和 `Mock Policy` 约束的任务。
 3. 主 agent 在统一 audit 中核对 worker 已勾选任务是否可信；若发现误勾选、proof 不足或 coverage 行未覆盖，必须指出并纠偏。
 4. 不需要更新独立 acceptance status；AC 的通过状态由该 section 下所有任务完成、required evidence 产出、coverage audit 通过共同表示。
 
