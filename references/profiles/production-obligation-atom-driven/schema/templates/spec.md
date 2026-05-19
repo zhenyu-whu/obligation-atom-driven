@@ -17,7 +17,7 @@ Source Trace:
 
 ## Artifact Projection Notes
 
-<!-- 对没有进入 requirement/scenario 的 relevant direct atoms 做投射说明，尤其是 design-obligation、verification-obligation、spec-guard 或 contextual-only。没有时写“无”。 -->
+<!-- 对没有进入 requirement/scenario 的 relevant atoms 做投射说明，尤其是 design-obligation、verification-obligation、spec-guard，或非 direct contextual-only。这里是 specs 内的 handoff 记录；design-obligation 必须在 design artifact 中实际消费，verification-obligation 必须在 tasks/proof 中实际消费。没有时写“无”。 -->
 
 | Global Atom ID | Artifact Projection | Spec Handling | Design / Tasks Handoff |
 | --- | --- | --- | --- |

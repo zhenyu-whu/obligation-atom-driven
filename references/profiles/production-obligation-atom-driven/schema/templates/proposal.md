@@ -26,11 +26,11 @@
 
 ## Change Atom Coverage Register
 
-<!-- 每个 final change packet 的 direct atom 一行。Global Atom ID 必须来自 `obligation-atom-index.md`，每行只能一个 GA ID，不重新编号，不使用 ranges。Artifact Projection 使用 spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only；Projection Source 写 final-packet、global-index 或 inferred-from-legacy-packet。Downstream Coverage 必须匹配 projection；后续 artifacts 必须引用这些 exact GA IDs。Direct atom 不得留下 orphan downstream coverage。 -->
+<!-- 每个 final change packet 的 direct atom 一行。Global Atom ID 必须来自 `obligation-atom-index.md`，每行只能一个 GA ID，不重新编号，不使用 ranges。Direct row 的 Artifact Projection 只能使用 spec-requirement / spec-guard / design-obligation / verification-obligation；contextual-only 只用于非 direct context/boundary row，不能出现在 Direct Owning Atoms。Projection Source 写 final-packet、global-index 或 inferred-from-legacy-packet。Downstream Coverage 必须匹配 projection；后续 artifacts 必须引用这些 exact GA IDs。Direct atom 不得留下 orphan downstream coverage。 -->
 
 | Global Atom ID | Source Document | Lines | Atom Type | Artifact Projection | Projection Source | Normativity | Coverage Status | Packet Capability | Source Fact | Propose Use | Evidence Need | Downstream Coverage |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `GA-0001` | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- atom type --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- final-packet / global-index / inferred-from-legacy-packet --> | <!-- must / should / must-not / context --> | <!-- direct / explicit-non-goal / contextual-preserve / ... --> | <!-- planned capability --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- canonical propose use --> | <!-- browser-e2e / integration / contract / ... --> | <!-- proposal/spec/design/tasks coverage expectation，必须匹配 projection --> |
+| `GA-0001` | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- atom type --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation --> | <!-- final-packet / global-index / inferred-from-legacy-packet --> | <!-- must / should / must-not / context --> | <!-- direct / explicit-non-goal / contextual-preserve / ... --> | <!-- planned capability --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- canonical propose use --> | <!-- browser-e2e / integration / contract / ... --> | <!-- proposal/spec/design/tasks coverage expectation，必须匹配 projection --> |
 
 ## Production Source Coverage
 

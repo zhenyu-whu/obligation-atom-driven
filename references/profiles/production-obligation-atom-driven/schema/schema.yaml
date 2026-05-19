@@ -43,9 +43,9 @@ artifacts:
       - 每个 packet direct atom 在 proposal register 中必须正好有一行。
       - 保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use`、`Evidence Need`。
       - `direct` atoms 是 implementation candidates。`contextual`、`contextual-preserve`、`explicit-non-goal`、`prototype-only-not-production`、`non-production`、`blocked` 等 rows 是边界、guardrail 或 verification context；除非 packet/global index 明确要求，不得把它们转成新增实现 scope。
-      - `Artifact Projection` 允许值为 `spec-requirement`、`spec-guard`、`design-obligation`、`verification-obligation`、`contextual-only`。`blocked` 只可用于无法安全消费的 row。
+      - `Artifact Projection` 允许值为 `spec-requirement`、`spec-guard`、`design-obligation`、`verification-obligation`、`contextual-only`。Proposal direct register rows 不得使用 `contextual-only`；`contextual-only` 只可用于非 direct context/boundary rows。`blocked` 只可用于无法安全消费的 row。
       - 若旧版 final packet/global index 缺少 artifact projection，proposal 必须保守推断并在 register 的 `Projection Source` 写 `inferred-from-legacy-packet`：用户/系统行为、API/data/auth/security contract -> `spec-requirement`；preserve-boundary、explicit non-goal、must-not scope -> `spec-guard`；architecture/runtime/package/schema/provider/deployment shape -> `design-obligation`；test/fixture/visual/smoke/evidence -> `verification-obligation`；非 direct context -> `contextual-only`。无法安全推断时记录 blocker。
-      - 每个 direct atom 必须有非空 downstream coverage expectation，且 downstream coverage 必须匹配 artifact projection：`spec-requirement` 进入 specs requirement/scenario；`spec-guard` 进入 specs guard/gate 或 non-goal；`design-obligation` 进入 design；`verification-obligation` 进入 tasks/proof；`contextual-only` 只作为 context/guard。若 direct atom 无法映射到 capability、requirement、design obligation 或 acceptance slice，记录 blocker，不得留下 orphan `GA-####`。
+      - 每个 direct atom 必须有非空 downstream coverage expectation，且 downstream coverage 必须匹配 artifact projection：`spec-requirement` 进入 specs requirement/scenario；`spec-guard` 进入 specs guard/gate 或 non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 tasks/proof；非 direct `contextual-only` 只作为 context/guard。若 final packet 的 direct row 使用 `contextual-only`，必须改入 context/non-direct handling 或记录 blocker；不得留下 orphan `GA-####`。
       - Proposal 不得因为 atom 是 direct 就自动要求 specs 生成 requirement/scenario。
 
       Proposal-specific constraints：
@@ -88,12 +88,12 @@ artifacts:
       Obligation Atom closure：
       - Specs 必须把 capability 相关且 `Artifact Projection: spec-requirement` 的每个 direct obligation atom 转成规范性 requirements 和 scenarios，或在 proposal register 支持时明确捕获为 preserve/deferred/non-goal guard。
       - `Artifact Projection: spec-guard` 的 atom 应作为 guard、must-not、non-goal 或 Production Alignment Gate 约束表示，不得膨胀成新的正向行为。
-      - `Artifact Projection: design-obligation` 的 atom 不得强行写成用户/系统行为 scenario；spec file 应在 `## Artifact Projection Notes` 中点名 exact `GA-####` 并交给 design 消费。
-      - `Artifact Projection: verification-obligation` 的 atom 应记录 proof expectation 或在 `## Artifact Projection Notes` 中交给 tasks/proof；除非它也定义 normative behavior，不得伪造成 requirement。
-      - `Artifact Projection: contextual-only` 不成为新增 requirement；只在 gate、notes 或 non-goal 中保留必要边界。
+      - `Artifact Projection: design-obligation` 的 atom 不得强行写成用户/系统行为 scenario；spec file 应在 `## Artifact Projection Notes` 中点名 exact `GA-####` 并声明 design artifact 的强制消费位置。后续 `design.md` 必须实际落到 design obligation、implementation boundary 或 blocker。
+      - `Artifact Projection: verification-obligation` 的 atom 应记录 proof expectation 或在 `## Artifact Projection Notes` 中声明 tasks/proof 的强制消费位置；除非它也定义 normative behavior，不得伪造成 requirement。后续 `tasks.md` 必须实际落到 verification/acceptance proof 或 blocker。
+      - `Artifact Projection: contextual-only` 不成为新增 requirement；它只允许用于非 direct context/boundary rows，并只在 gate、notes 或 non-goal 中保留必要边界。
       - 每个 requirement 必须在 `Source Atoms:` 下引用 exact `GA-####`。
       - Global Atom references 必须枚举 exact IDs，例如 `GA-0001, GA-0002, GA-0003`。禁止 `GA-0001-GA-0010`、`GA-0001..GA-0010`、`GA-0001 through GA-0010` 等 ranges。
-      - Requirements 和 scenarios 必须保留 `spec-requirement` obligation atoms 中 implementation-relevant edge cases、failure states、disabled states、data/API contracts、auth/security rules 和 operational constraints；verification/design atoms 通过 notes/gate handoff 保留，不强制写入 scenario。
+      - Requirements 和 scenarios 必须保留 `spec-requirement` obligation atoms 中 implementation-relevant edge cases、failure states、disabled states、data/API contracts、auth/security rules 和 operational constraints；verification/design atoms 在 specs 中通过 notes/gate handoff 保留，不强制写入 scenario，但后续 design/tasks artifacts 必须按 projection 实际消费。
       - Specs 后不得留下 orphan direct atom。若 direct atom 不产生 requirement/scenario，spec 必须点名 exact `GA-####`，解释 source-backed boundary status、artifact projection、design/tasks handoff，并且只有 proposal register 支持时才标为 preserve/deferred/non-goal。
 
       每个 proposal capability 创建一个 spec file：
@@ -258,7 +258,7 @@ artifacts:
       Final check：
       - 确认 AC names 和 checkbox task descriptions 在非 source-native identifier 时为中文。
       - 确认每个 direct atom 的 `Artifact Projection` 在 proposal、specs、design、tasks trace blocks 与 coverage tables 中一致或有明确 handoff 理由。
-      - 确认每个 direct atom 至少有一个 implementation task 和一个 verification/acceptance proof，除非该 atom 被 proposal 明确分类为 deferred/non-goal/reference-only/guard。
+      - 确认每个 direct atom 按 `Artifact Projection` 获得对应执行覆盖：`spec-requirement` 需要 implementation task 和 verification/acceptance proof；`design-obligation` 需要 design placement、必要 implementation task 和 proof；`verification-obligation` 需要 explicit verification/acceptance proof，可不伪造实现任务；`spec-guard` 需要 guard/preserve/静态或负向 proof。除非该 atom 被 proposal 明确分类为 deferred/non-goal/reference-only/guard，否则不得缺少 projection 对应的覆盖。
       - 确认每个 in-scope requirement scenario 映射到 AC section。
       - 确认每个 material design obligation 映射到 AC section。
       - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。

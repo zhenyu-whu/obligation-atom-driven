@@ -80,7 +80,7 @@
 2. proposal 必须保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use` 和 `Evidence Need`。
 3. proposal 必须将 `direct`、`contextual`、`contextual-preserve`、`explicit-non-goal`、`prototype-only-not-production`、`non-production`、`blocked` 等 atom 状态分别处理，不能把上下文、排除项或 prototype-only atom 误转成实现 scope。
 4. proposal 的 `Capabilities` 必须匹配 final change packet 中的 capability atom views；除非 packet 明确记录非阻塞 gap 或 blocker。
-5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 进入 design；`verification-obligation` 进入 tasks/proof；`contextual-only` 只作为 context/guard。不能留下 orphan direct atom。
+5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 tasks/proof；`contextual-only` 只允许作为非 direct context/guard。final packet 的 direct row 不得使用 `contextual-only`；若出现，必须改入 context/non-direct handling 或记录 blocker。不能留下 orphan direct atom。
 6. proposal 不得因为 atom 是 direct 就自动要求 specs 生成 requirement/scenario。旧 packet 缺少 projection 时，必须按 schema 的 legacy inference 保守推断并记录 `Projection Source: inferred-from-legacy-packet`；无法推断则 blocker。
 7. proposal alignment gate 必须声明 proposal input mode、change slug、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
 
@@ -89,7 +89,7 @@
 1. specs 必须从 proposal register 和 per-change capability atom view file 生成；每个 requirement/scenario 必须列出 exact `GA-####` 和 concrete `Source Trace`。
 2. specs 不得使用 `GA-0001-GA-0010`、`GA-0001..GA-0010`、`GA-0001 through GA-0010` 等范围。
 3. specs 的 Requirement / Scenario 名称若非源文档固定术语，优先使用中文。
-4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 必须在 `Artifact Projection Notes` 或 gate 中点名 handoff，不得伪造成 scenario。
+4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 必须在 specs 的 `Artifact Projection Notes` 或 gate 中点名 handoff，不得伪造成 scenario；后续 design/tasks artifacts 必须按 projection 实际消费这些 GA，不能只停留在 specs notes。
 5. 每个 spec 的 Production Alignment Gate 必须列出 `Artifact Projection coverage` 和 `Orphan direct atoms: none`，或列出 blocker。
 6. design 必须把 proposal/spec 中需要设计消费的 `GA-####` 落到可执行实现义务，包括 module、data/API、auth/security、worker/realtime、frontend/UX、ops/deployment 和 verification。
 7. design 生成前必须建立 design atom matrix。每个 `design-obligation` direct `GA-####`、需要 design placement 的 `spec-requirement`、`spec-guard` 和每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker。
@@ -119,7 +119,7 @@
 
 1. 全部 artifacts：按“Artifact 中文约束”做语言自查；忽略反引号中的标识后，不得存在英文主导的解释性句子；checkbox task description 必须中文。
 2. `proposal.md`：packet direct atom 数量 = proposal register row 数量；每行有 `Artifact Projection` 和 `Projection Source`；direct atoms 均已出现在 `Source Window Read Set`；无 orphan direct `GA-####`；无 GA ranges。
-3. specs：proposal direct `GA-####` 均按 artifact projection 映射到 requirement/scenario、guard、`Artifact Projection Notes` 或 gate handoff；每个 scenario 有 exact `Source Atoms` 和 concrete `Source Trace`；无 orphan direct `GA-####`；无 GA ranges。
+3. specs：proposal direct `GA-####` 均按 artifact projection 映射到 requirement/scenario、guard、`Artifact Projection Notes` 或 gate handoff；handoff 只表示 specs 不伪造 scenario，不能替代后续 design/tasks 的实际消费；每个 scenario 有 exact `Source Atoms` 和 concrete `Source Trace`；无 orphan direct `GA-####`；无 GA ranges。
 4. `design.md`：每个 in-scope scenario、`design-obligation` atom 和需要 design placement 的 direct `GA-####` 有 design obligation 或 guard handling；source-backed implementation decisions 记录 source gap、最小技术形态和 rejected expansion；无需要 implementer 猜测的行为。
 5. `tasks.md`：三张 coverage 表完整且 projection-aware；`Obligation Atom Coverage` 单行单 GA；所有 task ID 引用都能解析到 checkbox；每个 AC 有 final verification checkbox；每个 AC 有 evidence ledger expectation；无 GA ranges、无 aggregate row、无 orphan direct atom、无 projection mismatch。
 
