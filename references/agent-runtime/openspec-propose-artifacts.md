@@ -22,29 +22,41 @@
 
 当用户触发 `openspec-propose` 但没有提供明确 change 名、也没有提供足够明确的 change 描述时，不得立即询问用户“要做什么 change”。必须先根据已完成/已存在 change 和 `openspec/orchestrate/change-capability-anchors/index.md` 自动推断下一个应处理的 final planned change。
 
+自动推断的第一门禁是 active/archive 状态盘点。不得只看 final packet index 的第一行，也不得只依赖 `openspec list --json` 的 active 列表；必须同时检查 `openspec/changes/` 下的 active change 目录和 `openspec/changes/archive/` 下的归档目录后，才能决定下一个目标。
+
 推断流程：
 
-1. 读取 `openspec/orchestrate/change-capability-anchors/index.md`，按 final packet index 的 `Order` 提取 final changes。推断出的 change 名必须使用 index 中的 exact slug，不得自行改名。
-2. 读取候选 change 的 final packet：`openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`，确认 packet 存在且没有 blocker。
-3. 读取 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.md`，确认候选 packet 中的 direct atoms 均能回链到全局 atom 注册表，并能取得或保守推断 artifact projection；最终 direct scope 和 artifact projection 以 final packet 为准。
-4. 只有需要核对 dependencies 或 final packet index 信息不足时，才读取 `openspec/orchestrate/change-plan.md`；它不得覆盖 final packet。
-5. 运行 `openspec list --json`，并检查 `openspec/changes/` 与 `openspec/changes/archive/` 中现有 change 目录。历史归档目录可能带日期前缀；推断时应读取 `.openspec.yaml` 或结合目录名去除日期前缀后匹配 planned change slug。
-6. 将 planned changes 分类：
-   - `completed`: 已归档，或有明确证据显示该 planned change 已完成并不再需要 propose。
-   - `active-incomplete`: `openspec/changes/<change-slug>/` 存在但 apply-ready artifacts 尚未完成，或 tasks/implementation 尚未完成。
-   - `active-apply-ready`: `openspec/changes/<change-slug>/` 存在且 proposal/specs/design/tasks 已生成，但仍未归档。
-   - `not-started`: 未归档且没有 active change 目录。
-7. 如果 final packet index 顺序中最早的未完成 planned change 是 `active-incomplete`，继续该 change 的 artifact 生成，不创建重复目录。
-8. 如果最早的未完成 planned change 是 `active-apply-ready`，不得自动跳到后续 change；报告该 change 已 propose 完成、下一步应 apply 或 archive。只有用户明确要求并行规划后续 change 时，才允许继续推断下一个 `not-started` change。
-9. 如果最早的未完成 planned change 是 `not-started`，自动选择它作为本次 propose 目标，并继续执行 `openspec new change "<change-slug>"`。
-10. 如果无法可靠判断 completed / active 状态，或多个候选同等合理，才向用户提出一个简短澄清问题，并列出候选 change slug 与阻塞原因。
+1. 读取 `openspec/orchestrate/change-capability-anchors/index.md`，按 final packet index 的表格顺序提取 final changes；如果 index 显式提供 `Order` 列，则按 `Order` 排序。推断出的 change 名必须使用 index 中的 exact slug，不得自行改名。
+2. 在读取候选 packet 或执行 `openspec new change` 前，先建立完整状态盘点：
+   - 运行 `openspec list --json`，记录 CLI 返回的 active changes。
+   - 扫描 active change 目录：`find openspec/changes -mindepth 1 -maxdepth 1 -type d ! -name archive -print`。
+   - 扫描 archive change 目录：`find openspec/changes/archive -mindepth 1 -maxdepth 2 -name .openspec.yaml -print`；不得使用会漏掉 `openspec/changes/archive/<archive-dir>/.openspec.yaml` 的过浅搜索。
+   - 对每个 archive 目录，优先读取 `.openspec.yaml` 中的 change name；如果文件不含名称，则用目录名去除日期前缀 `YYYY-MM-DD-` 后匹配 final packet index 的 exact slug。历史归档目录可能带日期前缀，不能因此视为未完成。
+   - 将 CLI active 列表、active 目录列表和 archive 目录列表合并成一份 per-slug inventory；如果三者不一致，必须以文件系统实际目录为准，并把不一致作为推断说明或 blocker。
+3. 只对 final packet index 中存在的 planned changes 做分类，不得把 archive 或 active 中的非 planned change 自动加入本轮目标：
+   - `completed`: 存在匹配 slug 的 archive 目录；该状态优先于“未在 active 列表中出现”。已归档 change 不得再次 propose。
+   - `active-incomplete`: `openspec/changes/<change-slug>/` 存在，且 `openspec status --change "<change-slug>" --json` 显示 apply-ready artifacts 尚未完成，或 tasks/implementation 尚未完成。
+   - `active-apply-ready`: `openspec/changes/<change-slug>/` 存在，且 apply-required artifacts 已完成，但该 change 尚未归档。
+   - `not-started`: 没有匹配 archive 目录，也没有 active change 目录。
+   - `state-conflict`: 同一个 planned change 同时存在匹配 archive 目录和 active 目录，或 CLI active 列表、active 目录、archive 目录给出相互矛盾的状态。
+4. 如果任一 planned change 被分类为 `state-conflict`，不得继续创建或选择后续 change。必须报告冲突路径、推断出的 slug 和建议清理动作；只有用户明确要求清理或继续时，才处理该冲突。
+5. 按 final packet index 顺序寻找最早的未完成 planned change：
+   - 若最早未完成项是 `active-incomplete`，继续该 change 的 artifact 生成，不创建重复目录。
+   - 若最早未完成项是 `active-apply-ready`，不得自动跳到后续 change；报告该 change 已 propose 完成，下一步应 apply 或 archive。只有用户明确要求并行规划后续 change 时，才允许继续推断下一个 `not-started` change。
+   - 若最早未完成项是 `not-started`，自动选择它作为本次 propose 目标，并继续后续 packet/atom 校验；只有在校验通过后才执行 `openspec new change "<change-slug>"`。
+6. 选定目标后，读取该 change 的 final packet：`openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`，确认 packet 存在且没有 blocker。
+7. 读取 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.md`，确认目标 packet 中的 direct atoms 均能回链到全局 atom 注册表，并能取得或保守推断 artifact projection；最终 direct scope 和 artifact projection 以 final packet 为准。
+8. 只有需要核对 dependencies 或 final packet index 信息不足时，才读取 `openspec/orchestrate/change-plan.md`；它不得覆盖 final packet。
+9. 如果无法可靠判断 completed / active / archive 状态，或多个候选同等合理，才向用户提出一个简短澄清问题，并列出候选 change slug、active/archive 路径与阻塞原因。
 
 推断门禁：
 
 - 自动推断只能选择 final packet index 中已存在的 planned change。
+- 自动推断必须先完成 active/archive inventory；未读取 archive 目录时，不得把 final packet index 中靠前的 change 判定为 `not-started`。
 - 自动推断不得跳过尚未完成的 dependency。若候选 change 的 `Dependencies:` 指向的 planned change 未完成或未归档，必须选择依赖链上最早未完成的 change，或报告 blocker。
 - 如果候选 change 缺少 `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`，不得自动 propose，必须报告 final change packet 缺失。
 - 如果候选 packet 中存在 direct atom 但 `obligation-atom-index.md` 查不到对应 `GA-####`，不得自动 propose，必须报告 atom index 与 change packet 不一致。
+- 如果 archive 中已经存在目标 slug，绝不得再次运行 `openspec new change "<change-slug>"`；若 active 目录也存在同名 slug，先按 `state-conflict` 处理。
 
 ## Production Obligation Atom Driven 入口
 
