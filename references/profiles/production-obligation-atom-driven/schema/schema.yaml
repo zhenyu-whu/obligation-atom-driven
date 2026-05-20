@@ -80,25 +80,26 @@ artifacts:
 
       写入前：
       - 先读取 `proposal.md`。把其中的 `Change Atom Coverage Register` 作为本 change 的 mandatory source-reading interface，并读取每行 `Artifact Projection`。
-      - 对 proposal 中列出的每个 capability，读取当前 change 的 capability atom view file：`openspec/orchestrate/change-capability-anchors/<change-slug>/capability-anchors/<capability>.md`。
+      - 对 proposal 中列出的每个 capability，读取当前 change 的 capability atom view file：`openspec/orchestrate/change-capability-anchors/<change-slug>/capability-anchors/<capability>.md`。随后先判定该 capability 是否有 `spec-requirement` 或 `spec-guard` delta；没有 spec-level delta 的 capability 不创建 spec file。
       - 对每个选中 `GA-####`，仅在需要保留 exact behavior、identifiers、failure paths 或 verification expectations 时，按 proposal register 的 `Source Document` + `Lines` 定点重读原始 source window。
-      - 起草前建立 capability-to-atom map 和 artifact-projection map。每个 proposal direct `GA-####` 必须按 projection 映射到 capability 的 requirement/scenario、spec guard、Artifact Projection Notes、或明确记录为 design/tasks handoff。
+      - 起草前建立 capability-to-atom map 和 artifact-projection map。每个 proposal direct `GA-####` 必须按 projection 映射到 requirement/scenario、spec guard、已有 delta spec 的 Artifact Projection Notes、或明确记录为 design/tasks handoff。
       - 如果修改 existing capability，起草 delta spec 前读取 `openspec/specs/<capability>/spec.md`。
 
       Obligation Atom closure：
       - Specs 必须把 capability 相关且 `Artifact Projection: spec-requirement` 的每个 direct obligation atom 转成规范性 requirements 和 scenarios，或在 proposal register 支持时明确捕获为 preserve/deferred/non-goal guard。
       - `Artifact Projection: spec-guard` 的 atom 应作为 guard、must-not、non-goal 或 Production Alignment Gate 约束表示，不得膨胀成新的正向行为。
-      - `Artifact Projection: design-obligation` 的 atom 不得强行写成用户/系统行为 scenario；spec file 应在 `## Artifact Projection Notes` 中点名 exact `GA-####` 并声明 design artifact 的强制消费位置。后续 `design.md` 必须实际落到 design obligation、implementation boundary 或 blocker。
-      - `Artifact Projection: verification-obligation` 的 atom 应记录 proof expectation 或在 `## Artifact Projection Notes` 中声明 tasks/proof 的强制消费位置；除非它也定义 normative behavior，不得伪造成 requirement。后续 `tasks.md` 必须实际落到 verification/acceptance proof 或 blocker。
-      - `Artifact Projection: contextual-only` 不成为新增 requirement；它只允许用于非 direct context/boundary rows，并只在 gate、notes 或 non-goal 中保留必要边界。
+      - `Artifact Projection: design-obligation` 的 atom 不得强行写成用户/系统行为 scenario。若同一 capability 已因 spec-level delta 创建 spec file，可在 `## Artifact Projection Notes` 中点名 exact `GA-####` 并声明 design artifact 的强制消费位置；若该 capability 只有 design-obligation，不得创建空 spec，必须在 `design.md` 和 `tasks.md` coverage 中消费。后续 `design.md` 必须实际落到 design obligation、implementation boundary 或 blocker。
+      - `Artifact Projection: verification-obligation` 的 atom 应记录 proof expectation。若同一 capability 已因 spec-level delta 创建 spec file，可在 `## Artifact Projection Notes` 中声明 tasks/proof 的强制消费位置；若该 capability 只有 verification-obligation，不得创建空 spec，必须在 `tasks.md` proof/coverage 中消费。除非它也定义 normative behavior，不得伪造成 requirement。
+      - `Artifact Projection: contextual-only` 不成为新增 requirement；它只允许用于非 direct context/boundary rows，并只在已有 delta spec 的 gate/notes、proposal non-goal、design 或 tasks 中保留必要边界。
       - 每个 requirement 必须在 `Source Atoms:` 下引用 exact `GA-####`。
       - Global Atom references 必须枚举 exact IDs，例如 `GA-0001, GA-0002, GA-0003`。禁止 `GA-0001-GA-0010`、`GA-0001..GA-0010`、`GA-0001 through GA-0010` 等 ranges。
-      - Requirements 和 scenarios 必须保留 `spec-requirement` obligation atoms 中 implementation-relevant edge cases、failure states、disabled states、data/API contracts、auth/security rules 和 operational constraints；verification/design atoms 在 specs 中通过 notes/gate handoff 保留，不强制写入 scenario，但后续 design/tasks artifacts 必须按 projection 实际消费。
-      - Specs 后不得留下 orphan direct atom。若 direct atom 不产生 requirement/scenario，spec 必须点名 exact `GA-####`，解释 source-backed boundary status、artifact projection、design/tasks handoff，并且只有 proposal register 支持时才标为 preserve/deferred/non-goal。
+      - Requirements 和 scenarios 必须保留 `spec-requirement` obligation atoms 中 implementation-relevant edge cases、failure states、disabled states、data/API contracts、auth/security rules 和 operational constraints；verification/design atoms 不强制写入 scenario，也不得为了 handoff 生成空 spec，但后续 design/tasks artifacts 必须按 projection 实际消费。
+      - Specs 后不得留下 spec-level orphan direct atom。若某 direct atom 不产生 requirement/scenario 且同 capability 已有 delta spec，spec 可点名 exact `GA-####`，解释 source-backed boundary status、artifact projection、design/tasks handoff。若某 capability 没有任何 spec-level delta，则不创建 spec file；该 capability 的 direct atoms 必须在 proposal register、design atom matrix、tasks coverage 中闭环。
 
-      每个 proposal capability 创建一个 spec file：
-      - New capabilities: 使用 exact kebab-case capability name（`specs/<capability>/spec.md`）。
-      - Modified capabilities: 使用 `openspec/specs/<capability>/` 中已有 spec folder name。
+      只为有 OpenSpec delta 的 capability 创建 spec file：
+      - New capabilities: 仅当至少有一个 `spec-requirement` 或 `spec-guard` 需要新增 requirement/guard 时，使用 exact kebab-case capability name（`specs/<capability>/spec.md`）。
+      - Modified capabilities: 仅当 existing requirement 需要 ADDED/MODIFIED/REMOVED/RENAMED delta 时，使用 `openspec/specs/<capability>/` 中已有 spec folder name。
+      - 禁止创建只包含 `## Artifact Projection Notes`、只写“无”、或没有 `### Requirement:` 的 `specs/<capability>/spec.md`；这类文件不是有效 delta spec，归档时会被 OpenSpec CLI 拒绝。
 
       Delta operations：
       - 新行为使用 `## ADDED Requirements`。
@@ -117,10 +118,10 @@ artifacts:
 
       Final alignment gate：
       - 每个 spec file 必须以 `## Production Alignment Gate` 结束。
-      - 若 spec file 覆盖任何非 `spec-requirement` direct atom，必须在 gate 前包含 `## Artifact Projection Notes`，列出 `Global Atom ID`、`Artifact Projection`、`Spec Handling` 和 `Design / Tasks Handoff`。
+      - 若已存在的 spec file 覆盖任何非 `spec-requirement` direct atom，必须在 gate 前包含 `## Artifact Projection Notes`，列出 `Global Atom ID`、`Artifact Projection`、`Spec Handling` 和 `Design / Tasks Handoff`。不得为了这张表单独创建 spec file。
       - Gate 必须列出 covered Global Atom IDs、artifact projection coverage、source docs and line ranges read、capability atom view file consumed、product workflow coverage、prototype route/object/responsive coverage（相关时）、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和 forbidden drift checked。
       - Gate 必须包含 `Orphan direct atoms: none` 或列出 blockers，并列出用于 exact behavior 的 focused source windows。
-      - 如果任何 relevant direct atom 未被 requirement/scenario、Artifact Projection Notes 或 gate 表示，停止并修订 proposal/specs 后再继续。
+      - 如果任何 spec-level relevant direct atom 未被 requirement/scenario、已有 spec file 的 Artifact Projection Notes 或 gate 表示，停止并修订 proposal/specs 后再继续。纯 design/verification-only capability 的 closure 在 design/tasks 阶段检查。
     requires:
       - proposal
 
@@ -132,8 +133,8 @@ artifacts:
       创建设计文档，说明 HOW to implement the production change。
 
       写入前：
-      - 读取 proposal 和所有 delta specs。
-      - 使用 proposal 的 `Change Atom Coverage Register`、`Artifact Projection`、spec `Source Atoms`、spec `Source Trace` 和 spec `Artifact Projection Notes` 作为 source-reading interface。
+      - 读取 proposal 和所有实际生成的 delta specs；不要期待纯 design/verification-only capability 有 spec file。
+      - 使用 proposal 的 `Change Atom Coverage Register`、`Artifact Projection`、spec `Source Atoms`、spec `Source Trace` 和存在时的 spec `Artifact Projection Notes` 作为 source-reading interface。
       - 当 design 需要 exact product behavior、architecture/module boundaries、data/API shape、auth/security constraints、async/worker behavior、UI/prototype fidelity、observability、deployment 或 verification detail 时，只通过 registered `GA-####` 的 focused `Source Document` + `Lines` window 定点重读原始 source。
       - 不重新发现 source truth。如果 design 需要 proposal/spec atoms 无法到达的 source detail，修订 proposal/specs 或报告 blocker。
       - 起草前建立 design atom matrix。每个 `design-obligation` direct `GA-####`、每个需要 design placement 的 `spec-requirement`、每个 `spec-guard`，以及每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker。
@@ -202,8 +203,8 @@ artifacts:
       - 所有 tasks 完成表示 implementation 和 acceptance proof 完成。不得把最终验收延后到独立 artifact。
 
       写入前：
-      - 读取 proposal、所有 delta specs 和 design。
-      - 使用 proposal 的 `Change Atom Coverage Register`、`Artifact Projection`、spec `Source Atoms`、spec `Artifact Projection Notes` 和 design `Production Source Map` 作为 source-reading interface。
+      - 读取 proposal、所有实际生成的 delta specs 和 design；不要期待纯 design/verification-only capability 有 spec file。
+      - 使用 proposal 的 `Change Atom Coverage Register`、`Artifact Projection`、spec `Source Atoms`、存在时的 spec `Artifact Projection Notes` 和 design `Production Source Map` 作为 source-reading interface。
       - 仅在需要让 task proof 达到 source-equivalent 时，通过 relevant `GA-####` 的 focused `Source Document` + `Lines` windows 定点重读原始 source。
       - 将 missing 或 failed proposal/spec/design alignment gates 视为 blockers。
       - Finalizing tasks 前建立 proposal `GA-####` rows、artifact projection map、spec scenarios、design obligations、AC sections、checkbox task IDs 和 coverage table references 的索引。每个 coverage table task ID 必须解析到实际 checkbox task。

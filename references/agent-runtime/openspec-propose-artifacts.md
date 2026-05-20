@@ -101,7 +101,7 @@
 1. specs 必须从 proposal register 和 per-change capability atom view file 生成；每个 requirement/scenario 必须列出 exact `GA-####` 和 concrete `Source Trace`。
 2. specs 不得使用 `GA-0001-GA-0010`、`GA-0001..GA-0010`、`GA-0001 through GA-0010` 等范围。
 3. specs 的 Requirement / Scenario 名称若非源文档固定术语，优先使用中文。
-4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 必须在 specs 的 `Artifact Projection Notes` 或 gate 中点名 handoff，不得伪造成 scenario；后续 design/tasks artifacts 必须按 projection 实际消费这些 GA，不能只停留在 specs notes。
+4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 不得伪造成 scenario，也不得为了 handoff 单独创建空 spec。只有当同一 capability 已经因为 `spec-requirement` 或 `spec-guard` 生成有效 delta spec 时，才可在该 spec 的 `Artifact Projection Notes` 或 gate 中点名 handoff；纯 design/verification-only capability 的 closure 必须在 design/tasks coverage 中完成。
 5. 每个 spec 的 Production Alignment Gate 必须列出 `Artifact Projection coverage` 和 `Orphan direct atoms: none`，或列出 blocker。
 6. design 必须把 proposal/spec 中需要设计消费的 `GA-####` 落到可执行实现义务，包括 module、data/API、auth/security、worker/realtime、frontend/UX、ops/deployment 和 verification。
 7. design 生成前必须建立 design atom matrix。每个 `design-obligation` direct `GA-####`、需要 design placement 的 `spec-requirement`、`spec-guard` 和每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker。
@@ -131,7 +131,7 @@
 
 1. 全部 artifacts：按“Artifact 中文约束”做语言自查；忽略反引号中的标识后，不得存在英文主导的解释性句子；checkbox task description 必须中文。
 2. `proposal.md`：packet direct atom 数量 = proposal register row 数量；每行有 `Artifact Projection` 和 `Projection Source`；direct atoms 均已出现在 `Source Window Read Set`；无 orphan direct `GA-####`；无 GA ranges。
-3. specs：proposal direct `GA-####` 均按 artifact projection 映射到 requirement/scenario、guard、`Artifact Projection Notes` 或 gate handoff；handoff 只表示 specs 不伪造 scenario，不能替代后续 design/tasks 的实际消费；每个 scenario 有 exact `Source Atoms` 和 concrete `Source Trace`；无 orphan direct `GA-####`；无 GA ranges。
+3. specs：只为有 OpenSpec delta 的 capability 生成 `specs/<capability>/spec.md`；每个生成的 spec file 必须至少包含一个 `### Requirement:`，且不得只包含 `Artifact Projection Notes` 或“无”。proposal direct `GA-####` 按 artifact projection 映射到 requirement/scenario、guard、已有 delta spec 的 `Artifact Projection Notes` 或 design/tasks coverage；handoff 不能替代后续 design/tasks 的实际消费；每个 scenario 有 exact `Source Atoms` 和 concrete `Source Trace`；无 spec-level orphan direct `GA-####`；无 GA ranges。
 4. `design.md`：每个 in-scope scenario、`design-obligation` atom 和需要 design placement 的 direct `GA-####` 有 design obligation 或 guard handling；source-backed implementation decisions 记录 source gap、最小技术形态和 rejected expansion；无需要 implementer 猜测的行为。
 5. `tasks.md`：三张 coverage 表完整且 projection-aware；`Obligation Atom Coverage` 单行单 GA；所有 task ID 引用都能解析到 checkbox；每个 AC 有 final verification checkbox；每个 AC 有 evidence ledger expectation；无 GA ranges、无 aggregate row、无 orphan direct atom、无 projection mismatch。
 

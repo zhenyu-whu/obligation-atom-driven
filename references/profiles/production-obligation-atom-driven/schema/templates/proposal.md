@@ -17,7 +17,7 @@
 ## Capabilities
 
 ### New Capabilities
-<!-- 描述新增 capabilities。将 <name> 替换为 kebab-case identifier；每个 capability 会创建 specs/<name>/spec.md。 -->
+<!-- 描述新增 capabilities。将 <name> 替换为 kebab-case identifier；只有包含 spec-requirement 或 spec-guard delta 的 capability 才会创建 specs/<name>/spec.md。纯 design-obligation / verification-obligation capability 不创建空 spec。 -->
 - `<name>`: <概述该 capability 覆盖的范围；Global Atoms: GA-...>
 
 ### Modified Capabilities
