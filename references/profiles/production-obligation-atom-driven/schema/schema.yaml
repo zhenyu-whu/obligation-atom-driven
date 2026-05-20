@@ -50,6 +50,7 @@ artifacts:
 
       Proposal-specific constraints：
       - `What Changes` 必须引用 exact `GA-####`，并在 source-backed 时命名相关 product surfaces、routes、domain commands、APIs、database entities/migrations、worker jobs、events/SSE streams、storage/assets、auth/security rules、billing/entitlement rules、observability/ops surfaces、deployment constraints 和 verification surfaces。
+      - 当 direct atom 描述用户可见操作或控件能力（例如新增、编辑、删除、保存、选择、重试、返回、提交、关闭、取消、上传、下载）时，proposal 必须保留每个 operation verb 及其可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。不得只写“支持编辑”“支持操作”而不列出具体操作和结果。
       - `Capabilities` 必须匹配 final packet 的 capability atom views，除非 packet 记录 source-backed conflict 或 blocker。
       - `Production Source Coverage` 必须列出 proposal register 中 exact source files、line ranges 和 `GA-####`。不得新增宽泛整篇文档读取义务。
       - `Source Window Read Set` 必须列出每个重读 source window、匹配 `GA-####`，以及重读是否改变或确认 proposal interpretation。
@@ -115,6 +116,7 @@ artifacts:
       - 每个 requirement 必须包含 `Source Trace:` bullets，列出 concrete source paths、line ranges、product workflows、architecture sections、routes、domain commands、DTOs、tables、migrations、events、jobs、queues、storage assets、auth rules、entitlement rules、prototype scenes、object states、fixture slices、responsive rules、ops processes、deployment environments 或 verification rows。
       - 每个 scenario 使用 `#### Scenario: <name>`，且必须使用 exactly 4 hashtags。
       - 每个 requirement 必须至少有一个 scenario。
+      - 若 source-backed requirement 包含多个用户可见操作（例如新增、编辑、删除、选择和提交），scenario 必须逐项枚举这些操作或拆成多个 scenario；每个操作都要定义用户触发、预期 UI 变化、API/data 后果、持久化或 reload 后结果，以及适用的 disabled/failure/recovery 行为。只证明控件、data attribute、截图或静态 markup 存在，不足以表达“支持该操作”。
 
       Final alignment gate：
       - 每个 spec file 必须以 `## Production Alignment Gate` 结束。
@@ -154,8 +156,10 @@ artifacts:
       - API / Auth / Security Design 必须定义 route/handler responsibilities、DTO validation、session/cookie handling、actor resolution、authorization entry points、return target sanitization 和 sensitive-data redaction。
       - Async / Realtime / AI / Worker Design 必须定义 job/event/stream/provider contracts、payloads、ownership、locking/idempotency/retry behavior、sandbox/test-double boundary 和 explicit deferred boundaries。
       - Frontend / UX / Prototype Fidelity Design 必须定义 route/component responsibilities、props/events/state model、state transitions、disabled/failure/retry behavior、responsive variants 和 local-versus-persisted state。
+      - 对每个会改变数据、状态、route 或用户可见结果的 UI control，Frontend / UX / Prototype Fidelity Design 必须定义 owner component、runtime/client-server boundary、event trigger、handler/action/API route、request payload、response merge 或 reload persistence、submitting/disabled/error/retry behavior。若框架需要浏览器端 runtime、hydration 或 client component 才能绑定事件，design 必须明确该边界；server/static markup 不能单独视为 mutating control 的完整设计。
       - Observability / Ops / Deployment Design 必须定义 log/event categories、allowed and forbidden fields、config keys or categories、environment differences、migration ordering、staging smoke expectations 和 rollback constraints。
       - Verification Design 必须把每个主要行为映射到 concrete proof：unit、DB integration、route/API、worker/job、SSE/outbox、provider sandbox、storage/asset、component、E2E、responsive visual/DOM check、static forbidden-drift check、config validation、log redaction assertion 或 staging smoke。
+      - 对用户可见的 mutating/selection/action control，Verification Design 必须映射到 positive interaction proof：通过实际点击、输入、选择、blur/submit 或键盘操作触发，并断言 API/data 结果和 rendered UI 更新。静态 DOM、截图、`data-testid`、enabled/disabled 断言或 SSR/static render 只能作为补充，不能单独证明交互能力。
 
       必需章节：
       - **Context**
@@ -225,6 +229,8 @@ artifacts:
       - 每个 AC section 必须至少包含一个 final verification 或 acceptance checkbox，其 task ID 出现在 section 的 `Primary Proof` / `Required Evidence` 和所有相关 coverage table verification columns。
       - Checkbox task IDs 必须唯一、稳定，并匹配 owning AC prefix。Coverage tables 不得引用不存在的 task IDs。
       - Broad workspace commands 只能作为补充 proof；task 或 AC 还必须命名 linked atoms 的 exact source-equivalent evidence。
+      - 对用户可见的 mutating/selection/action requirement，AC 的 `Primary Proof`、`Required Evidence`、final verification checkbox 和 coverage table `Acceptance Proof` 必须包含 operation matrix：逐项列出每个操作的 trigger、request/action、expected rendered UI update、API/data assertion、reload/persistence assertion，以及适用的 disabled/failure/recovery branch。
+      - 如果 scenario 或 atom 使用“支持 A、B、C、D”这种多个操作的表述，tasks 不得只用一个 broad “component/browser proof” 覆盖；必须在 final verification task 中逐项执行 A、B、C、D，除非记录 blocker 并回到 specs/design 修订。
 
       Acceptance-driven coverage gate：
       - `tasks.md` 必须以 non-checkbox `## Acceptance-Driven Coverage` section 开头。
@@ -247,6 +253,7 @@ artifacts:
       - 如果 atom 描述 worker、queue、provider、SSE/outbox、reconciler 或 async behavior，proof 必须通过 default wiring 或 source-compatible deterministic sandbox 覆盖该路径。
       - 如果 atom 描述 auth、security、privacy、entitlement、asset access 或 sensitive data behavior，proof 必须在相关时包含 negative/unauthorized、redaction、audit 或 privacy evidence。
       - 如果 atom 描述 failure、edge、disabled、loading 或 empty behavior，proof 必须覆盖 failing branch 和 recovery/retry path。
+      - 如果 atom 描述用户可见操作，proof 必须包含 user-equivalent runtime interaction。控件存在、`data-*` 标记、截图、静态 markup、enabled/disabled 状态或 isolated render test 只能证明 affordance，不证明操作可用；它们必须与实际 click/type/select/blur/submit 和结果断言配对。
       - Broad commands 如 workspace-wide test suites 只能作为补充，除非绑定 exact AC IDs 和 evidence。
       - Tasks 必须为每个 AC 定义 evidence ledger expectation：commands run、browser/rendered artifacts（适用时）、API/DB/job/storage/log/audit facts（适用时）和不能被 mocks 替代的 default-production-path proof。
 
@@ -266,6 +273,7 @@ artifacts:
       - 确认不存在 orphan direct atoms、aggregate Obligation Atom Coverage rows 或 GA ranges。
       - 确认 task 未要求 unplanned services、integrations、routes、scenes、pages、surfaces、objects、components、states、assets、APIs、tables、jobs、events、providers、deployment environments 或 source-out-of-scope behavior。
       - 确认每个 task 有 observable proof，而不只是 file-edit statement。
+      - 确认没有任何 source-backed 用户可见操作只由 static DOM、screenshot、控件存在、API-only test 或 broad test command 覆盖；UI 操作、API/data mutation 和 persistence/readback 需要在同一 AC proof 中闭环，或明确拆成互相引用的 implementation 和 verification tasks。
     requires:
       - proposal
       - specs
@@ -283,10 +291,11 @@ apply:
     - Spec requirements/scenarios 及其 `GA-####` references。
     - Design obligations 及其 `GA-####` references。
     - AC sections、checkbox task IDs、trace fields、coverage table rows 和 proof/evidence requirements。
+    - 从 specs/design/tasks 抽取的 user-visible operation matrix：每个 mutating/selection/action control 的 trigger、handler/action/API route、expected UI update、API/data assertion、reload/persistence assertion 和 disabled/failure/recovery branch。
     - Evidence ledger targets：commands、browser/rendered artifacts、API/DB/job/storage/log/audit facts 和 default-production-path proof。
     - Language gate targets：checkbox task descriptions 和 agent-authored acceptance/proof/preserve/mock-policy explanations。
 
-    若 preflight index 发现 GA ranges、orphan direct atoms、artifact projection mismatch、coverage tables 中 unresolved task IDs、缺少 final verification task 的 AC sections、missing trace fields、英文主导 task descriptions，或 proof 弱于 atom/source/design obligations，暂停并更新 artifacts 后再编辑代码。
+    若 preflight index 发现 GA ranges、orphan direct atoms、artifact projection mismatch、coverage tables 中 unresolved task IDs、缺少 final verification task 的 AC sections、missing trace fields、英文主导 task descriptions、用户可见操作只有 presence-only/static proof，或 proof 弱于 atom/source/design obligations，暂停并更新 artifacts 后再编辑代码。
 
     Implementation 和 acceptance 在本 schema 中是同一个 workflow：
     - 按依赖顺序处理 AC sections。
@@ -298,5 +307,6 @@ apply:
     - 如果 task summary 或 proof 弱于其 Global Atoms、specs、design 或 acceptance slice，先更新 artifacts 再实现。
     - 如果 task descriptions、acceptance/proof explanations 或 evidence ledger expectations 是英文主导且非 source-native identifiers，先更新 artifacts 再实现。
     - 如果实现暴露出 artifacts 与 obligation atoms 或 original source docs 不一致，暂停并更新 artifacts，不得用代码绕过 mismatch。
+    - 对用户可见的 mutating/selection/action control，勾选相关 task 前必须通过实际 runtime surface 执行 user-equivalent interaction（click/type/select/blur/submit/keyboard 等），并断言 handler/API 被触发、响应或持久化数据正确、rendered UI 更新且 reload/readback 后仍成立。静态 markup、截图、`data-testid`、enabled/disabled 或 API-only proof 不得单独作为操作已实现的完成依据。
     - 工作时维护 evidence notes：对每个完成的 checkbox，记录满足 task 的 command、rendered artifact、API/DB/job/storage/log/audit fact 或 default-path proof。
     - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表做最终 audit，对照 completed tasks、implementation evidence、verification evidence、Global Atoms 和 evidence ledger。只有 audit 通过后，change 才 ready for archive。

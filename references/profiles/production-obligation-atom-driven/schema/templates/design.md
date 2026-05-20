@@ -36,7 +36,7 @@
 
 ## Frontend / UX / Prototype Fidelity Design
 
-<!-- routes、page surfaces、components、objects、state model、events、disabled/failure/retry、responsive、a11y、local-vs-server state。 -->
+<!-- routes、page surfaces、components、objects、state model、events、disabled/failure/retry、responsive、a11y、local-vs-server state。对 mutating controls，写清 owner component、client/runtime/hydration boundary、event trigger、handler/action/API route、payload、response merge/reload persistence 和 error/submitting behavior。 -->
 
 ## Observability / Ops / Deployment Design
 
@@ -44,7 +44,7 @@
 
 ## Verification Design
 
-<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / static guard / smoke。 -->
+<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / static guard / smoke。用户可见操作必须有 positive interaction proof；静态 DOM、截图或 SSR/static render 只能作补充。 -->
 
 ## Rollout / Compatibility
 

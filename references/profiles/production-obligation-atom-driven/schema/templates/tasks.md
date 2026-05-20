@@ -44,11 +44,11 @@ Design:
 - <!-- Design sections / decisions / obligations。 -->
 
 Primary Proof:
-- <!-- 最强验收证据。用户可见行为优先 browser/E2E/rendered proof；后端行为优先 API/DB/job/storage/security facts。 -->
+- <!-- 最强验收证据。用户可见行为优先 browser/E2E/rendered proof；后端行为优先 API/DB/job/storage/security facts。若涉及新增/编辑/删除/选择/提交等操作，列出 operation matrix，不用控件存在替代交互 proof。 -->
 
 Required Evidence:
 - Commands: <!-- exact commands or Not applicable with reason -->
-- Browser / rendered evidence: <!-- screenshot / DOM / responsive / a11y / interaction evidence -->
+- Browser / rendered evidence: <!-- screenshot / DOM / responsive / a11y / interaction evidence。mutating controls 必须包含 click/type/select/blur/submit 等实际触发和 rendered result。 -->
 - Data / API / job / storage evidence: <!-- DB rows / API response / queue status / asset facts / logs / audit facts -->
 - Evidence ledger expectation: <!-- apply 时必须记录的证据条目：命令、截图/DOM、API/DB/job/storage/log/audit facts、default-path proof。 -->
 
@@ -63,7 +63,7 @@ Mock Policy:
   Acceptance: <!-- 此任务贡献哪个可验收行为。 -->
   Source: <!-- 来自相关 GA register rows 的 source paths、line ranges 与 source rule。 -->
   Preserve: <!-- 必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints。 -->
-  Proof: <!-- 说明要执行的 source-equivalent proof。 -->
+  Proof: <!-- 说明要执行的 source-equivalent proof。用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback；static markup / data-testid / screenshot 只能补充。 -->
   Mock Policy: <!-- 说明 mock/sandbox/default path 规则。 -->
 
 <!-- 每个 AC section 必须至少包含一个 final verification / acceptance checkbox，例如 AC-001.N。该 checkbox 必须出现在本节 Required Evidence、coverage tables 的 Verification Task IDs 和最终 apply evidence ledger 中。 -->

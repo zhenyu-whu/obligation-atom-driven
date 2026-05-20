@@ -15,7 +15,7 @@ Source Trace:
 #### Scenario: <!-- scenario name，优先中文；只有 exact source-native 名称才保留英文 -->
 
 - WHEN <!-- condition / actor / state / API / route / job / UI event -->
-- THEN <!-- expected source-backed system behavior -->
+- THEN <!-- expected source-backed system behavior。若 source 行为包含多个用户操作，逐项枚举或拆分 scenario，并写明 UI/API/data/reload/failure 后果；不要只写“支持操作”。 -->
 
 ## Artifact Projection Notes
 
