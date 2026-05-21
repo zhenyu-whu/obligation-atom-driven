@@ -1,5 +1,5 @@
 name: production-obligation-atom-driven
-version: 2
+version: 3
 description: 面向生产实现的 obligation atom 工作流：proposal -> specs -> design -> acceptance-driven tasks，直接消费 openspec/orchestrate 的 canonical change packets，并按 artifact projection 区分 spec requirement、spec guard、design obligation、verification obligation 与 contextual-only atom
 artifacts:
   - id: proposal
@@ -212,23 +212,36 @@ artifacts:
       - 仅在需要让 task proof 达到 source-equivalent 时，通过 relevant `OGA-####` 的 focused `Source Document` + `Lines` windows 定点重读原始 source。
       - 将 missing 或 failed proposal/spec/design alignment gates 视为 blockers。
       - Finalizing tasks 前建立 proposal `OGA-####` rows、artifact projection map、spec scenarios、design obligations、AC sections、checkbox task IDs 和 coverage table references 的索引。每个 coverage table task ID 必须解析到实际 checkbox task。
+      - Finalizing tasks 前必须先建立 runtime acceptance model，再把该模型编译成 AC-local execution contracts 和 checkbox tasks；不得先粗分 AC 再用 broad proof 补洞。
+
+      Runtime acceptance model 原则：
+      - Runtime acceptance model 是 source-backed obligations 的验证投影，不是新的产品需求来源。每个 runtime row 必须回链到 proposal register row、spec requirement/scenario、design obligation、spec guard 或 verification obligation。
+      - 每个 runtime row 必须包含 source basis：exact `OGA-####`、spec scenario 名称、design section/obligation 或明确的 verification-obligation。无法回链的 row 只能作为非阻断工程辅助，不得成为 AC scope、产品行为或完成门禁。
+      - 通用 web 最佳实践只能用于选择 proof 形态、测试层级和 evidence 强度，不能产生 source 外的 route、control、state、API、job、event、provider、storage、retry、offline、toast 或 lifecycle 行为。
+      - 如果 proposal/spec/design 中出现 operation verbs、status enum、stage、terminal state、failure branch、disabled/loading/empty/retry/recovery branch、async queue/worker/provider/SSE/storage chain、auth/security branch 或 responsive variant，tasks 必须把它们抽取成 runtime acceptance model rows。
+      - Runtime acceptance model 的完整细节用于主 agent preflight 和最终 audit；每个 worker 的主要输入必须是当前 AC 中裁剪后的 AC-local execution contract，不得要求 worker 从全局矩阵自行推断当前责任。
+      - 如果实现过程中发现新的 runtime state、branch、operation、event、job、API 或 terminal outcome，必须先更新 tasks 的 runtime acceptance model、AC-local execution contract 和 AC proof，再实现或勾选任务；不得让实现悄悄扩大状态空间。
 
       Task-writing constraints：
       - 严格遵循 checkbox format。Apply phase 解析 `- [ ]` leaf tasks。
       - 按 `## AC-### <short acceptance slice name>` headings 分组。short acceptance slice name 应优先中文，除非它是 exact source-native identifier。
-      - 每个 AC section 必须包含 non-checkbox fields：`Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Primary Proof:`、`Required Evidence:`、`Mock Policy:`。
+      - 每个 AC section 必须包含 non-checkbox fields：`Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`Test Items:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:`、`Mock Policy:`。
       - 每个 executable task 必须是 checkbox：`- [ ] AC-###.N Task description`。
       - Checkbox task descriptions 必须中文，除非 description 完全由固定 ID、commands、paths、code identifiers 或 source-native terms 构成。技术名词可以混入中文句子。
-      - 每个 checkbox 后必须跟随 indented trace block，字段为 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Acceptance:`、`Source:`、`Preserve:`、`Proof:`、`Mock Policy:`。
+      - 每个 checkbox 后必须跟随 indented trace block，字段为 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Source:`、`Preserve:`、`Proof:`、`Mock Policy:`。
       - 每个 task block 必须与下一个 checkbox task block 之间保留一个空行。同一个 task block 的 trace fields 之间不要插入空行。
       - `Source Atoms:` 必须列出 exact `OGA-####`，或仅在 concrete repository/setup tasks 本身没有 source-backed behavior 时写 `Not applicable` 并给出理由。
+      - `Runtime Rows:` 必须列出该 task 负责的 Runtime Surface、Operation、State / Branch、Async / Realtime row IDs；若 task 是无 runtime 行为的 source-backed setup task，必须写 `Not applicable` 并给出理由。
+      - `Test IDs:` 必须列出该 task 建立、维护或执行的 Test Evidence row IDs；implementation-only task 若不直接运行测试，也必须引用该 AC final verification task 会执行的 Test IDs。每个 Test ID 只能归属一个 AC，task 只能引用 owning AC 的 Test IDs；禁止同一 Test ID 出现在多个 AC-local `Test IDs:` 或多个 AC section 的 task trace 中。
       - task trace blocks 和 coverage tables 中的 Global Atom references 必须枚举 exact IDs。禁止 ranges。
       - `Acceptance:` 必须描述 task 贡献证明的具体行为，而不是 file-edit summary。
       - `Proof:` 必须说明可观察证据，证明 linked Global Atoms、spec scenarios、design obligations 和 preserve constraints 达到 source-equivalent fidelity。
       - `Mock Policy:` 必须说明哪些可以 mock/sandbox，哪些必须走 default production path。
       - 每个 AC section 必须至少包含一个 final verification 或 acceptance checkbox，其 task ID 出现在 section 的 `Primary Proof` / `Required Evidence` 和所有相关 coverage table verification columns。
       - Checkbox task IDs 必须唯一、稳定，并匹配 owning AC prefix。Coverage tables 不得引用不存在的 task IDs。
-      - Broad workspace commands 只能作为补充 proof；task 或 AC 还必须命名 linked atoms 的 exact source-equivalent evidence。
+      - 每个 AC 必须有至少一个 final verification test item。`Test Items:` 必须逐项列出本 AC 拥有的 Test ID、固定可重跑命令、canonical evidence directory、ledger 文件和 local/CI runnable 状态。
+      - 每个 Test ID 必须有固定命令，例如 `pnpm test:e2e tests/e2e/pre-v1-failure-recovery.spec.ts` 或带稳定 test name/filter 的等价命令。命令必须能由审阅者在本地或 CI 直接重跑，不得依赖 agent 当场点击、临时 REPL、手工浏览器操作或口述步骤作为 primary proof。
+      - Broad workspace commands 只能作为补充 proof；task 或 AC 还必须命名 linked atoms 的 exact source-equivalent evidence、AC-owned Test ID 和固定命令。
       - 对用户可见的 mutating/selection/action requirement，AC 的 `Primary Proof`、`Required Evidence`、final verification checkbox 和 coverage table `Acceptance Proof` 必须包含 operation matrix：逐项列出每个操作的 trigger、request/action、expected rendered UI update、API/data assertion、reload/persistence assertion，以及适用的 disabled/failure/recovery branch。
       - 如果 scenario 或 atom 使用“支持 A、B、C、D”这种多个操作的表述，tasks 不得只用一个 broad “component/browser proof” 覆盖；必须在 final verification task 中逐项执行 A、B、C、D，除非记录 blocker 并回到 specs/design 修订。
 
@@ -246,6 +259,26 @@ artifacts:
       - 三张表中所有 `Implementation Task IDs` 和 `Verification Task IDs` 都必须解析到实际 checkbox task。若某 row 只有 AC-level proof，则创建 explicit verification checkbox，而不是只引用 AC heading。
       - Finalizing 前比较：proposal direct `OGA-####` set、artifact projection map、specs/design/tasks 中所有 `OGA-####` references、`Obligation Atom Coverage` rows、checkbox trace blocks 和 AC `Source Atoms`。任何 missing、extra、status-mismatched 或 projection-mismatched ID 都是 blocker，除非明确解释为 proposal 支持的 guard/deferred/non-goal row。
 
+      Runtime acceptance index and verification appendix gate：
+      - `Acceptance-Driven Coverage` section 之后、任何 `## AC-###` section 之前，`tasks.md` 必须包含 non-checkbox `## Runtime Acceptance Index` section。若 change 不触及 web/runtime behavior，也必须写明 `Not applicable` 和 source-backed 理由。
+      - `Runtime Acceptance Index` 是给主 agent preflight 使用的轻量路由表，不是 worker 的主要执行说明。它必须包含 `### AC Runtime Ownership Index` table，columns 至少为：`AC ID`、`Source Basis`、`Runtime Surface Rows`、`Operation Rows`、`State / Branch Rows`、`Async / Realtime Rows`、`Test IDs`、`Scope Role`、`No-Scope-Expansion Check`、`Detail Matrix Rows`。
+      - 每个 AC section 必须把 `AC Runtime Ownership Index` 中属于自己的 rows 编译到本 section 的 `Runtime Rows Owned:`、`Test IDs:`、`Test Items:`、`Required Evidence:`、`Mock / Fixture Boundary:` 和 final verification checkbox 中；worker 不需要从完整全局矩阵自行搜索当前 AC 责任。
+      - 所有 AC sections 之后，`tasks.md` 必须包含 non-checkbox `## Verification Appendix` section，并按顺序包含五张详细矩阵：`### Runtime Surface Inventory`、`### Operation Coverage Matrix`、`### State / Branch Coverage Matrix`、`### Async / Realtime Chain Matrix`、`### Test Evidence Matrix`。这五张矩阵用于生成质量、主 agent preflight 和最终 audit，不属于 executable work section。
+      - detailed runtime matrices（除 `Test Evidence Matrix` 外）必须包含 `Source Basis`、`Projection Type`、`Scope Role`、`AC IDs`、`Test IDs`、`No-Scope-Expansion Check` columns。`Test Evidence Matrix` 必须包含 `Test ID`，并包含单数 `AC ID`、`Fixed Command`、`Evidence Directory`、`Ledger File`、`CI Runnable?`、`Source Basis`、`Projection Type`、`Scope Role`、`No-Scope-Expansion Check` columns。`Source Basis` 必须列 exact `OGA-####` 或 spec/design/verification obligation；`Scope Role` 只能是 `required behavior`、`preserve boundary`、`proof-only` 或 `not applicable`。
+      - `Runtime Surface Inventory` columns 至少包含：`Surface ID`、`Surface Type`、`Owner`、`Entry Point`、`Default Path Required`、`External Boundary`、`Source Basis`、`Projection Type`、`Scope Role`、`AC IDs`、`Test IDs`、`No-Scope-Expansion Check`。Surface type 覆盖适用的 UI route、client component、server action、route handler/API、DB/repository、worker/job、queue、SSE/event stream、webhook、storage/asset、auth/session、config/deployment。
+      - `Operation Coverage Matrix` columns 至少包含：`Operation ID`、`Trigger`、`Control / Route`、`Request / Action`、`Expected Rendered UI Update`、`API/Data Assertion`、`Reload/Persistence Assertion`、`Disabled/Failure/Recovery Branches`、`Source Basis`、`Projection Type`、`Scope Role`、`AC IDs`、`Test IDs`、`No-Scope-Expansion Check`。
+      - `State / Branch Coverage Matrix` columns 至少包含：`State ID`、`State / Branch`、`Trigger Into`、`Observable UI / API Outcome`、`Data/Event Facts`、`Allowed Next States`、`Terminal?`、`Source Basis`、`Projection Type`、`Scope Role`、`AC IDs`、`Test IDs`、`No-Scope-Expansion Check`。
+      - `Async / Realtime Chain Matrix` columns 至少包含：`Chain ID`、`User/System Entry`、`Enqueue / Dispatch Fact`、`Worker / Consumer Fact`、`Domain Mutation`、`Event / Outbox Fact`、`Client Subscription / Readback`、`Rendered Terminal State`、`Failure Variant`、`Source Basis`、`Projection Type`、`Scope Role`、`AC IDs`、`Test IDs`、`No-Scope-Expansion Check`。
+      - `Test Evidence Matrix` columns 至少包含：`Test ID`、`AC ID`、`Fixed Command`、`Test File / Name`、`Layer`、`Covers Rows`、`Default Path?`、`Fixture Boundary`、`Must Fail Before Implementation`、`Evidence Directory`、`Evidence Produced`、`Ledger File`、`CI Runnable?`、`Source Basis`、`Projection Type`、`Scope Role`、`No-Scope-Expansion Check`。Layer 应使用 unit、component、route/API contract、DB/integration、worker/job integration、realtime/SSE integration、browser E2E、visual/responsive、security/negative、config/ops/check 等稳定类别。
+      - 每个 operation/state/branch/async row 必须至少映射一个 Test ID、一个 AC ID，并出现在 owning AC 的 `Runtime Rows Owned:` 和至少一个 checkbox `Runtime Rows:` 中，除非 `Scope Role` 为 `preserve boundary` 或 `not applicable` 且说明不需要执行 proof 的 source-backed 理由。
+      - 每个 Test ID 必须覆盖具体 matrix row IDs，并且 `AC ID` 只能是一个 exact `AC-###`。禁止 `AC ID` 单元格包含逗号、多个 AC、范围或 “shared”。若同一个物理 test file/name 服务多个 AC，必须拆成多个 Test ID；这些 Test ID 可以共享物理文件，但必须有 AC-local fixed command、test name/filter 和 evidence directory。
+      - 每个 Test ID 必须出现在 owning AC 的 `Test IDs:`、`Test Items:` 和相关 checkbox `Test IDs:` 中，不得出现在其他 AC section。Broad command 可作为补充 evidence produced，但 primary proof 必须绑定 AC-owned Test ID、fixed command、row IDs 和 canonical evidence directory。
+      - `Evidence Directory` 必须使用 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`。所有测试相关 evidence 必须保存或复制到该目录；`/tmp`、未复制的测试框架默认目录、agent 本地临时截图路径或口述路径不得作为最终验收 evidence。若 Playwright/Vitest/其他 runner 原始输出在别处，final verification task 必须复制或生成审阅所需的 curated artifacts 到 canonical directory。
+      - 每个 Test ID 的 evidence produced 至少应包含 `command.log`、`ledger.json`，并按 layer 产出 screenshot、trace、DOM snapshot、API facts、DB facts、job/event facts、log/audit facts 或 failure trace。`Ledger File` 必须位于该 Test ID 的 canonical evidence directory，并记录 `change`、`acId`、`testId`、`taskId`、`runtimeRows`、`command`、`result`、`artifacts[]` 和 default-path/fixture boundary facts。
+      - Fixture/mock 边界必须逐行声明：允许 mock/sandbox 的段、不能 mock 的 default path、以及另一个测试如何覆盖被 fixture 替换的 production path。Playwright route intercept、手工注入 `EventSource`、直接写 DB 构造终态、fixture snapshot 或 isolated unit test 不得作为 async/realtime/browser terminal state 的唯一 proof。
+      - 对每个 async/realtime chain，至少应有 success terminal row 和 relevant failure terminal row 的自动 proof；若 source/design 明确只有单一终态或 failure deferred，必须在 matrix 和 owning AC 的 `Mock / Fixture Boundary:` 中引用 source-backed deferred/guard 理由。
+      - 对每个 user-visible operation，至少应有 user-equivalent browser/runtime proof；如果操作会改变 API/data/persistence，proof 必须在同一 AC 或互相引用的 paired tasks 中闭环到 API/data/readback。
+
       Proof strength：
       - 如果 atom 描述 user-visible behavior，proof 必须包含 user-equivalent interaction、browser-rendered DOM/screenshot、responsive、accessibility 或 visual evidence。
       - 如果 atom 描述 API behavior，proof 必须 call 或 test 该 contract。
@@ -254,11 +287,13 @@ artifacts:
       - 如果 atom 描述 auth、security、privacy、entitlement、asset access 或 sensitive data behavior，proof 必须在相关时包含 negative/unauthorized、redaction、audit 或 privacy evidence。
       - 如果 atom 描述 failure、edge、disabled、loading 或 empty behavior，proof 必须覆盖 failing branch 和 recovery/retry path。
       - 如果 atom 描述用户可见操作，proof 必须包含 user-equivalent runtime interaction。控件存在、`data-*` 标记、截图、静态 markup、enabled/disabled 状态或 isolated render test 只能证明 affordance，不证明操作可用；它们必须与实际 click/type/select/blur/submit 和结果断言配对。
-      - Broad commands 如 workspace-wide test suites 只能作为补充，除非绑定 exact AC IDs 和 evidence。
-      - Tasks 必须为每个 AC 定义 evidence ledger expectation：commands run、browser/rendered artifacts（适用时）、API/DB/job/storage/log/audit facts（适用时）和不能被 mocks 替代的 default-production-path proof。
+      - Broad commands 如 workspace-wide test suites 只能作为补充，除非绑定 exact AC-owned Test IDs、fixed commands 和 canonical evidence directories。
+      - Tasks 必须为每个 AC 定义 evidence ledger expectation：fixed commands run、canonical `test-results/<change-slug>/<AC-ID>/<Test-ID>/` artifacts、browser/rendered artifacts（适用时）、API/DB/job/storage/log/audit facts（适用时）和不能被 mocks 替代的 default-production-path proof。
 
       Recommended AC grouping：
-      - 按 externally meaningful user/system acceptance behavior 分组，不按文件分组。
+      - AC sections 必须由 runtime acceptance model 反推生成，并在 `Runtime Acceptance Index` 中登记 ownership：按 externally meaningful user/system acceptance behavior、terminal state、failure/recovery branch 或 async chain segment 分组，不按文件分组。
+      - 一个 AC 只拥有一个可验收行为闭环，或一个明确的异步 lifecycle 段。若一个行为包含多个 terminal states（如 success、failed、dispatch_failed、timeout、unauthorized），必须拆成多个 AC 或多个 final verification checkboxes，并在 State / Branch Coverage Matrix、`Runtime Rows Owned:` 和 checkbox `Runtime Rows:` 中逐行映射。
+      - AC section 是 worker 的主要执行契约；全局三张 coverage 表、`Runtime Acceptance Index` 和 `Verification Appendix` 只为主 agent preflight、分派裁剪和最终 audit 服务。
       - 需要体现实现顺序时，可在一个 AC 下使用多个较小 tasks。
       - 当 acceptance proof 跨层时，在每个 AC slice 内包含 final verification task。
       - Repository/runtime setup tasks 只有直接支撑 source-backed acceptance behavior 时才放入相关 AC；否则使用短 `AC-000 Repository / Runtime Support` section，并给出 concrete `Not applicable` justification。
@@ -269,6 +304,11 @@ artifacts:
       - 确认每个 direct atom 按 `Artifact Projection` 获得对应执行覆盖：`spec-requirement` 需要 implementation task 和 verification/acceptance proof；`design-obligation` 需要 design placement、必要 implementation task 和 proof；`verification-obligation` 需要 explicit verification/acceptance proof，可不伪造实现任务；`spec-guard` 需要 guard/preserve/静态或负向 proof。除非该 atom 被 proposal 明确分类为 deferred/non-goal/reference-only/guard，否则不得缺少 projection 对应的覆盖。
       - 确认每个 in-scope requirement scenario 映射到 AC section。
       - 确认每个 material design obligation 映射到 AC section。
+      - 确认 `Runtime Acceptance Index` 中每个 owning row 都能解析到 AC-local `Runtime Rows Owned:`、`Test IDs:`、`Test Items:`、checkbox `Runtime Rows:` / `Test IDs:` 和 `Verification Appendix` detail matrix rows。
+      - 确认 `Verification Appendix` 中每个 mandatory row 都有 source basis、scope role、AC ID、Test ID 和 no-scope-expansion check，且没有 source-less mandatory AC 或没有 owning AC 的 runtime row。
+      - 确认 specs/design 中出现的 operation、state、branch、terminal outcome、async chain、failure/retry/recovery、auth/security branch、responsive variant 都已出现在相应 detail matrix、`Runtime Acceptance Index` 和 owning AC-local contract；若不适用，必须有 source-backed `Not applicable` 理由。
+      - 确认每个 `Test Evidence Matrix` row 绑定具体 operation/state/branch/async row IDs，并且只有一个 exact owning `AC ID`；任何多 AC Test ID、shared Test ID、范围 AC 或同一 Test ID 出现在多个 AC-local contracts 中都是 blocker。
+      - 确认每个 Test ID 有 fixed command、canonical evidence directory、ledger file、local/CI runnable 标记，并出现在 owning AC 的 `Test IDs:`、`Test Items:` 和相关 checkbox trace 中；每个 required row 至少有自动测试或明确 source-backed manual/staging gate。
       - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。
       - 确认不存在 orphan direct atoms、aggregate Obligation Atom Coverage rows 或 OGA ranges。
       - 确认 task 未要求 unplanned services、integrations、routes、scenes、pages、surfaces、objects、components、states、assets、APIs、tables、jobs、events、providers、deployment environments 或 source-out-of-scope behavior。
@@ -290,23 +330,36 @@ apply:
     - Proposal Artifact Projection map。
     - Spec requirements/scenarios 及其 `OGA-####` references。
     - Design obligations 及其 `OGA-####` references。
-    - AC sections、checkbox task IDs、trace fields、coverage table rows 和 proof/evidence requirements。
+    - AC sections、AC-local execution contract fields、checkbox task IDs、trace fields、coverage table rows、AC-owned Test Items 和 proof/evidence requirements。
+    - `Runtime Acceptance Index`：每个 AC 的 source basis、runtime surface rows、operation rows、state/branch rows、async/realtime rows、Test IDs、scope role、no-scope-expansion check 和 detail matrix row references。
+    - `Verification Appendix`：`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`、`Test Evidence Matrix` 的全部 row IDs、source basis、scope role、runtime detail `AC IDs`、Test Evidence owning `AC ID`、Test IDs 和 no-scope-expansion checks。
     - 从 specs/design/tasks 抽取的 user-visible operation matrix：每个 mutating/selection/action control 的 trigger、handler/action/API route、expected UI update、API/data assertion、reload/persistence assertion 和 disabled/failure/recovery branch。
-    - Evidence ledger targets：commands、browser/rendered artifacts、API/DB/job/storage/log/audit facts 和 default-production-path proof。
+    - 从 specs/design/tasks 抽取的 state/branch matrix：每个 status、stage、loading、empty、disabled、locked、success、failure、retry/recovery、terminal outcome、auth/security branch、responsive variant 及其 required tests。
+    - 从 specs/design/tasks 抽取的 async/realtime chain matrix：每个 queue、worker、provider、webhook、outbox、SSE、polling、storage 或 readback path 的 success/failure terminal proof。
+    - Test evidence matrix：每个 Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation 要求、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced。
+    - Evidence ledger targets：fixed commands、canonical `test-results/<change-slug>/<AC-ID>/<Test-ID>/` artifacts、browser/rendered artifacts、API/DB/job/storage/log/audit facts 和 default-production-path proof。
     - Language gate targets：checkbox task descriptions 和 agent-authored acceptance/proof/preserve/mock-policy explanations。
 
-    若 preflight index 发现 OGA ranges、orphan direct atoms、artifact projection mismatch、coverage tables 中 unresolved task IDs、缺少 final verification task 的 AC sections、missing trace fields、英文主导 task descriptions、用户可见操作只有 presence-only/static proof，或 proof 弱于 atom/source/design obligations，暂停并更新 artifacts 后再编辑代码。
+    若 preflight index 发现 OGA ranges、orphan direct atoms、artifact projection mismatch、coverage tables 中 unresolved task IDs、`Runtime Acceptance Index` 缺失或与 AC-local contract 不一致、detail runtime matrix row 缺少 source basis、mandatory row 缺少 AC ID 或 Test ID、Test Evidence row 未绑定具体 covered rows、Test Evidence row 归属多个 AC、同一 Test ID 出现在多个 AC-local contracts、缺少 fixed command、缺少 canonical evidence directory、evidence directory 不在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`、AC-local `Runtime Rows Owned:` / `Test IDs:` / `Test Items:` 无法解析到 detail matrices、checkbox `Runtime Rows:` / `Test IDs:` 缺失、缺少 final verification task 的 AC sections、missing trace fields、英文主导 task descriptions、用户可见操作只有 presence-only/static proof，或 proof 弱于 atom/source/design obligations，暂停并更新 artifacts 后再编辑代码。
+    如果 specs/design 中出现的 operation、state、branch、terminal outcome、async chain、failure/retry/recovery、auth/security branch 或 responsive variant 没有进入 `Verification Appendix`、`Runtime Acceptance Index` 和 owning AC-local contract，必须先修订 tasks；不得通过实现或测试绕过缺失矩阵行。
 
     Implementation 和 acceptance 在本 schema 中是同一个 workflow：
     - 按依赖顺序处理 AC sections。
-    - 编辑任何 task 前，读取该 task 的 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Acceptance:`、`Source:`、`Preserve:`、`Proof:` 和 `Mock Policy:` 字段。
+    - 编辑任何 task 前，先读取当前 AC 的 AC-local execution contract：`Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`Test Items:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:` 和 `Mock Policy:`。
+    - 编辑任何 task 前，读取该 task 的 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Source:`、`Preserve:`、`Proof:` 和 `Mock Policy:` 字段。
+    - 编辑任何 task 前，只读取该 AC-local contract 和 task trace 引用的 Runtime Surface、Operation、State / Branch、Async / Realtime Chain 和 Test Evidence detail rows；若 task 没有相关 rows 且不是 source-backed repository/setup task，先修订 tasks。
     - 读取 linked proposal register rows，并只读取该 task 需要的 focused original source line ranges。
     - 不实现无法追溯到 proposal、specs、design、Global Atom IDs 和 original source docs 的行为。
+    - 优先建立或补齐该 AC-local `Test IDs:` / `Test Items:` 和 task `Test IDs:` 对应的自动测试。实现完成前，相关 proof 应能失败或暴露缺口；实现后，相关 Test IDs 必须通过固定命令，并在 canonical evidence directory 产生可审阅 evidence。
     - 除非 task 的 `Proof:` 已执行且 linked acceptance slice 达到所需 fidelity，否则不得标记 task complete。
     - 如果 artifact 使用 `OGA-0001-OGA-0010` 这类 Global Atom ID ranges，暂停并更新 artifacts，使其枚举 exact IDs。
     - 如果 task summary 或 proof 弱于其 Global Atoms、specs、design 或 acceptance slice，先更新 artifacts 再实现。
     - 如果 task descriptions、acceptance/proof explanations 或 evidence ledger expectations 是英文主导且非 source-native identifiers，先更新 artifacts 再实现。
     - 如果实现暴露出 artifacts 与 obligation atoms 或 original source docs 不一致，暂停并更新 artifacts，不得用代码绕过 mismatch。
+    - 如果实现新增或发现新的 operation、state、branch、terminal outcome、async step、event、job、provider branch、storage branch、auth/security branch 或 responsive variant，先更新 `Verification Appendix`、`Runtime Acceptance Index`、owning AC-local contract、AC tasks 和 Test Evidence Matrix，再继续实现或勾选。
     - 对用户可见的 mutating/selection/action control，勾选相关 task 前必须通过实际 runtime surface 执行 user-equivalent interaction（click/type/select/blur/submit/keyboard 等），并断言 handler/API 被触发、响应或持久化数据正确、rendered UI 更新且 reload/readback 后仍成立。静态 markup、截图、`data-testid`、enabled/disabled 或 API-only proof 不得单独作为操作已实现的完成依据。
-    - 工作时维护 evidence notes：对每个完成的 checkbox，记录满足 task 的 command、rendered artifact、API/DB/job/storage/log/audit fact 或 default-path proof。
-    - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表做最终 audit，对照 completed tasks、implementation evidence、verification evidence、Global Atoms 和 evidence ledger。只有 audit 通过后，change 才 ready for archive。
+    - 对 state/branch/terminal outcomes，勾选相关 task 前必须执行对应 Test IDs，断言进入条件、可观察 UI/API 结果、数据或事件事实、允许的 next states、terminal 标记和 recovery/retry 行为。成功状态测试不能替代失败/dispatch/timeout/unauthorized 等独立终态。
+    - 对 async/realtime chain，勾选相关 task 前必须证明 chain matrix 中要求的 success 和 relevant failure variants。手工注入 `EventSource`、Playwright route intercept、fixture snapshot、直接 DB seed 或 isolated unit test 可作为补充，但不能作为唯一 proof 替代 queue/worker/domain/outbox/SSE/browser/readback 的 required default path 或 source-compatible deterministic path。
+    - 测试相关 evidence 必须由固定命令自动生成或由 final verification task 复制到 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`。不得把 `/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径作为最终 proof。
+    - 工作时维护 AC/Test-local evidence ledger：对每个完成的 checkbox，记录满足 task 的 fixed command、canonical rendered artifact、API/DB/job/storage/log/audit fact 或 default-path proof。
+    - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract 和 `Verification Appendix` 五张矩阵做最终 audit，对照 completed tasks、implementation evidence、verification evidence、Global Atoms、runtime rows、Test IDs、fixed commands、canonical evidence directories 和 evidence ledger。只有 audit 通过后，change 才 ready for archive。
