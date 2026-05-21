@@ -1,13 +1,13 @@
 ---
 name: obligation-atom-driven
-description: Install or switch a repository to the bundled production-obligation-atom-driven OpenSpec implementation workflow. Use when Codex needs to sync the current projection-aware obligation atom driven schema, proposal/spec/design/tasks templates, and matching OpenSpec agent-runtime constraint documents into a repository, or when older anchor/source-artifact profiles should be replaced by the current OGA obligation atom contract.
+description: Install or switch a repository to the bundled production-obligation-atom-driven OpenSpec implementation workflow. Use when Codex needs to sync the current projection-aware obligation atom driven schema, proposal/spec/design/tasks templates, and matching OpenSpec agent-runtime constraint documents into a repository, or when older anchor/source-artifact profiles should be replaced by the current GA obligation atom contract.
 ---
 
 # Obligation Atom Driven
 
 Use this skill to configure a repository so OpenSpec changes use the bundled projection-aware `production-obligation-atom-driven` schema and its paired agent runtime constraints.
 
-The canonical Global Atom ID prefix for this profile is `OGA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification must preserve `OGA-####` IDs from `obligation-atom-index.md`; do not rewrite them to any shorter legacy prefix or local source atom ID.
+The canonical Global Atom ID prefix for this profile is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
 
 ## Workflow
 
