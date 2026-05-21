@@ -1,6 +1,6 @@
 ## Context
 
-<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。引用 GA IDs。 -->
+<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。引用 OGA IDs。 -->
 
 ## Goals / Non-Goals
 
@@ -12,11 +12,11 @@
 
 | Global Atom ID | Artifact Projection | Source Document / Lines | Design Consumption | Implementation Boundary |
 | --- | --- | --- | --- | --- |
-| `GA-0001` | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
+| `OGA-0001` | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
 
 ## Decisions
 
-<!-- 记录 source-backed implementation decisions。若 source 只定义行为未定义技术形态，说明 source gap、选择的最小 source-compatible 形态、对应 GA IDs，以及为避免扩大 scope 而拒绝的更大替代方案。 -->
+<!-- 记录 source-backed implementation decisions。若 source 只定义行为未定义技术形态，说明 source gap、选择的最小 source-compatible 形态、对应 OGA IDs，以及为避免扩大 scope 而拒绝的更大替代方案。 -->
 
 ## Architecture / Module Boundary Design
 
@@ -52,10 +52,10 @@
 
 ## Production Alignment Gate
 
-- Global Atom IDs implemented / preserved / deferred: <!-- GA-0001 implemented, GA-0002 preserved, GA-0003 deferred；逐个枚举 exact IDs，不使用 ranges -->
+- Global Atom IDs implemented / preserved / deferred: <!-- OGA-0001 implemented, OGA-0002 preserved, OGA-0003 deferred；逐个枚举 exact IDs，不使用 ranges -->
 - Artifact Projection handling: <!-- design-obligation 已进入 design；verification-obligation 已进入 Verification Design/tasks handoff；spec-guard 已体现 preserve/forbidden drift；无 projection mismatch -->
 - Spec scenarios covered by design: <!-- requirement/scenario names -->
-- Orphan direct atoms: <!-- none / exact GA blockers -->
+- Orphan direct atoms: <!-- none / exact OGA blockers -->
 - Source-backed implementation decisions minimal: <!-- 是 / blocker；列出关键 decision 与 rejected expansion -->
 - Source-defined identifiers used: <!-- workflows/routes/states/data keys/tables/commands/APIs/jobs/events/object keys/entitlements/environments/lifecycle terms -->
 - Source trace complete: <!-- 是 / blocker -->
