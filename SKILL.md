@@ -19,6 +19,7 @@ The canonical Global Atom ID prefix for this profile is `GA-####`. Runtime const
 4. Sync bundled OpenSpec files into the target repository:
    - Copy `<skill-root>/references/profiles/production-obligation-atom-driven/<schema_dir>/` to `<repo-root>/openspec/schemas/<schema_name>/`.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
+   - Preserve the bundled apply runtime requirement that any apply-stage `worker` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
    - Create or update `<repo-root>/openspec/config.yaml` so the top-level `schema:` value is `<schema_name>`.
    - Preserve unrelated project-specific config entries when updating an existing `openspec/config.yaml`.
    - If target schema or runtime files already exist and differ, inspect the differences and update them intentionally.
@@ -39,7 +40,7 @@ The canonical Global Atom ID prefix for this profile is `GA-####`. Runtime const
 - `references/profiles/production-obligation-atom-driven/`: profile metadata and schema files for the production obligation atom driven OpenSpec workflow.
 - `references/profiles/production-obligation-atom-driven/schema/schema.yaml`: projection-aware schema that consumes canonical final change packets and `obligation-atom-index.md` directly from `openspec/orchestrate`, creates proposal, specs, design, and acceptance-driven tasks, distinguishes `spec-requirement`, `spec-guard`, `design-obligation`, `verification-obligation`, and `contextual-only` atoms, and does not use `source-truth.md`, separate `acceptance.md`, legacy source coverage artifacts, `change-source-map.md`, or pre-proposal source artifacts.
 - `references/profiles/production-obligation-atom-driven/schema/templates/`: templates paired with the schema artifacts.
-- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference.
+- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
 
 ## Profile Contract
 

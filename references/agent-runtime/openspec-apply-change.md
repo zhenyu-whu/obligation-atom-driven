@@ -50,11 +50,13 @@
 ## Subagent 分派
 
 1. 用户明确要求执行或继续执行 `openspec-apply-change` 技能时，该请求即代表用户显式授权并要求按本节使用 `worker` subagent 和 delegation，除非用户在同一请求中明确禁止 subagent。
-2. `worker` subagent 必须串行执行。禁止一次性启动多个 worker；任一时刻最多只能有一个 worker 处于运行中。
-3. 对每个包含未完成任务的 AC section，必须按顺序分别创建一个 `worker` subagent 进行开发，除非用户明确禁止 subagent 或运行环境不可用。前一个 worker 自然返回最终完成或明确 blocker 前，不得启动下一个 worker。
-4. 每个 worker 只负责自己 AC section 内的任务和该 section 的验收 proof。
-5. 启动 worker 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该章节必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
-6. 启动 worker 时必须传入：
+2. 创建或启动任何 apply-stage `worker` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级为其他模型或推理档位；若当前运行环境无法创建 `GPT-5.5` / `xhigh` worker，必须暂停 apply 并向用户报告 blocker，不得以降级 worker 继续。
+3. `worker` subagent 必须串行执行。禁止一次性启动多个 worker；任一时刻最多只能有一个 worker 处于运行中。
+4. 对每个包含未完成任务的 AC section，必须按顺序分别创建一个 `worker` subagent 进行开发，除非用户明确禁止 subagent 或运行环境不可用。前一个 worker 自然返回最终完成或明确 blocker 前，不得启动下一个 worker。
+5. 每个 worker 只负责自己 AC section 内的任务和该 section 的验收 proof。
+6. 启动 worker 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该章节必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
+7. 启动 worker 时必须传入：
+   - runtime 配置：`model=GPT-5.5`、`reasoningEffort=xhigh`、不得降级；若无法满足该配置，worker 不得启动。
    - change 名称和 schema 名称。
    - `contextFiles` 路径清单。
    - proposal register 中与该 AC 相关的 `GA-####` rows。
@@ -66,9 +68,9 @@
    - 与该 AC 相关的用户可见 operation matrix；若 tasks/spec/design 没有提供但 source atoms 描述了用户操作，worker 必须先报告 artifact proof gap。
    - 允许修改的代码范围或模块边界。
    - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足、default path 未证明或存在 blocker 的任务不得勾选。
-7. 必须明确告知 worker：实现前必须通过 linked `GA-####` 定点读取原始 source docs 相关片段，并在最终回复中列出读取的 source windows；若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 atoms/spec/design/source docs，必须停止猜测并标明 blocker。
-8. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
-9. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 evidence ledger 条目，包括命令、截图/DOM、API/DB/job/storage/log/audit facts、AC-local runtime row IDs、Test IDs 或 default-path proof；只报告“测试通过”不足以支撑勾选。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。对用户可见操作，ledger 必须满足当前 schema 的 operation matrix proof；对状态/分支/异步链路，ledger 必须满足对应 AC-local State / Branch 和 Async / Realtime Chain rows。
+8. 必须明确告知 worker：实现前必须通过 linked `GA-####` 定点读取原始 source docs 相关片段，并在最终回复中列出读取的 source windows；若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 atoms/spec/design/source docs，必须停止猜测并标明 blocker。
+9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
+10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 evidence ledger 条目，包括命令、截图/DOM、API/DB/job/storage/log/audit facts、AC-local runtime row IDs、Test IDs 或 default-path proof；只报告“测试通过”不足以支撑勾选。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。对用户可见操作，ledger 必须满足当前 schema 的 operation matrix proof；对状态/分支/异步链路，ledger 必须满足对应 AC-local State / Branch 和 Async / Realtime Chain rows。
 
 ## 主 Agent 职责
 
