@@ -111,19 +111,24 @@
 
 1. 不生成独立 `acceptance.md`。`tasks.md` 是实现计划和验收合同。
 2. tasks 必须按 `## AC-### <name>` 分组。每个 AC section 必须有 `Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:`、`Mock Policy:`。
-3. AC heading 的 `<name>` 和 checkbox task description 必须使用中文，除非它们完全是固定 ID、路径、命令或源文档精确术语。
-4. 每个 checkbox task 必须只包含 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段；默认通过 `Trace: inherits AC-###` 继承 owning AC 的 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`No-Scope Boundary:` 和 `Mock Policy:`。只有 task 相对 owning AC 有更窄 scope 或例外时，才在 `Trace:` 或 `Overrides:` 中写明 exact override，不要机械重复 AC-level 字段。
-5. `tasks.md` 必须包含 `## Acceptance-Driven Coverage`，并按顺序包含三张非 checkbox 表：
+3. tasks 生成 AC 前必须建立 runtime provision graph，区分 baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only 和 forbidden-boundary；AC sections 必须按该 graph 拓扑排序生成。
+4. 如果某个 AC 的 Primary Proof、Required Evidence 或 fixed command 需要 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC；不得把后置依赖留到 apply 阶段。
+5. 每个 AC section 必须额外包含 `Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`。`Prerequisites` 只能引用 baseline 或 earlier AC/Test IDs；`Provides` 说明本 AC 完成后提供给后续 AC 的 runtime rows/contracts/facts；`Consumes` 说明本 AC proof 消费的 baseline 或 earlier AC rows/contracts/facts；`Start Gate` 用中文写明进入该 AC 的执行门禁。
+6. AC heading 的 `<name>` 和 checkbox task description 必须使用中文，除非它们完全是固定 ID、路径、命令或源文档精确术语。
+7. 每个 checkbox task 必须只包含 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段；默认通过 `Trace: inherits AC-###` 继承 owning AC 的 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`No-Scope Boundary:` 和 `Mock Policy:`。只有 task 相对 owning AC 有更窄 scope 或例外时，才在 `Trace:` 或 `Overrides:` 中写明 exact override，不要机械重复 AC-level 字段。
+8. `tasks.md` 必须包含 `## Acceptance-Driven Coverage`，并按顺序包含三张非 checkbox 表：
    - `### Obligation Atom Coverage`
    - `### Requirement / Scenario Coverage`
    - `### Design Obligation Coverage`
-6. 每个 direct atom 必须按 artifact projection 有 implementation task、design handoff、guard handling 或 verification/acceptance proof，除非该 atom 在 proposal 中被 source-backed 改判为 blocker、deferred、non-goal 或 guard。
-7. `Obligation Atom Coverage` 必须包含 `Artifact Projection` 列；`Requirement / Scenario Coverage` 和 `Design Obligation Coverage` 必须体现 projection handling，且不得为纯 `design-obligation` 或 `verification-obligation` atom 伪造 scenario。
-8. `Obligation Atom Coverage` 每行只能包含一个 `GA-####`，不得使用 aggregate row、range 或多 ID 单元格。
-9. 三张 coverage 表中的每个 `Implementation Task IDs` 和 `Verification Task IDs` 必须解析到实际 checkbox task ID。只引用 AC heading 不足以作为 executable proof；需要显式 final verification / acceptance checkbox。
-10. 每个 AC section 必须至少有一个 final verification / acceptance checkbox，并在 `Primary Proof`、`Required Evidence` 和相关 coverage rows 中被引用。
-11. tasks 必须定义每个 AC 的 evidence ledger expectation，包括 commands、browser/rendered artifacts、API/DB/job/storage/log/audit facts、default-production-path proof。
-12. Proof 必须达到验收强度：用户可见行为需要 browser/rendered evidence；后端/data/worker/storage/security 行为需要 API、DB、job、asset、log、audit 或 authorization facts；默认生产路径不能只用 mock 或 isolated unit test 证明。
+9. 每个 direct atom 必须按 artifact projection 有 implementation task、design handoff、guard handling 或 verification/acceptance proof，除非该 atom 在 proposal 中被 source-backed 改判为 blocker、deferred、non-goal 或 guard。
+10. `Obligation Atom Coverage` 必须包含 `Artifact Projection` 列；`Requirement / Scenario Coverage` 和 `Design Obligation Coverage` 必须体现 projection handling，且不得为纯 `design-obligation` 或 `verification-obligation` atom 伪造 scenario。
+11. `Obligation Atom Coverage` 每行只能包含一个 `GA-####`，不得使用 aggregate row、range 或多 ID 单元格。
+12. 三张 coverage 表中的每个 `Implementation Task IDs` 和 `Verification Task IDs` 必须解析到实际 checkbox task ID。只引用 AC heading 不足以作为 executable proof；需要显式 final verification / acceptance checkbox。
+13. 每个 AC section 必须至少有一个 final verification / acceptance checkbox，并在 `Primary Proof`、`Required Evidence` 和相关 coverage rows 中被引用。
+14. 每个 Test ID 必须使用 exact `T-###`（三位数字，例如 `T-001`，可用 `T-000` 表示 repository/runtime support），在整个 change 内唯一且只归属一个 AC。禁止把 AC 编号、测试名称、slug、字母后缀或描述性文本写入 Test ID；语义应写入 `Test File / Name`、`Layer`、`Covers Rows`、`Evidence Produced` 或 ledger。
+15. tasks 必须定义每个 AC 的 evidence ledger expectation，包括 commands、browser/rendered artifacts、API/DB/job/storage/log/audit facts、default-production-path proof。
+16. Proof 必须达到验收强度：用户可见行为需要 browser/rendered evidence；后端/data/worker/storage/security 行为需要 API、DB、job、asset、log、audit 或 authorization facts；默认生产路径不能只用 mock 或 isolated unit test 证明。
+17. Final task 自查必须确认 AC section 输出顺序满足 runtime provision graph：没有 consumer AC 依赖后置 provider AC，没有循环依赖，没有 future-change-only prerequisite，也没有只藏在 proof/fixed command 中的隐式 runtime dependency。
 
 ## Artifact 生成自查
 
@@ -133,7 +138,7 @@
 2. `proposal.md`：packet direct atom 数量 = proposal register row 数量；每行有 `Artifact Projection` 和 `Projection Source`；direct atoms 均已出现在 `Source Window Read Set`；无 orphan direct `GA-####`；无 GA ranges。
 3. specs：只为有 OpenSpec delta 的 capability 生成 `specs/<capability>/spec.md`；每个生成的 spec file 必须至少包含一个 `### Requirement:`，且不得只包含 `Artifact Projection Notes` 或“无”。proposal direct `GA-####` 按 artifact projection 映射到 requirement/scenario、guard、已有 delta spec 的 `Artifact Projection Notes` 或 design/tasks coverage；handoff 不能替代后续 design/tasks 的实际消费；每个 scenario 有 exact `Source Atoms` 和 concrete `Source Trace`；无 spec-level orphan direct `GA-####`；无 GA ranges。
 4. `design.md`：每个 in-scope scenario、`design-obligation` atom 和需要 design placement 的 direct `GA-####` 有 design obligation 或 guard handling；source-backed implementation decisions 记录 source gap、最小技术形态和 rejected expansion；无需要 implementer 猜测的行为。
-5. `tasks.md`：三张 coverage 表完整且 projection-aware；`Obligation Atom Coverage` 单行单 GA；所有 task ID 引用都能解析到 checkbox；每个 AC 有 final verification checkbox；每个 AC 有 evidence ledger expectation；无 GA ranges、无 aggregate row、无 orphan direct atom、无 projection mismatch。
+5. `tasks.md`：三张 coverage 表完整且 projection-aware；`Obligation Atom Coverage` 单行单 GA；所有 task ID 引用都能解析到 checkbox；每个 Test ID 都匹配 exact `T-[0-9]{3}` 且 canonical evidence directory 使用同名最后一级目录；每个 AC 有 final verification checkbox；每个 AC 有 evidence ledger expectation；每个 AC 有 Prerequisites/Provides/Consumes/Start Gate；AC section 顺序满足 runtime provision graph；无 GA ranges、无 aggregate row、无 orphan direct atom、无 projection mismatch、无后置 provider dependency。
 
 ## Legacy Schema 兼容
 
