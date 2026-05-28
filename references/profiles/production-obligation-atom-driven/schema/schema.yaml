@@ -11,7 +11,7 @@ artifacts:
 
       核心规则：
       - 本 schema 直接消费当前已存在的 `openspec/orchestrate/change-capability-anchors/` canonical change packets 与 `obligation-atom-index.md`。proposal 阶段只允许使用这些最小权威读集，不得创建或要求任何新的 proposal 前置 source artifact。
-      - 当前 Phase 4 final change packet：`openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 是唯一 canonical change contract。它独占定义本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers。
+      - 当前 Phase 5 final change packet：`openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 是唯一 canonical change contract。它独占定义本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers。
       - `openspec/orchestrate/change-capability-anchors/obligation-atom-index.md` 只作为 GA lookup table，用于校验 `GA-####` 存在并补齐 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、`Source Atom Origins`、`Propose Use` 和 `Evidence Need`。它不得覆盖当前 final change packet 的 direct scope、artifact projection 或 capability 归属。
       - `openspec/orchestrate/change-capability-anchors/index.md` 只用于 packet discovery。`change-plan.md` 只在自动推断 change slug 或核对 roadmap 顺序时读取，不得覆盖 final change packet。
       - 除 canonical change packet、global atom index 和必要 capability views 外，其他 orchestrate/review/report 产物都不是 proposal 门禁或内容权威。proposal 不得从这些文件新增、删除、移动、重判 direct atom，也不得用它们扩展 final packet 之外的 scope。
