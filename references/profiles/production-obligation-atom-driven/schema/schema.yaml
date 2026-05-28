@@ -17,18 +17,20 @@ artifacts:
       - 除 canonical change packet、global atom index 和必要 capability views 外，其他 orchestrate/review/report 产物都不是 proposal 门禁或内容权威。proposal 不得从这些文件新增、删除、移动、重判 direct atom，也不得用它们扩展 final packet 之外的 scope。
       - 不得创建或依赖 `source-truth.md`、`acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何新的 proposal 前置 source artifact。
       - Proposal 必须包含 `Change Atom Coverage Register`，对当前 packet 的每个 `Direct Owning Atoms` 行引用 exact Global Atom ID（`GA-0001` 这种格式），并记录 `Artifact Projection` 和 `Projection Source`。下游 artifacts 必须引用 exact `GA-####`，不得使用 ranges。
-      - Proposal 可以将 obligation atoms 组织为简洁的产品或技术范围，但不得遗漏、弱化或窄化 packet/global index 记录的任何 direct source-backed behavior、preserve boundary、explicit non-goal、dependency、failure path、verification obligation、artifact projection 或 proposal-level implementation gap。
-      - Proposal 必须证明每个 direct atom 都已通过 global index 中的 `Source Document` + `Lines` 定点重读原文。对 contextual、contextual-preserve、explicit-non-goal、prototype-only-not-production 等 non-direct atoms，在需要保留边界或避免误扩 scope 时定点重读。
+      - Proposal 还必须包含 `Owner-Scoped Non-Direct Atom Register`，对当前 final change packet 中 context/dependency/evidence/preserve/non-goal handling tables 的每个 explicit `GA-####` owner-scoped non-direct row 建立一行。非 direct atom 不计入 capability advancement，但必须作为 proposal 输入进入边界、guard、dependency、evidence burden、non-goal 或 downstream handoff；不得只留在 packet/global index、不得汇总成 count、range、additional-context 或 link-only placeholder。
+      - Proposal 可以将 obligation atoms 组织为简洁的产品或技术范围，但不得遗漏、弱化或窄化 packet/global index 记录的任何 direct source-backed behavior、owner-scoped non-direct preserve boundary、explicit non-goal、dependency、failure path、verification obligation、artifact projection 或 proposal-level implementation gap。
+      - Proposal 必须证明每个 direct atom 都已通过 global index 中的 `Source Document` + `Lines` 定点重读原文。对 owner-scoped non-direct atoms，proposal 必须先逐条登记；其中需要保留精确边界、避免误扩 scope、确认 dependency/evidence burden 或确认 proof 语义的 atom 也必须定点重读。
 
       写入前：
       - 读取 `openspec/orchestrate/change-capability-anchors/index.md`，定位 exact planned change 和 packet path；change slug 必须来自该 final packet index。
       - 如果用户未提供明确 change，或需要核对 dependency/roadmap 顺序，再读取 `openspec/orchestrate/change-plan.md`；读取目的只限自动推断，不得覆盖 final packet。
       - 读取当前 final change packet：`openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`。proposal 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream baseline、downstream constraints、evidence burden 和 blockers 均以该 packet 为准。
+      - 从当前 final change packet 抽取所有 explicit owner-scoped non-direct `GA-####` rows，包括 context、dependency、evidence burden、preserve/reference、explicit non-goal、prototype-only、blocked 或 forbidden-drift handling rows。capability views 是 direct-advancement derived views，只能辅助分组，不能作为 non-direct atom 的替代输入来源。
       - 读取 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.md`。
       - 只有当 packet 中某个 capability increment 需要拆分 spec file 或 packet 明确要求读取 capability view 时，才读取对应 `openspec/orchestrate/change-capability-anchors/<change-slug>/capability-anchors/<capability>.md`；这些 view 只能辅助分组，不得覆盖 final packet。
       - 检查 `openspec/specs/` 只用于判断 proposal capabilities 是新增还是修改；existing specs 不得窄化或替代 final packet/global index。
       - 对每个 direct `GA-####`，按 global index 中的 source path 和 line range 定点重读原始 source window；不得重新做全量 source discovery。
-      - 记录 `Source Window Read Set`，列出每个 direct atom 的重读 source window；non-direct atom 只在需要边界确认时列入。
+      - 记录 `Source Window Read Set`，列出每个 direct atom 的重读 source window；owner-scoped non-direct atom 必须全部进入 `Owner-Scoped Non-Direct Atom Register`，并在需要边界、dependency、evidence 或 proof 精确性时列入 source window read set。
 
       阻断条件：
       - change 不存在于 final packet index；用户指定的 change 不在 final packet index 中时，不得用 `change-plan.md` 或旧 packet 猜测替代。
@@ -41,6 +43,7 @@ artifacts:
       Global Atom ID 规则：
       - 直接使用 global atom registry 中的 `GA-####`，不得在 proposal 中重新编号为任何局部 source ID。
       - 每个 packet direct atom 在 proposal register 中必须正好有一行。
+      - 每个 owner-scoped non-direct atom 在 proposal 的 `Owner-Scoped Non-Direct Atom Register` 中必须正好有一行；packet non-direct row count/list 必须与 proposal non-direct register row count/list 相等。缺失任何 row 都是 proposal blocker。
       - 保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use`、`Evidence Need`。
       - `direct` atoms 是 implementation candidates。`contextual`、`contextual-preserve`、`explicit-non-goal`、`prototype-only-not-production`、`non-production`、`blocked` 等 rows 是边界、guardrail 或 verification context；除非 packet/global index 明确要求，不得把它们转成新增实现 scope。
       - `Artifact Projection` 允许值为 `spec-requirement`、`spec-guard`、`design-obligation`、`verification-obligation`、`contextual-only`。Proposal direct register rows 不得使用 `contextual-only`；`contextual-only` 只可用于非 direct context/boundary rows。`blocked` 只可用于无法安全消费的 row。
@@ -52,9 +55,9 @@ artifacts:
       - `What Changes` 必须引用 exact `GA-####`，并在 source-backed 时命名相关 product surfaces、routes、domain commands、APIs、database entities/migrations、worker jobs、events/SSE streams、storage/assets、auth/security rules、billing/entitlement rules、observability/ops surfaces、deployment constraints 和 verification surfaces。
       - 当 direct atom 描述用户可见操作或控件能力（例如新增、编辑、删除、保存、选择、重试、返回、提交、关闭、取消、上传、下载）时，proposal 必须保留每个 operation verb 及其可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。不得只写“支持编辑”“支持操作”而不列出具体操作和结果。
       - `Capabilities` 必须匹配 final packet 的 capability atom views，除非 packet 记录 source-backed conflict 或 blocker。
-      - `Production Source Coverage` 必须列出 proposal register 中 exact source files、line ranges 和 `GA-####`。不得新增宽泛整篇文档读取义务。
-      - `Source Window Read Set` 必须列出每个重读 source window、匹配 `GA-####`，以及重读是否改变或确认 proposal interpretation。
-      - `Non-Goals` 必须包含 explicit non-goal、later-change、preserve、prototype-only、superseded 或 forbidden-drift atoms 对本 change 的约束。
+      - `Production Source Coverage` 必须列出 direct register 与 owner-scoped non-direct register 中 exact source files、line ranges 和 `GA-####`。不得新增宽泛整篇文档读取义务。
+      - `Source Window Read Set` 必须列出每个重读 source window、匹配 `GA-####`，以及重读是否改变或确认 proposal interpretation。所有 direct atom 必须列入；owner-scoped non-direct atom 按边界、dependency、evidence 或 proof 精确性需要列入，但即使未重读也必须在 non-direct register 中登记处理方式。
+      - `Non-Goals` 必须包含 explicit non-goal、later-change、preserve、prototype-only、superseded 或 forbidden-drift atoms 对本 change 的约束，并引用 `Owner-Scoped Non-Direct Atom Register` 中对应 exact `GA-####`。
       - Proposal 必须把 source 只留给 propose/design 的实现细节（例如 API route 命名或最小 schema 选择）保留为 open design decisions，而不是伪装成 source-defined。
 
       必需章节：
@@ -64,6 +67,7 @@ artifacts:
       - **What Changes**
       - **Capabilities**
       - **Change Atom Coverage Register**
+      - **Owner-Scoped Non-Direct Atom Register**
       - **Production Source Coverage**
       - **Source Window Read Set**
       - **Non-Goals**
@@ -80,7 +84,7 @@ artifacts:
       创建 specification files，定义 production system 应该做什么。
 
       写入前：
-      - 先读取 `proposal.md`。把其中的 `Change Atom Coverage Register` 作为本 change 的 mandatory source-reading interface，并读取每行 `Artifact Projection`。
+      - 先读取 `proposal.md`。把其中的 `Change Atom Coverage Register` 作为本 change direct atoms 的 mandatory source-reading interface，并读取每行 `Artifact Projection`；同时读取 `Owner-Scoped Non-Direct Atom Register` 作为 preserve、guard、dependency、evidence burden、non-goal 与 downstream handoff 的 mandatory boundary interface。
       - 对 proposal 中列出的每个 capability，读取当前 change 的 capability atom view file：`openspec/orchestrate/change-capability-anchors/<change-slug>/capability-anchors/<capability>.md`。随后先判定该 capability 是否有 `spec-requirement` 或 `spec-guard` delta；没有 spec-level delta 的 capability 不创建 spec file。
       - 对每个选中 `GA-####`，仅在需要保留 exact behavior、identifiers、failure paths 或 verification expectations 时，按 proposal register 的 `Source Document` + `Lines` 定点重读原始 source window。
       - 起草前建立 capability-to-atom map 和 artifact-projection map。每个 proposal direct `GA-####` 必须按 projection 映射到 requirement/scenario、spec guard、已有 delta spec 的 Artifact Projection Notes、或明确记录为 design/tasks handoff。
@@ -136,7 +140,7 @@ artifacts:
 
       写入前：
       - 读取 proposal 和所有实际生成的 delta specs；不要期待纯 design/verification-only capability 有 spec file。
-      - 使用 proposal 的 `Change Atom Coverage Register`、`Artifact Projection`、spec `Source Atoms`、spec `Source Trace` 和存在时的 spec `Artifact Projection Notes` 作为 source-reading interface。
+      - 使用 proposal 的 `Change Atom Coverage Register`、`Owner-Scoped Non-Direct Atom Register`、`Artifact Projection`、spec `Source Atoms`、spec `Source Trace` 和存在时的 spec `Artifact Projection Notes` 作为 source-reading interface。
       - 当 design 需要 exact product behavior、architecture/module boundaries、data/API shape、auth/security constraints、async/worker behavior、UI/prototype fidelity、observability、deployment 或 verification detail 时，只通过 registered `GA-####` 的 focused `Source Document` + `Lines` window 定点重读原始 source。
       - 不重新发现 source truth。如果 design 需要 proposal/spec atoms 无法到达的 source detail，修订 proposal/specs 或报告 blocker。
       - 起草前建立 design atom matrix。每个 `design-obligation` direct `GA-####`、每个需要 design placement 的 `spec-requirement`、每个 `spec-guard`，以及每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker。
@@ -208,7 +212,7 @@ artifacts:
 
       写入前：
       - 读取 proposal、所有实际生成的 delta specs 和 design；不要期待纯 design/verification-only capability 有 spec file。
-      - 使用 proposal 的 `Change Atom Coverage Register`、`Artifact Projection`、spec `Source Atoms`、存在时的 spec `Artifact Projection Notes` 和 design `Production Source Map` 作为 source-reading interface。
+      - 使用 proposal 的 `Change Atom Coverage Register`、`Owner-Scoped Non-Direct Atom Register`、`Artifact Projection`、spec `Source Atoms`、存在时的 spec `Artifact Projection Notes` 和 design `Production Source Map` 作为 source-reading interface。
       - 仅在需要让 task proof 达到 source-equivalent 时，通过 relevant `GA-####` 的 focused `Source Document` + `Lines` windows 定点重读原始 source。
       - 将 missing 或 failed proposal/spec/design alignment gates 视为 blockers。
       - Finalizing tasks 前建立 proposal `GA-####` rows、artifact projection map、spec scenarios、design obligations、AC sections、checkbox task IDs、coverage table references、Runtime Appendix rows 和 Test Evidence rows 的索引。每个 coverage table task ID 必须解析到实际 checkbox task。

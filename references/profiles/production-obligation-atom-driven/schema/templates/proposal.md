@@ -32,13 +32,21 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `GA-0001` | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- atom type --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation --> | <!-- final-packet / global-index / inferred-from-legacy-packet --> | <!-- must / should / must-not / context --> | <!-- direct / explicit-non-goal / contextual-preserve / ... --> | <!-- planned capability --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- canonical propose use --> | <!-- browser-e2e / integration / contract / ... --> | <!-- proposal/spec/design/tasks coverage expectation，必须匹配 projection --> |
 
+## Owner-Scoped Non-Direct Atom Register
+
+<!-- 每个 final change packet context/dependency/evidence/preserve/non-goal handling table 中显式属于本 change 的 non-direct GA atom 一行。非 direct atom 不计入 capability advancement，也不进入 direct register，但必须作为 proposal 输入保留边界、guard、dependency、evidence burden、non-goal 或 downstream handoff。不得使用 ranges、count-only、additional-context、link-only placeholder 或多 GA 聚合行。若 final packet 没有 owner-scoped non-direct atom，写“None”，并在 Proposal Alignment Gate 写 parity rows=0。 -->
+
+| Global Atom ID | Source Document | Lines | Packet Relation | Context Type | Artifact Projection | Source Fact | Proposal Handling | Downstream Handling |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `GA-0002` | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- context / dependency / evidence-burden / preserve / explicit-non-goal / prototype-only / blocked / forbidden-drift --> | <!-- boundary / prerequisite / proof / no-scope / reference / other --> | <!-- contextual-only / spec-guard / verification-obligation / ... --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- 在 Why/Boundary/Non-Goals/Impact/Readiness/Gate 中如何消费 --> | <!-- specs/design/tasks 中如何作为 guard、dependency、proof 或 non-goal 继续传递；不得变成新增实现 scope，除非 packet 明确要求 --> |
+
 ## Production Source Coverage
 
-<!-- 列出此 change 必须保持一致的 exact source files、line ranges 与 exact GA IDs。不要新增宽泛整篇文档读取义务。 -->
+<!-- 列出 direct register 与 owner-scoped non-direct register 中必须保持一致的 exact source files、line ranges 与 exact GA IDs。不要新增宽泛整篇文档读取义务。 -->
 
 ## Source Window Read Set
 
-<!-- 对每个 direct atom，列出已定点重读的 original source window。Contextual、preserve、non-goal atom 只在需要精确边界时列入。不要用整篇文档代替 line ranges。 -->
+<!-- 对每个 direct atom，列出已定点重读的 original source window。Owner-scoped non-direct atom 必须先全部登记到 Non-Direct Register；其中需要精确边界、dependency、evidence 或 proof 语义的 atom 也列入本表。不要用整篇文档代替 line ranges。 -->
 
 | Global Atom ID | Source Window | Re-read Purpose | Interpretation Result |
 | --- | --- | --- | --- |
@@ -46,7 +54,7 @@
 
 ## Non-Goals
 
-<!-- 明确排除 source-backed later-change boundaries、global forbidden drift、explicit non-goals、prototype-only-not-production atoms 与 out-of-scope work；适用时引用 GA IDs。 -->
+<!-- 明确排除 source-backed later-change boundaries、global forbidden drift、explicit non-goals、prototype-only-not-production atoms 与 out-of-scope work；适用时引用 Owner-Scoped Non-Direct Atom Register 中的 exact GA IDs。 -->
 
 ## Impact
 
@@ -65,9 +73,11 @@
 - Final change packet consumed: <!-- path -->
 - Capability atom view files consumed: <!-- paths / 未额外读取，按 final packet 分组 -->
 - Direct atoms covered by proposal: <!-- GA-0001, GA-0002, ...；逐个枚举，不使用 ranges -->
+- Owner-scoped non-direct atoms captured: <!-- GA-...；逐个枚举或说明无 -->
+- Owner-scoped non-direct atom parity: <!-- packet rows=<n>, proposal rows=<n>, missing=none / blocker -->
 - Artifact projection coverage: <!-- 每个 direct GA 的 projection 已记录；design/verification atoms 未被强制列为 spec requirement -->
 - Contextual / preserve / non-goal atoms captured: <!-- GA-...；逐个枚举或说明无 -->
-- Source windows re-read for direct atoms: <!-- GA-0001 -> path Lx-Ly, GA-0002 -> path Lx-Ly；无遗漏或列 blocker -->
+- Source windows re-read: <!-- direct GA 全部列入；需要精确边界/dependency/evidence/proof 的 owner-scoped non-direct GA 也列入；GA-0001 -> path Lx-Ly；无遗漏或列 blocker -->
 - Orphan direct atoms: <!-- none / 具体 GA blocker -->
 - Capability increments covered or gap-classified: <!-- 说明 -->
 - Blockers: <!-- 无 / 具体 blocker -->
