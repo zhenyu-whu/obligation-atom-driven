@@ -1,0 +1,3 @@
+profile: production-default-acceptance-driven
+schema_name: production-default-acceptance-driven
+schema_dir: schema

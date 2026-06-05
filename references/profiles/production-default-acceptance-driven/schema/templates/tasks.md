@@ -1,0 +1,145 @@
+## Acceptance-Driven Coverage
+
+<!--
+本节是 proposal/spec/design 到 AC/task 的覆盖索引，不是 executable work。
+每个 material scope item、requirement scenario 或 material design decision 使用一行；不要用 aggregate rows 替代底层 scope items、scenarios 或 decisions。
+所有 Implementation Task IDs / Verification Task IDs 必须解析到下方实际 checkbox task；不要只引用 AC heading。
+-->
+
+### Scope Item Coverage
+
+| Scope Item ID | Artifact Handling | Scope Summary | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
+| --- | --- | --- | --- | --- | --- | --- |
+| <!-- SI-001；每行只能有一个 ID，不使用 SI-001-SI-010 这类 ranges。 --> | <!-- spec / guard / design / proof / context --> | <!-- 概述行为、preserve 或 forbidden-drift boundary。 --> | <!-- AC-001 --> | <!-- AC-001.1, AC-001.2；必须是实际 checkbox ID。 --> | <!-- AC-001.3；必须是实际 checkbox ID。 --> | <!-- user interaction、API test、data assertion、worker/realtime path、security check、rendered layout check 等 proof summary。 --> |
+
+### Requirement / Scenario Coverage
+
+| Capability | Requirement | Scenario | Scope Item IDs | Artifact Handling | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- SI-001, SI-002；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- spec scenario / guard handling --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.3 --> | <!-- scenario-level observable proof summary。 --> |
+
+### Design Decision Coverage
+
+| Design Section | Design Decision | Scope Item IDs | Artifact Handling | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification decision。 --> | <!-- SI-001, SI-002, 或 Not applicable；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- design / proof / guard / spec --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.3 --> | <!-- design decision proof summary。 --> |
+
+## Runtime Acceptance Index
+
+<!--
+本节是主 agent preflight 的轻量路由表，不是 executable work，也不是 runtime/test 详情来源。
+它只把 AC 路由到 Appendix 中的 row IDs、Test IDs 和 AC dependency graph；不要在这里重复 fixed commands、证据目录、ledger、fixture 或 row 详情。
+如果 change 不触及 web/runtime behavior，写明 Not applicable 和理由。
+Test IDs 必须使用 exact `T-###`，不得带 AC 编号、测试名称、slug 或字母后缀。
+-->
+
+### AC Runtime Ownership Index
+
+| AC ID | Scope Basis | Runtime Surface Rows | Operation Rows | State / Branch Rows | Async / Realtime Rows | Test IDs | Provides Rows | Consumes Rows | Depends On AC IDs | Prerequisite Test IDs | Start Gate | Scope Role | No-Scope-Expansion Check | Detail Matrix Rows |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- AC-001 --> | <!-- SI-001, spec scenario, design decision。 --> | <!-- RS-001 --> | <!-- OP-001 --> | <!-- ST-001, ST-002 --> | <!-- CH-001 或 Not applicable。 --> | <!-- T-001, T-002 --> | <!-- 本 AC 完成后提供的 rows，例如 RS-001；没有则 None。 --> | <!-- 本 AC 消费的 baseline 或 earlier AC rows，例如 RS-003；没有则 None。 --> | <!-- AC-000 / AC-001 / None；只能引用前置 AC。 --> | <!-- T-000 / T-001 / None；只能引用前置 Test ID。 --> | <!-- 可在 change 开始后执行 / 需 AC-000 完成后执行。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- 不引入 scope 外 route/control/state/API/job/event/provider/storage/retry 等。 --> | <!-- RS-001, OP-001, ST-001, CH-001, T-001。 --> |
+
+## AC-001 <!-- 中文验收切片名称 -->
+
+Acceptance:
+- <!-- 用户/系统可观察的验收行为。必须能从 proposal/spec/design 推导，不从实现计划反推。 -->
+
+Scope Items:
+- <!-- SI-001, SI-002；逐个枚举 exact IDs，不使用 ranges。 -->
+
+Artifact Handling:
+- <!-- linked SI IDs 的 handling；例如 SI-001: spec。 -->
+
+Spec:
+- <!-- Capability / Requirement / Scenario names。 -->
+
+Design:
+- <!-- Design sections / decisions。 -->
+
+Runtime Rows Owned:
+- <!-- RS-001, OP-001, ST-001, CH-001；只列 row IDs，row 详情只在 Verification Appendix 中定义。 -->
+
+Test IDs:
+- <!-- T-001, T-002；只列本 AC 拥有的 Test IDs，必须匹配 exact T-###。 -->
+
+Prerequisites:
+- <!-- 本 AC 启动前必须完成的 AC IDs、Test IDs 或 baseline facts；无依赖时写 None 并说明只依赖 baseline。 -->
+
+Provides:
+- <!-- 本 AC 完成后为后续 AC 提供的 runtime surfaces / operations / states / contracts / proof facts；没有则写 None。 -->
+
+Consumes:
+- <!-- 本 AC proof 消费的 baseline 或 earlier AC rows / contracts / facts；消费 current-change row 时必须能回到 Prerequisites。 -->
+
+Start Gate:
+- <!-- 进入本 AC 的执行门禁，例如“AC-000.3 与 T-000 已完成，RS-003 已由 earlier AC 提供”。 -->
+
+No-Scope Boundary:
+- <!-- 明确本 AC 不得引入的 scope 外 route/control/state/API/job/event/provider/storage/retry/lifecycle 行为。 -->
+
+Primary Proof:
+- <!-- 人类可读的最高强度验收证明摘要。用户可见行为优先 browser/E2E/rendered proof；后端行为优先 API/DB/job/storage/security facts。 -->
+
+Required Evidence:
+- Test evidence: <!-- T-001, T-002；fixed commands、evidence directories、ledger files 只在 Test Evidence Matrix 中维护。 -->
+- Browser / rendered evidence: <!-- screenshot / DOM / responsive / a11y / interaction evidence 的类型和验收意图。 -->
+- Data / API / job / storage evidence: <!-- DB rows / API response / queue status / asset facts / logs / audit facts 的类型和验收意图。 -->
+- Evidence ledger: <!-- 由 Test Evidence Matrix 的 Ledger File 产出；本处只说明 ledger 必须覆盖哪些事实类别。 -->
+
+Mock / Fixture Boundary:
+- <!-- AC-level default path / mock 原则摘要；逐 Test ID 的 fixture boundary 只在 Test Evidence Matrix 中定义。 -->
+
+Mock Policy:
+- <!-- 哪些允许 sandbox/mock；哪些必须走 default production wiring。 -->
+
+- [ ] AC-001.1 <!-- 用中文描述此 acceptance slice 下的具体实现或验证任务。 -->
+  Trace: <!-- 默认写 inherits AC-001；只有当本 task 的 scope/spec/design/no-scope/mock 边界比 AC 更窄或有例外时才展开 override。 -->
+  Runtime Rows: <!-- 本 task 负责或最终验证覆盖的 RS-/OP-/ST-/CH- row IDs；无 runtime 行为时写 Not applicable 并给出理由。 -->
+  Test IDs: <!-- 本 task 建立、维护或由 final verification 执行的 T-### row IDs；不得带名称后缀。 -->
+  Acceptance: <!-- 此任务贡献证明的具体可验收行为。 -->
+  Proof: <!-- proof 摘要。用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback；static markup / data-testid / screenshot 只能补充。 -->
+  Overrides: <!-- 若不继承 AC-level source/no-scope/mock boundary，在此列 exact override；否则写 None。 -->
+
+## Verification Appendix
+
+<!--
+本节是 runtime/test 明细的唯一事实来源，不属于 executable work section。
+Runtime detail rows 只在对应矩阵定义；AC section、Runtime Acceptance Index 和 checkbox tasks 只引用 row IDs。
+Test Evidence Matrix 是 fixed command、test file/name、evidence directory、ledger file、fixture boundary 和 CI runnable 状态的唯一事实来源。
+-->
+
+### Runtime Surface Inventory
+
+| Surface ID | Surface Type | Owner | Entry Point | Default Path Required | External Boundary | Scope Basis | Artifact Handling | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | Test IDs | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- RS-001 --> | <!-- UI route / client component / API / DB / worker / queue / SSE / storage / auth / config 等。 --> | <!-- module/component/service。 --> | <!-- route/action/job/stream entry。 --> | <!-- yes/no + reason。 --> | <!-- provider/storage/network/env 等边界。 --> | <!-- SI-001 / spec scenario / design decision。 --> | <!-- spec / guard / design / proof / context。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- baseline / AC-001 / forbidden-boundary。 --> | <!-- AC-002, AC-003 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 surface。 --> |
+
+### Operation Coverage Matrix
+
+| Operation ID | Trigger | Control / Route | Request / Action | Expected Rendered UI Update | API/Data Assertion | Reload/Persistence Assertion | Disabled/Failure/Recovery Branches | Scope Basis | Artifact Handling | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | Test IDs | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- OP-001 --> | <!-- click/type/select/submit/system trigger。 --> | <!-- UI control or route。 --> | <!-- handler/action/API/job request。 --> | <!-- rendered result。 --> | <!-- response/data invariant。 --> | <!-- reload/readback persistence。 --> | <!-- disabled/failure/retry/recovery rows。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / forbidden-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 operation。 --> |
+
+### State / Branch Coverage Matrix
+
+| State ID | State / Branch | Trigger Into | Observable UI / API Outcome | Data/Event Facts | Allowed Next States | Terminal? | Scope Basis | Artifact Handling | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | Test IDs | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- ST-001 --> | <!-- loading / empty / disabled / success / failed / timeout / unauthorized 等。 --> | <!-- entry condition/event。 --> | <!-- visible/API outcome。 --> | <!-- DB/event/outbox/job facts。 --> | <!-- next states。 --> | <!-- yes/no。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / forbidden-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 state。 --> |
+
+### Async / Realtime Chain Matrix
+
+| Chain ID | User/System Entry | Enqueue / Dispatch Fact | Worker / Consumer Fact | Domain Mutation | Event / Outbox Fact | Client Subscription / Readback | Rendered Terminal State | Failure Variant | Scope Basis | Artifact Handling | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | Test IDs | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- CH-001 --> | <!-- user action/system job。 --> | <!-- queue/action dispatch。 --> | <!-- worker/consumer processing。 --> | <!-- domain/data change。 --> | <!-- event/outbox/log fact。 --> | <!-- SSE/poll/readback。 --> | <!-- success/failure terminal UI。 --> | <!-- failed/dispatch_failed/timeout 或 Not applicable。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / forbidden-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 chain。 --> |
+
+### Test Evidence Matrix
+
+| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path? | Fixture Boundary | Must Fail Before Implementation | Requires Tests Passed | Evidence Directory | Evidence Produced | Ledger File | CI Runnable? | Scope Basis | Artifact Handling | Scope Role | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- T-001；必须匹配 exact T-###，禁止 T-005B / T-AC005-... / T-001-smoke。 --> | <!-- AC-001；只能有一个 AC ID，禁止多个 AC 或 shared。 --> | <!-- `pnpm test:e2e tests/e2e/example.spec.ts`；必须可本地/CI 重跑。 --> | <!-- test file / stable test name or filter。 --> | <!-- unit / component / route/API contract / DB integration / worker/job integration / realtime/SSE integration / browser E2E / visual/responsive / security/negative / config/ops/check。 --> | <!-- RS-001, OP-001, ST-001, CH-001。 --> | <!-- yes/no + reason。 --> | <!-- mocked/sandboxed segments and paired default-path proof。 --> | <!-- yes/no + expected failing gap。 --> | <!-- None / T-000；只能引用 earlier AC 的 Test ID。 --> | <!-- `test-results/<change-slug>/AC-001/T-001/`；最后一级目录必须与 Test ID 完全一致。 --> | <!-- command.log、ledger.json、DOM/screenshot、trace、API/DB/job/log facts、failure trace。 --> | <!-- `test-results/<change-slug>/AC-001/T-001/ledger.json`。 --> | <!-- yes/no + reason。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- 不引入 scope 外 behavior。 --> |
+
+### Regression Test Deposit
+
+| AC ID | Test IDs | Permanent Test File | Regression Command | Behavior Contract | Assertion Oracle | Fixture Boundary | CI Tier | Not Testing | Deposit Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- AC-001 --> | <!-- T-001；可列同一 AC 的多个 exact T-###。 --> | <!-- 仓库内长期维护的 test/spec 文件；not-applicable 时写 N/A + 理由。 --> | <!-- 最小可重跑命令，例如 package-level test 或稳定 file/filter；不要只写 broad workspace command。 --> | <!-- 来自 proposal/spec/design 的外部行为契约。 --> | <!-- 断言依据：用户可见结果、API contract、DB invariant、安全边界、错误分支等。 --> | <!-- 允许的 fixture/mock 和必须保留 default path 的边界。 --> | <!-- PR-fast / PR-integration / nightly / release / manual-staging。 --> | <!-- 明确不测的实现细节，例如私有函数、调用次数、DOM 层级、样式类名、快照全文。 --> | <!-- required / deposited / not-applicable / blocked；not-applicable 或 blocked 必须含 reason。 --> |

@@ -1,36 +1,47 @@
 ---
 name: obligation-atom-driven
-description: Install or switch a repository to the bundled production-obligation-atom-driven OpenSpec implementation workflow. Use when Codex needs to sync the current projection-aware obligation atom driven schema, proposal/spec/design/tasks templates, and matching OpenSpec agent-runtime constraint documents into a repository, or when older anchor/source-artifact profiles should be replaced by the current GA obligation atom contract.
+description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their proposal/spec/design/tasks templates and matching OpenSpec agent-runtime constraint documents.
 ---
 
 # Obligation Atom Driven
 
-Use this skill to configure a repository so OpenSpec changes use the bundled projection-aware `production-obligation-atom-driven` schema and its paired agent runtime constraints.
+Use this skill to configure a repository so OpenSpec changes use one of the bundled production schemas and paired agent runtime constraints.
 
-The canonical Global Atom ID prefix for this profile is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
+## Profiles
+
+- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes canonical change packets and `obligation-atom-index.md` from `openspec/orchestrate`, preserves `GA-####` IDs, and uses projection-aware proposal/spec/design/tasks artifacts.
+- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> tasks model, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and adds lightweight `SI-###` change-local scope coverage, AC acceptance slices, fixed `T-###` tests, evidence ledgers, and regression test deposits.
+
+The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification for that profile must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
+
+The `production-default-acceptance-driven` profile uses change-local `SI-###` scope item IDs only inside a single change. These IDs are not global source IDs and must not be treated as a global registry.
 
 ## Workflow
 
 1. Inspect the target repository root. Default to the current working directory unless the user names another directory.
-2. Read `references/profiles/production-obligation-atom-driven/profile.yaml`.
-3. Confirm the profile metadata:
-   - `schema_name` is `production-obligation-atom-driven`.
+2. Select the profile:
+   - If the user asks for the current docs-driven, atom-driven, orchestrate-backed, or GA-based workflow, select `production-obligation-atom-driven`.
+   - If the user asks for the default-style, post-greenfield, follow-up feature/modification, or acceptance-driven workflow, select `production-default-acceptance-driven`.
+   - If the user does not specify a profile, default to `production-obligation-atom-driven` to preserve the existing behavior.
+3. Read `references/profiles/<schema_name>/profile.yaml`.
+4. Confirm the profile metadata:
+   - `schema_name` matches the selected profile.
    - `schema_dir` defaults to `schema` when omitted.
-4. Sync bundled OpenSpec files into the target repository:
-   - Copy `<skill-root>/references/profiles/production-obligation-atom-driven/<schema_dir>/` to `<repo-root>/openspec/schemas/<schema_name>/`.
+5. Sync bundled OpenSpec files into the target repository:
+   - Copy `<skill-root>/references/profiles/<schema_name>/<schema_dir>/` to `<repo-root>/openspec/schemas/<schema_name>/`.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
    - Preserve the bundled apply runtime requirement that any apply-stage `worker` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
    - Create or update `<repo-root>/openspec/config.yaml` so the top-level `schema:` value is `<schema_name>`.
    - Preserve unrelated project-specific config entries when updating an existing `openspec/config.yaml`.
    - If target schema or runtime files already exist and differ, inspect the differences and update them intentionally.
-5. Update project instructions:
+6. Update project instructions:
    - Read `<skill-root>/references/agent-runtime/agents-md-runtime-section.md`.
    - Add its runtime section to the target repository `AGENTS.md`, preserving existing project-specific instructions.
    - If an equivalent OpenSpec runtime section already exists, update it instead of adding a duplicate.
-6. Verify the result:
-   - `openspec/config.yaml` has `schema: production-obligation-atom-driven`.
-   - `openspec/schemas/production-obligation-atom-driven/schema.yaml` exists.
-   - `openspec/schemas/production-obligation-atom-driven/templates/` contains the bundled templates.
+7. Verify the result:
+   - `openspec/config.yaml` has `schema: <schema_name>`.
+   - `openspec/schemas/<schema_name>/schema.yaml` exists.
+   - `openspec/schemas/<schema_name>/templates/` contains the bundled templates.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
@@ -38,8 +49,11 @@ The canonical Global Atom ID prefix for this profile is `GA-####`. Runtime const
 ## Bundled Resources
 
 - `references/profiles/production-obligation-atom-driven/`: profile metadata and schema files for the production obligation atom driven OpenSpec workflow.
-- `references/profiles/production-obligation-atom-driven/schema/schema.yaml`: projection-aware schema that consumes canonical final change packets and `obligation-atom-index.md` directly from `openspec/orchestrate`, creates proposal, specs, design, and acceptance-driven tasks, distinguishes `spec-requirement`, `spec-guard`, `design-obligation`, `verification-obligation`, and `contextual-only` atoms, requires proposal to register both direct atoms and owner-scoped non-direct atoms from final packets, and does not use `source-truth.md`, separate `acceptance.md`, legacy source coverage artifacts, `change-source-map.md`, or pre-proposal source artifacts.
+- `references/profiles/production-obligation-atom-driven/schema/schema.yaml`: projection-aware schema that consumes canonical final change packets and `obligation-atom-index.md` directly from `openspec/orchestrate`, creates proposal, specs, design, and acceptance-driven tasks, distinguishes `spec-requirement`, `spec-guard`, `design-obligation`, `verification-obligation`, and `contextual-only` atoms, and does not use `source-truth.md`, separate `acceptance.md`, legacy source coverage artifacts, `change-source-map.md`, or pre-proposal source artifacts.
 - `references/profiles/production-obligation-atom-driven/schema/templates/`: templates paired with the schema artifacts.
+- `references/profiles/production-default-acceptance-driven/`: profile metadata and schema files for post-greenfield production evolution.
+- `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
+- `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
 - `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
 
 ## Profile Contract
@@ -49,4 +63,4 @@ The bundled profile directory contains:
 - `profile.yaml` with `profile`, `schema_name`, and optional `schema_dir`.
 - The schema directory named by `schema_dir`, containing `schema.yaml` and templates.
 
-The skill synchronizes this schema directory to `openspec/schemas/production-obligation-atom-driven/`, switches `openspec/config.yaml` to that schema, synchronizes runtime constraints, and updates `AGENTS.md`.
+The skill synchronizes the selected schema directory to `openspec/schemas/<schema_name>/`, switches `openspec/config.yaml` to that schema, synchronizes runtime constraints, and updates `AGENTS.md`.

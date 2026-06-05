@@ -1,0 +1,246 @@
+name: production-default-acceptance-driven
+version: 1
+description: 面向 Greenfield 完成后的生产演进工作流：保持 OpenSpec default proposal -> specs -> design -> tasks 模式，增加轻量 scope coverage、AC 验收切片、固定 Test ID、可重跑证据和永久回归测试沉淀；不依赖 openspec/orchestrate、change plan、全局编号表或 proposal 前置 source artifact
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: default-style proposal，带轻量 change scope coverage
+    template: proposal.md
+    instruction: |
+      创建 proposal，说明 WHY 此 change 必要、WHAT 会改变、哪些 capability 受影响，以及后续 specs/design/tasks 如何覆盖本 change 的 material scope。
+
+      核心规则：
+      - 本 schema 用于 Greenfield 项目完成后的后续新增、修改和修复。它遵循 OpenSpec default schema 的 proposal/specs/design/tasks 心智，不消费 `openspec/orchestrate`、change plan、final change packet、全局编号表或 capability anchor packet。
+      - proposal 的主要输入是用户请求、现有 `openspec/specs/`、现有代码、当前产品行为，以及用户显式提供的 issue、设计稿、外部文档或调研结论。不得要求创建 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 artifact。
+      - 若用户请求本身足够明确，优先用它定义 change boundary；若请求含糊，先读取现有 specs/code 建立 baseline，并在仍无法安全判断时只提出必要澄清。
+      - 若 change 修改 existing capability，读取对应 `openspec/specs/<capability>/spec.md`。若新增 capability，使用 kebab-case capability 名称。
+      - Proposal 必须包含 `Change Scope Coverage`，用 change-local `SI-###` 标识 material scope item。`SI-###` 只在本 change 内有效，不是全局编号。
+      - `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`spec` 表示应进入 requirement/scenario；`guard` 表示 non-goal、MUST NOT、preserve 或 forbidden drift；`design` 表示主要由 design 决定实现形态；`proof` 表示主要由 tasks/test/evidence 验证；`context` 只提供背景，不生成实现范围。
+      - 下游 artifacts 必须引用 exact `SI-###`，不得使用 ranges。每个 material scope item 必须有 downstream coverage expectation。
+      - Proposal 可以保留 open design decisions，但不得把尚未确认的实现选择伪装成用户已要求的产品范围。
+      - 当用户请求描述可见操作或控件能力时，proposal 必须保留具体 operation verb 和可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
+
+      写入前：
+      - 读取现有 `openspec/specs/` 中相关 capability spec。没有相关 spec 时记录为 new capability。
+      - 按需读取现有代码、测试、配置和路由，确认 baseline 与影响面；不要做无边界的全仓库探索。
+      - 若用户提供外部输入，读取相关片段并记录到 `Baseline / Input Read Set`。
+      - 建立 scope item list，并为每个 material item 分配 `SI-###`。
+
+      阻断条件：
+      - 用户请求与现有 spec 或代码 baseline 冲突，且无法通过 proposal 里的 open question 安全表达。
+      - 无法判断 change 是新增 capability、修改 existing capability、还是只属于实现/测试/运维修复。
+      - 发现本 change 会破坏已归档或现有 specs 的明确 MUST/MUST NOT，且用户没有要求修改该 capability。
+      - scope item 缺少 artifact handling 或 downstream coverage expectation。
+
+      必需章节：
+      - **Why**
+      - **Baseline / Input Read Set**
+      - **What Changes**
+      - **Capabilities**
+      - **Change Scope Coverage**
+      - **Non-Goals**
+      - **Impact**
+      - **Rollout / Readiness**
+      - **Open Questions**
+      - **Proposal Alignment Gate**
+    requires: []
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: default OpenSpec delta specs
+    template: spec.md
+    instruction: |
+      创建 OpenSpec delta specification files，定义 production system 应该做什么。
+
+      写入前：
+      - 读取 `proposal.md`，使用 `Change Scope Coverage` 作为 scope-reading interface。
+      - 只为有 `Artifact Handling: spec` 或 `Artifact Handling: guard` 的 capability 创建 delta spec。只有 `design`、`proof` 或 `context` scope item 时不得创建空 spec。
+      - 修改 existing capability 前，读取 `openspec/specs/<capability>/spec.md` 并保持 capability folder name。
+      - 建立 capability-to-scope map。每个 `spec` scope item 必须落到 requirement/scenario；每个 `guard` scope item 必须落到 guard、MUST NOT、non-goal 或 Production Alignment Gate。
+
+      Delta operations：
+      - 新行为使用 `## ADDED Requirements`。
+      - 变化行为使用 `## MODIFIED Requirements`，修改前必须复制完整 existing requirement block。
+      - 删除行为只在有 **Reason** 和 **Migration** 时使用 `## REMOVED Requirements`。
+      - 重命名只在有 `FROM:` / `TO:` 时使用 `## RENAMED Requirements`。
+
+      Format requirements：
+      - 每个 requirement 使用 `### Requirement: <name>`。
+      - Requirement names 和 scenario names 由 agent 拟定时优先中文；只有 existing requirement name、API/DB/package identifiers 或稳定技术术语才保留英文。
+      - Requirement 正文使用 SHALL / MUST / MUST NOT 表达规范行为。
+      - 每个 requirement 必须包含 `Scope Items:` bullets，列出 exact `SI-###` 和简短 scope 摘要。
+      - 每个 requirement 必须包含 `Baseline Trace:` bullets，列出用户输入、existing spec、代码路径、路由/API、数据表、配置、测试或外部输入来源；没有外部来源时说明来自用户请求。
+      - 每个 scenario 使用 `#### Scenario: <name>`，且必须使用 exactly 4 hashtags。
+      - 每个 requirement 必须至少有一个 scenario。
+      - 若 requirement 包含多个用户可见操作，scenario 必须逐项枚举或拆分；每个操作要定义触发、预期 UI/API/data 后果、持久化或 reload 后结果，以及适用的 disabled/failure/recovery 行为。
+
+      Final alignment gate：
+      - 每个 spec file 必须以 `## Production Alignment Gate` 结束。
+      - Gate 必须列出 covered scope items、artifact handling、baseline/input consumed、product workflow coverage、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和 forbidden drift checked。
+      - 如果任何 spec-relevant scope item 未被 requirement/scenario 或 guard 表示，停止并修订 proposal/specs。
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: production design for the accepted spec delta
+    template: design.md
+    instruction: |
+      创建设计文档，说明 HOW to implement the production change。
+
+      写入前：
+      - 读取 proposal 和所有实际生成的 delta specs；不要期待纯 design/proof-only capability 有 spec file。
+      - 使用 proposal 的 `Change Scope Coverage`、spec `Scope Items`、spec `Baseline Trace` 作为 scope-reading interface。
+      - 按需读取现有代码、测试、配置、数据库 schema、路由/API 和相关 specs，确认 design 能落到真实 production boundary。
+      - 起草前建立 design coverage map。每个 spec requirement/scenario、每个 `Artifact Handling: design` item、每个 `guard` item，以及每个需要 implementation placement 的 material scope item 都必须映射到 design decision、guard handling 或 explicit blocker。
+
+      Design-specific constraints：
+      - Design 必须追溯到 proposal/specs、用户输入或现有 baseline。无法追溯的设计选择必须删除或记录为 open question。
+      - 当 scope 定义行为但未定义实现形态时，design 必须选择最小 production-compatible technical shape，并说明为什么不扩大到更大的产品范围。
+      - Design 不得把生产行为替换成 placeholder、diagnostic、mock-only、static-only、fixture-only 或 sandbox-only 行为，除非 proposal 明确标记为 deferred、non-goal、context 或 proof-only。
+      - Design 必须说明 change 如何处理 architecture/runtime/module boundaries、routing/navigation、data ownership、transactions、auth/security、async processing、realtime streams、storage、provider boundaries、rendering chain、deployment 和 verification strategy。
+      - 对每个会改变数据、状态、route 或用户可见结果的 UI control，Frontend / UX Design 必须定义 owner component、runtime/client-server boundary、event trigger、handler/action/API route、request payload、response merge 或 reload persistence、submitting/disabled/error/retry behavior。
+
+      必需章节：
+      - **Context**
+      - **Goals / Non-Goals**
+      - **Baseline / Scope Map**
+      - **Decisions**
+      - **Architecture / Module Boundary Design**
+      - **Domain / Data / Migration Design**
+      - **API / Auth / Security Design**
+      - **Async / Realtime / AI / Worker Design**
+      - **Frontend / UX Design**
+      - **Observability / Ops / Deployment Design**
+      - **Verification Design**
+      - **Rollout / Compatibility**
+      - **Production Alignment Gate**
+      - **Risks / Trade-offs**
+      - **Open Questions**
+
+      `Production Alignment Gate` 必须回答：
+      - 哪些 `SI-###` 被 implemented、preserved、deferred 或作为 forbidden-drift guard。
+      - 每个 artifact handling 是否被正确消费，尤其是 `design`、`proof` 和 `guard` 是否没有被伪装成 spec requirement。
+      - 每个 spec scenario 是否有 design 中对应的 implementation contract。
+      - 每个 data mutation 是否在适用时有 table/column/constraint/transaction/idempotency details。
+      - 每个 route/API/auth path 是否在适用时有 request/session/response/error handling details。
+      - 每个 UI state 是否在适用时有 owner component、transition trigger、disabled/failure/recovery behavior 和 responsive handling。
+      - 是否仍有需要 implementer 从 proposal/spec/design 外部推断的行为。
+    requires:
+      - proposal
+      - specs
+
+  - id: tasks
+    generates: tasks.md
+    description: acceptance-driven implementation checklist with fixed proof
+    template: tasks.md
+    instruction: |
+      创建 task list，将 production implementation work 拆成以 acceptance 为完成标准的执行清单。
+
+      目的：
+      - 本 schema 没有独立 `acceptance.md`。`tasks.md` 是 apply-ready execution and acceptance contract。
+      - Tasks 必须按 acceptance slices 分组。每个 AC 描述 user/system-observable behavior、覆盖的 scope items、spec/design 依据和所需 primary evidence。
+      - 一个 AC 可以包含多个 implementation tasks，并且必须至少包含一个 verification 或 acceptance task，其 proof 强度足以验收该 AC。
+      - 所有 tasks 完成表示 implementation 和 acceptance proof 完成；不得把最终验收延后到独立 artifact。
+
+      写入前：
+      - 读取 proposal、所有实际生成的 delta specs 和 design。
+      - 建立 scope items、artifact handling、spec scenarios、design decisions、AC sections、checkbox task IDs、coverage table references、Runtime Appendix rows 和 Test Evidence rows 的索引。每个 coverage table task ID 必须解析到实际 checkbox task。
+      - 先建立 runtime acceptance model，再把该模型分层写入 `Runtime Acceptance Index`、AC-local execution contracts、checkbox tasks 和 `Verification Appendix`。
+      - 建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 forbidden boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
+      - 若某个 AC 的 primary proof、fixed command 或 Required Evidence 消费 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC。
+      - 写入时必须明确 artifact information ownership：coverage tables 只负责 proposal/spec/design coverage；`Runtime Acceptance Index` 只负责 AC 到 row/Test ID 的路由；AC section 是人工审阅和 worker 执行主入口；`Verification Appendix` 是 runtime row 详情、fixed commands、evidence directories、ledger files、fixture boundaries 和 CI runnable 状态的唯一事实来源；`Regression Test Deposit` 是永久回归测试文件、常规回归命令、行为断言 oracle 和“不测实现细节”边界的唯一事实来源。
+
+      Runtime acceptance model 原则：
+      - 每个 runtime row 必须回链到 proposal scope item、spec requirement/scenario、design decision 或明确的 proof requirement。无法回链的 row 只能作为非阻断工程辅助，不得成为 AC scope、产品行为或完成门禁。
+      - 通用 web 最佳实践只能用于选择 proof 形态、测试层级和 evidence 强度，不能产生用户未要求且 specs/design 未承接的 route、control、state、API、job、event、provider、storage、retry、offline、toast 或 lifecycle 行为。
+      - 如果 proposal/spec/design 中出现 operation verbs、status enum、stage、terminal state、failure branch、disabled/loading/empty/retry/recovery branch、async queue/worker/provider/SSE/storage chain、auth/security branch 或 responsive variant，tasks 必须把它们抽取成 runtime acceptance model rows。
+      - AC sections 必须按 externally meaningful user/system acceptance behavior、terminal state、failure/recovery branch 或 async chain segment 分组，不按文件分组。
+      - 每个 AC section 必须至少有一个 final verification / acceptance checkbox，并在 `Primary Proof`、`Required Evidence` 和 coverage rows 中被引用。
+
+      测试生成原则：
+      - 测试必须从 behavior contract 反推，而不是从私有 helper、当前组件层级、className、调用次数或临时实现分支反推。
+      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；边界、未授权、敏感字段和 forbidden drift 用 security/negative 或 config/ops/check。
+      - 不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。
+      - 每个 required behavior Test ID 必须有 fixed command、canonical evidence directory、ledger file 和 `Regression Test Deposit` 行；proof-only、config/ops/check、staging-only 或一次性 readiness 可写 not-applicable，但必须给出 scope-backed 理由。
+
+      Task-writing constraints：
+      - 严格遵循 checkbox format。
+      - 按 `## AC-### <short acceptance slice name>` headings 分组。short acceptance slice name 应优先中文，除非它是 exact source-native identifier。
+      - 每个 AC section 必须包含 non-checkbox fields：`Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:`、`Mock Policy:`。
+      - 每个 executable task 必须是 checkbox：`- [ ] AC-###.N Task description`。
+      - Checkbox task descriptions 必须中文，除非 description 完全由固定 ID、commands、paths、code identifiers 或 source-native terms 构成。
+      - 每个 checkbox 后必须跟随 indented trace block，字段为 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:`、`Overrides:`。
+      - `Trace:` 默认写 `inherits AC-###`。只有当该 task 的 scope/spec/design/no-scope/mock 边界比 owning AC 更窄或有例外时，才在 `Trace:` 或 `Overrides:` 中展开 exact override。
+      - 每个 Test ID 必须使用 exact `T-###`，在整个 change 内唯一且只归属一个 AC。禁止 `T-005B`、`T-AC005-TRIAL-RESPONSIVE`、`T-001-smoke` 或任何带名称、AC 编号、slug、字母后缀的 Test ID。
+
+      必需结构：
+      - `## Acceptance-Driven Coverage`
+      - `### Scope Item Coverage`
+      - `### Requirement / Scenario Coverage`
+      - `### Design Decision Coverage`
+      - `## Runtime Acceptance Index`
+      - `### AC Runtime Ownership Index`
+      - one or more `## AC-###` sections
+      - `## Verification Appendix`
+      - `### Runtime Surface Inventory`
+      - `### Operation Coverage Matrix`
+      - `### State / Branch Coverage Matrix`
+      - `### Async / Realtime Chain Matrix`
+      - `### Test Evidence Matrix`
+      - `### Regression Test Deposit`
+
+      Proof strength：
+      - 用户可见行为必须包含 user-equivalent interaction、browser-rendered DOM/screenshot、responsive、accessibility 或 visual evidence。
+      - API 行为必须 call 或 test 该 contract。
+      - persistence、data mutation、migration、idempotency 或 transaction behavior 必须断言 resulting stored data 和相关 invariants。
+      - worker、queue、provider、SSE/outbox、reconciler 或 async behavior 必须通过 default wiring 或 production-compatible deterministic sandbox 覆盖该路径。
+      - auth、security、privacy、entitlement、asset access 或 sensitive data behavior 必须在相关时包含 negative/unauthorized、redaction、audit 或 privacy evidence。
+      - failure、edge、disabled、loading 或 empty behavior 必须覆盖 failing branch 和 recovery/retry path。
+
+      Final check：
+      - 确认每个 `SI-###` 在 proposal、specs、design、AC sections、task overrides 与 coverage tables 中一致或有明确 handoff 理由。
+      - 确认每个 in-scope requirement scenario 映射到 AC section。
+      - 确认每个 material design decision 映射到 AC section。
+      - 确认 `Runtime Acceptance Index` 中每个 owning row 都能解析到 AC-local `Runtime Rows Owned:`、`Test IDs:`、checkbox `Runtime Rows:` / `Test IDs:` 和 `Verification Appendix` detail matrix rows。
+      - 确认 AC section 输出顺序是 runtime provision graph 的拓扑序。
+      - 确认每个 Test ID 有 fixed command、canonical evidence directory、ledger file、local/CI runnable 标记，并出现在 owning AC 的 `Test IDs:` 和相关 checkbox trace 中。
+      - 确认每个 required behavior Test ID 在 `Regression Test Deposit` 中有永久回归沉淀或 scope-backed `not-applicable` 理由。
+      - 确认没有 implementation-detail tests 被登记为 primary proof 或永久回归沉淀。
+      - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。
+    requires:
+      - proposal
+      - specs
+      - design
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    编码前读取 proposal、specs、design 和 tasks。
+
+    实现前建立 apply preflight index：
+    - Proposal `Change Scope Coverage` rows、scope items、guard/context rows、artifact handling 和 baseline/input references。
+    - Spec requirements/scenarios 及其 `SI-###` references。
+    - Design decisions 及其 `SI-###` references。
+    - AC sections、AC-local execution contract fields、checkbox task IDs、trace inheritance / overrides、coverage table rows、AC-owned Test IDs、Prerequisites/Provides/Consumes/Start Gate 和 proof/evidence requirements。
+    - `Runtime Acceptance Index`：每个 AC 的 scope basis、runtime surface rows、operation rows、state/branch rows、async/realtime rows、Test IDs、Provides Rows、Consumes Rows、Depends On AC IDs、Prerequisite Test IDs、Start Gate、scope role、no-scope-expansion check 和 detail matrix row references。
+    - `Verification Appendix`：runtime/test detail row IDs、scope basis、scope role、provider/consumer ownership、AC ID、Requires Tests Passed、Test IDs 和 no-scope-expansion checks。
+    - Test evidence matrix：每个 Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation、requires tests passed、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced。
+    - Regression test deposit：每个 AC/Test ID 的永久测试文件、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier、Not Testing 边界和 deposit status。
+
+    若 preflight index 发现 missing scope item coverage、unresolved task IDs、runtime index 缺失或与 AC-local contract 不一致、mandatory runtime row 缺少 scope basis / provider / consumer / AC ID / Test ID、Test ID 不匹配 exact `T-[0-9]{3}`、同一 Test ID 出现在多个 AC-local contracts、缺少 fixed command、缺少 canonical evidence directory、required behavior Test ID 缺少 `Regression Test Deposit` 行、AC consumes 后置 AC 才提供的 runtime row、Depends On AC IDs 形成循环、checkbox trace 字段缺失、缺少 final verification task、英文主导 task descriptions、用户可见操作只有 presence-only/static proof，或 proof 弱于 proposal/spec/design，暂停并更新 artifacts 后再编辑代码。
+
+    Implementation 和 acceptance 在本 schema 中是同一个 workflow：
+    - 按依赖顺序处理 AC sections。
+    - 编辑任何 task 前，先读取当前 AC 的 AC-local execution contract：`Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:` 和 `Mock Policy:`。
+    - 编辑任何 task 前，确认当前 AC 的 `Prerequisites:`、`Depends On AC IDs` 和 `Prerequisite Test IDs` 已完成且证据存在；若未满足，必须先处理前置 AC 或修订 tasks。
+    - 编辑任何 task 前，读取该 task 的 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:` 和 `Overrides:` 字段。`Trace: inherits AC-###` 表示 task 继承 AC-level scope/spec/design/no-scope/mock policy。
+    - 不实现无法追溯到 proposal、specs、design 或现有 baseline 的行为。
+    - 优先建立或补齐该 AC-local `Test IDs:` 和 task `Test IDs:` 对应的自动测试，并同时落实 `Regression Test Deposit` 中的永久回归测试。
+    - 除非 task 的 `Proof:` 已执行且 linked acceptance slice 达到所需 fidelity，否则不得标记 task complete。
+    - 如果实现新增或发现新的 operation、state、branch、terminal outcome、async step、event、job、provider branch、storage branch、auth/security branch 或 responsive variant，先更新 `Verification Appendix`、`Runtime Acceptance Index`、owning AC-local contract、AC tasks 和 Test Evidence Matrix，再继续实现或勾选。
+    - 对用户可见的 mutating/selection/action control，勾选相关 task 前必须通过实际 runtime surface 执行 user-equivalent interaction，并断言 handler/API 被触发、响应或持久化数据正确、rendered UI 更新且 reload/readback 后仍成立。
+    - 测试相关 evidence 必须由固定命令自动生成或由 final verification task 复制到 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`，其中 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。
+    - 工作时维护 AC/Test-local evidence ledger。
+    - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 五张矩阵和 `Regression Test Deposit` 做最终 audit。只有 audit 通过后，change 才 ready for archive。
