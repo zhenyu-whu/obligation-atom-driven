@@ -16,19 +16,28 @@ The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `
 
 The `production-default-acceptance-driven` profile uses change-local `SI-###` scope item IDs only inside a single change. These IDs are not global source IDs and must not be treated as a global registry.
 
+## Runtime Schema Selection Contract
+
+When OpenSpec artifact-generation skills run in a repository configured by this skill, they must select the schema from the user's actual propose input:
+
+- If `openspec-propose` is triggered with no explicit change name and no substantive change description, use `production-obligation-atom-driven` and the orchestrate-backed final planned change auto-inference flow.
+- If `openspec-propose` is triggered with any explicit change name, feature request, bug fix, modification, or other substantive input, use `production-default-acceptance-driven`.
+- Runtime selection must be made before `openspec new change`. Use an explicit `--schema <schema_name>` whenever needed; do not rely on the top-level `openspec/config.yaml` default to infer the user's input mode.
+- Because runtime selection can choose either profile, a configured repository should have both bundled production schemas installed under `openspec/schemas/`.
+
 ## Workflow
 
 1. Inspect the target repository root. Default to the current working directory unless the user names another directory.
-2. Select the profile:
+2. Select the repository default profile:
    - If the user asks for the current docs-driven, atom-driven, orchestrate-backed, or GA-based workflow, select `production-obligation-atom-driven`.
    - If the user asks for the default-style, post-greenfield, follow-up feature/modification, or acceptance-driven workflow, select `production-default-acceptance-driven`.
    - If the user does not specify a profile, default to `production-obligation-atom-driven` to preserve the existing behavior.
-3. Read `references/profiles/<schema_name>/profile.yaml`.
-4. Confirm the profile metadata:
+3. Read `references/profiles/<schema_name>/profile.yaml` for the selected repository default profile.
+4. Confirm the selected profile metadata:
    - `schema_name` matches the selected profile.
    - `schema_dir` defaults to `schema` when omitted.
 5. Sync bundled OpenSpec files into the target repository:
-   - Copy `<skill-root>/references/profiles/<schema_name>/<schema_dir>/` to `<repo-root>/openspec/schemas/<schema_name>/`.
+   - Copy every bundled production profile schema directory from `<skill-root>/references/profiles/<profile>/schema/` to `<repo-root>/openspec/schemas/<profile>/`, including both `production-obligation-atom-driven` and `production-default-acceptance-driven`.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
    - Preserve the bundled apply runtime requirement that any apply-stage `worker` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
    - Create or update `<repo-root>/openspec/config.yaml` so the top-level `schema:` value is `<schema_name>`.
@@ -40,8 +49,10 @@ The `production-default-acceptance-driven` profile uses change-local `SI-###` sc
    - If an equivalent OpenSpec runtime section already exists, update it instead of adding a duplicate.
 7. Verify the result:
    - `openspec/config.yaml` has `schema: <schema_name>`.
-   - `openspec/schemas/<schema_name>/schema.yaml` exists.
-   - `openspec/schemas/<schema_name>/templates/` contains the bundled templates.
+   - `openspec/schemas/production-obligation-atom-driven/schema.yaml` exists.
+   - `openspec/schemas/production-obligation-atom-driven/templates/` contains the bundled templates.
+   - `openspec/schemas/production-default-acceptance-driven/schema.yaml` exists.
+   - `openspec/schemas/production-default-acceptance-driven/templates/` contains the bundled templates.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
