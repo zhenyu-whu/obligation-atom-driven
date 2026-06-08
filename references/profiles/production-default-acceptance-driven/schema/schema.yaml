@@ -150,6 +150,7 @@ artifacts:
       - 建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 forbidden boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
       - 若某个 AC 的 primary proof、fixed command 或 Required Evidence 消费 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC。
       - 写入时必须明确 artifact information ownership：coverage tables 只负责 proposal/spec/design coverage；`Runtime Acceptance Index` 只负责 AC 到 row/Test ID 的路由；AC section 是人工审阅和 worker 执行主入口；`Verification Appendix` 是 runtime row 详情、fixed commands、evidence directories、ledger files、fixture boundaries 和 CI runnable 状态的唯一事实来源；`Regression Test Deposit` 是永久回归测试文件、常规回归命令、行为断言 oracle 和“不测实现细节”边界的唯一事实来源。
+      - Testing Quality Core 不可选：每个 change 的 `tasks.md` 都必须包含 `Test Layer Plan`、`Test Evidence Matrix`、TDD red/green fields 和 `Regression Test Deposit`。complexity gate 只能决定 runtime detail matrices 的展开深度，不能关闭分层测试、固定证据、TDD 或永久回归沉淀。
       - 写入时必须先建立 `Test Layer Plan`，再写 `Test Evidence Matrix`。`Test Layer Plan` 必须按 AC/behavior 列出需要的 unit、component、route/API contract、DB/integration、browser E2E、security/negative、config/ops/check 等测试层；每个被省略的适用层都必须有 scope-backed 不适用理由。
       - `Test Layer Plan` 是不可降级的分层测试契约。`Required Layers` 中每个适用层都必须映射到独立 exact `T-###`；同一 `T-###` 不得同时代表 unit、component、route/API contract、DB/integration、browser E2E、security/negative 或 config/ops/check 等多个 required layer。
       - 一个 `Test ID` 的 `Layer` 只能是单一稳定类别。若一个物理测试文件覆盖多个层，必须在 `Test Evidence Matrix` 中拆成多个 Test ID、稳定 test name/filter、固定命令和 evidence row；不得用一个 broad smoke/e2e script 同时登记为 unit/component/API/DB/security 的 primary proof。
@@ -160,6 +161,7 @@ artifacts:
       - 每个 runtime row 必须回链到 proposal scope item、spec requirement/scenario、design decision 或明确的 proof requirement。无法回链的 row 只能作为非阻断工程辅助，不得成为 AC scope、产品行为或完成门禁。
       - 通用 web 最佳实践只能用于选择 proof 形态、测试层级和 evidence 强度，不能产生用户未要求且 specs/design 未承接的 route、control、state、API、job、event、provider、storage、retry、offline、toast 或 lifecycle 行为。
       - 如果 proposal/spec/design 中出现 operation verbs、status enum、stage、terminal state、failure branch、disabled/loading/empty/retry/recovery branch、async queue/worker/provider/SSE/storage chain、auth/security branch 或 responsive variant，tasks 必须把它们抽取成 runtime acceptance model rows。
+      - runtime detail matrices 可按实际 runtime 触达面最小化，但不能删除。若 change 确实不触及 route/control/API/data mutation/auth/DB/worker/SSE/storage/provider/state/branch，对应 `Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix` 可以只保留最小 `Not applicable` 行，并必须写明 scope-backed 理由。只要 proposal/spec/design/tasks 任一处出现对应 runtime 行为，就必须展开对应矩阵行。
       - AC sections 必须按 externally meaningful user/system acceptance behavior、terminal state、failure/recovery branch 或 async chain segment 分组，不按文件分组。
       - 每个 AC section 必须至少有一个 final verification / acceptance checkbox，并在 `Primary Proof`、`Required Evidence` 和 coverage rows 中被引用。
 
@@ -208,6 +210,8 @@ artifacts:
       - `### Regression Test Deposit`
 
       Matrix column constraints：
+      - `Test Layer Plan`、`Test Evidence Matrix` 和 `Regression Test Deposit` 是强制 Testing Quality Core，不得用 `Not applicable` 整表跳过。只允许对单个 Test ID、单个测试层或单个 deposit 行写 scope-backed `not-applicable` / `blocked` 理由。
+      - runtime detail matrices 可以按需最小化：无对应 runtime 行为时保留最小 `Not applicable` 行；有 route/control/API/data mutation/auth/DB/worker/SSE/storage/provider/state/branch 时必须展开对应 row，不得用 broad proof 或 Test Layer Plan 替代 runtime row。
       - `Test Layer Plan` columns 至少包含：`AC ID`、`Behavior / Boundary`、`Scope Basis`、`Required Layers`、`Test IDs By Layer`、`Omitted Layers / Reason`、`Primary Proof Layer`、`Regression Entry`、`No-Scope-Expansion Check`。它必须解释为什么某个 behavior 只用 smoke/browser 或只用低层测试仍足够；不得留空。
       - `Test Evidence Matrix` columns 至少包含：`Test ID`、`AC ID`、`Fixed Command`、`Test File / Name`、`Layer`、`Covers Rows`、`Default Path?`、`Fixture Boundary`、`Must Fail Before Implementation`、`Red Command`、`Expected Red Failure`、`Observed Red Failure`、`Green Command`、`TDD Status`、`Requires Tests Passed`、`Evidence Directory`、`Evidence Produced`、`Ledger File`、`CI Runnable?`、`Scope Basis`、`Artifact Handling`、`Scope Role`、`No-Scope-Expansion Check`。required behavior 的 `TDD Status` 完成时只能是 `green-passed`、`not-applicable` 或 `blocked`，不能停留在 `red-required`。
       - `Test IDs By Layer` 必须对 `Required Layers` 中每个适用层使用不同 exact `T-###`。同一 Test ID 不得出现在多个 required layer 下；若某层只是 supplemental 或 not-applicable，必须在该层 cell 中标明并指出唯一 primary layer。
@@ -237,6 +241,7 @@ artifacts:
       - 确认每个永久回归命令能从仓库根目录稳定执行，并且可通过 root/package script、CI job、稳定 test file/filter 或登记的 smoke/e2e/ops script 触达；未接入常规回归入口的测试只能作为临时 evidence，不得作为 deposited。
       - 确认没有 implementation-detail tests 被登记为 primary proof 或永久回归沉淀。
       - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。
+      - 如果仓库存在 `openspec/agent-runtime/scripts/validate_tasks_quality.py`，finalizing `tasks.md` 后必须运行 `python openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md` 并修复所有 error；该 helper 是 Testing Quality Core 的结构自查，不替代人工 proposal/spec/design 审查。
     requires:
       - proposal
       - specs
@@ -254,8 +259,8 @@ apply:
     - Design decisions 及其 `SI-###` references。
     - AC sections、AC-local execution contract fields、checkbox task IDs、trace inheritance / overrides、coverage table rows、AC-owned Test IDs、Prerequisites/Provides/Consumes/Start Gate 和 proof/evidence requirements。
     - `Runtime Acceptance Index`：每个 AC 的 scope basis、runtime surface rows、operation rows、state/branch rows、async/realtime rows、Test IDs、Provides Rows、Consumes Rows、Depends On AC IDs、Prerequisite Test IDs、Start Gate、scope role、no-scope-expansion check 和 detail matrix row references。
-    - `Verification Appendix`：runtime/test detail row IDs、scope basis、scope role、provider/consumer ownership、AC ID、Requires Tests Passed、Test IDs 和 no-scope-expansion checks。
-    - Test layer plan：每个 AC/behavior 的 required test layers、Test IDs by layer、omitted layers / reason、primary proof layer 和 regression entry。
+    - `Verification Appendix`：`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`、`Test Layer Plan`、`Test Evidence Matrix` 的全部 row IDs、scope basis、scope role、provider/consumer ownership、AC ID、Requires Tests Passed、Test IDs 和 no-scope-expansion checks。
+    - `Test Layer Plan`：每个 AC/behavior 的 required test layers、Test IDs by layer、omitted layers / reason、primary proof layer 和 regression entry。Testing Quality Core 不可选；runtime detail matrices 只在确实无对应 runtime 行为时允许最小 `Not applicable` 行。
     - Test evidence matrix：每个 Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation、red command、expected red failure、observed red failure、green command、TDD status、requires tests passed、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced。
     - Regression test deposit：每个 AC/Test ID 的永久测试文件、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier、Not Testing 边界和 deposit status。
 
@@ -276,4 +281,5 @@ apply:
     - 对用户可见的 mutating/selection/action control，勾选相关 task 前必须通过实际 runtime surface 执行 user-equivalent interaction，并断言 handler/API 被触发、响应或持久化数据正确、rendered UI 更新且 reload/readback 后仍成立。
     - 测试相关 evidence 必须由固定命令自动生成或由 final verification task 复制到 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`，其中 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。
     - 工作时维护 AC/Test-local evidence ledger。
+    - 如果仓库存在 `openspec/agent-runtime/scripts/validate_tasks_quality.py`，实现前和最终 audit 前都必须运行 `python openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`；最终 audit 可加 `--final`，使 `Regression Test Deposit` 停留 `required` 的行成为 blocker。
     - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张矩阵、`Regression Test Deposit` 和 `openspec/schemas/shared/tdd-regression-gates.md` 的 red/green/anti-pattern gates 做最终 audit。只有 audit 通过后，change 才 ready for archive。

@@ -12,7 +12,7 @@
    - `production-default-acceptance-driven`：使用 change-local Scope Item / `SI-###` 覆盖模型。
    - 其他 schema：按该 change 自身 schema instructions 兼容处理，不套用本文件的 GA/SI 生产门禁。
 3. 对两个生产 schema，apply instructions 必须只要求 `tasks` 作为 apply requirement，并且 context files 应包含 `proposal.md`、delta specs、`design.md`、`tasks.md`。若 apply instructions 仍要求 `source-truth`、`acceptance`、旧版 source coverage、`change-source-map` 或任何 proposal 前置 source artifact，必须暂停并修正 schema/config/artifacts。
-4. 主 agent 先读取 `tasks.md`，解析 `Acceptance-Driven Coverage`、`Runtime Acceptance Index`、所有 `AC-###` section、`Verification Appendix`、`Regression Test Deposit`（若 schema/artifact 要求或存在）、每个 AC 的 `Prerequisites` / `Provides` / `Consumes` / `Start Gate`，以及每个未完成 checkbox 的 `Trace` / `Runtime Rows` / `Test IDs` / `Acceptance` / `Proof` / `Overrides` trace 字段。
+4. 主 agent 先读取 `tasks.md`，解析 `Acceptance-Driven Coverage`、`Runtime Acceptance Index`、所有 `AC-###` section、`Verification Appendix`、`Test Layer Plan`、`Test Evidence Matrix`、`Regression Test Deposit`、每个 AC 的 `Prerequisites` / `Provides` / `Consumes` / `Start Gate`，以及每个未完成 checkbox 的 `Trace` / `Runtime Rows` / `Test IDs` / `Acceptance` / `Proof` / `Overrides` trace 字段。
 5. 主 agent 同时读取 proposal、相关 specs 和 design。不得批量展开原始 source docs；只有任务 trace、coverage gate、冲突协调或 proof 失败定位需要时，才按 schema 分支做定点读取。
 6. `production-obligation-atom-driven` preflight 必须索引：
    - proposal `Change Atom Coverage Register` rows、direct atoms、guard/boundary atoms、artifact projection 和 registered source line ranges。
@@ -28,24 +28,26 @@
 8. 两个生产 schema 的 common preflight 必须索引：
    - AC sections、AC-local execution contract fields、checkbox task IDs、trace inheritance / overrides、coverage table rows、AC-owned Test IDs、Prerequisites/Provides/Consumes/Start Gate 和 proof/evidence requirements。
    - `Runtime Acceptance Index`：每个 AC 的 scope/source basis、runtime surface rows、operation rows、state/branch rows、async/realtime rows、Test IDs、Provides Rows、Consumes Rows、Depends On AC IDs、Prerequisite Test IDs、Start Gate、scope role、no-scope-expansion check 和 detail matrix row references。它只作为 routing index，不作为 row/test 详情来源。
-   - `Verification Appendix`：`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`、`Test Evidence Matrix` 的 row IDs、basis、scope role、provider/consumer ownership、AC ID、Requires Tests Passed、Test IDs 和 no-scope-expansion checks。Appendix 是 runtime/test detail source of truth。
-   - test evidence matrix：Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation、Requires Tests Passed、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced；每个 Test ID 必须匹配 exact `T-[0-9]{3}`，不得带测试名称、AC 编号、slug 或字母后缀。
+   - `Verification Appendix`：`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`、`Test Layer Plan`、`Test Evidence Matrix` 的 row IDs、basis、scope role、provider/consumer ownership、AC ID、Requires Tests Passed、Test IDs 和 no-scope-expansion checks。Appendix 是 runtime/test detail source of truth。
+   - `Test Layer Plan`：每个 required behavior、preserve boundary 和 proof-only guard 的 required layers、Test IDs by layer、omitted layers / reason、primary proof layer 和 regression entry。Testing Quality Core 不可选；runtime detail matrices 只在确实无对应 runtime 行为时允许最小 `Not applicable` 行。
+   - test evidence matrix：Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation、Red Command、Expected Red Failure、Observed Red Failure、Green Command、TDD Status、Requires Tests Passed、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced；每个 Test ID 必须匹配 exact `T-[0-9]{3}`，不得带测试名称、AC 编号、slug 或字母后缀。
    - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、forbidden-boundary 的 row/provider/consumer 关系，以及 AC 拓扑顺序。
    - evidence ledger targets：fixed commands、canonical `test-results/<change-slug>/<AC-ID>/<Test-ID>/` artifacts、browser/rendered artifacts、API/DB/job/storage/log/audit facts、default-production-path proof。
 9. 完成 change 选择、status / instructions 读取、context 解析、schema-specific preflight、common preflight、coverage gate 和进度展示后，才能分派 worker 或开始实现。
+10. 如果仓库存在 `openspec/agent-runtime/scripts/validate_tasks_quality.py`，必须在分派 worker 或开始实现前运行 `python openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`。若报告 error，先修订 artifacts；不得用实现绕过 Testing Quality Core 缺口。
 
 ## Implementation + Acceptance Gates
 
-1. **Gate 1 / Artifact 完整性**：`tasks.md` 必须包含 `## Acceptance-Driven Coverage`、三张 coverage 表、`## Runtime Acceptance Index`、所有 `AC-###` sections 和后置 `## Verification Appendix` 五张 runtime/test 矩阵。`production-default-acceptance-driven` 还必须包含 `Regression Test Deposit`。如果 `production-obligation-atom-driven` artifact 或 schema instruction 已包含 `Regression Test Deposit`，也必须完整执行。
+1. **Gate 1 / Artifact 完整性**：`tasks.md` 必须包含 `## Acceptance-Driven Coverage`、三张 coverage 表、`## Runtime Acceptance Index`、所有 `AC-###` sections、后置 `## Verification Appendix` 六张 runtime/test 矩阵（包含 `Test Layer Plan` 和 `Test Evidence Matrix`），以及 `Regression Test Deposit`。两个生产 schema 的 Testing Quality Core（`Test Layer Plan`、TDD red/green fields、`Test Evidence Matrix`、`Regression Test Deposit`）不可选。
 2. **Gate 2 / AC-local contract 检查**：`production-obligation-atom-driven` 的每个 AC section 必须包含 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`；`production-default-acceptance-driven` 的每个 AC section 必须包含 `Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`。两个 schema 的每个 AC 都必须包含 `Acceptance:`、`Runtime Rows Owned:`、`Test IDs:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:`、`Mock Policy:`。
 3. **Gate 3 / 覆盖检查**：GA schema 中每个 direct `GA-####` 必须在 `Obligation Atom Coverage` 中有一行，并带有与 proposal register 一致的 `Artifact Projection`。Default schema 中每个 material `SI-###` 必须在 `Scope Item Coverage` 中有一行，并带有与 proposal scope coverage 一致的 `Artifact Handling`。两个 schema 都禁止 ID ranges、aggregate rows、多 ID 单元格、orphan coverage 和 projection/handling mismatch。
 4. **Gate 4 / Coverage task ID 解析检查**：三张 coverage 表中的每个 `Implementation Task IDs` 和 `Verification Task IDs` 必须解析到实际 checkbox task。每个 AC section 必须至少有一个 final verification / acceptance checkbox，并被 `Primary Proof`、`Required Evidence` 和相关 coverage rows 引用。
 5. **Gate 5 / Runtime model 覆盖检查**：`Verification Appendix` 中每个 mandatory row 必须有 basis、scope role、provider/consumer ownership、AC ID、Test ID 和 no-scope-expansion check；每个 Test ID 必须绑定具体 covered row IDs，只能归属一个 exact `AC-###`，并且必须匹配 exact `T-[0-9]{3}`。fixed command、test file/name、evidence directory、ledger file、fixture boundary、Requires Tests Passed 和 CI runnable 状态只能在 `Test Evidence Matrix` 中定义。
 6. **Gate 6 / AC dependency 拓扑检查**：每个 AC 的 `Consumes` 必须只能引用 baseline 或 earlier AC 在 `Provides` 中提供的 runtime rows / contracts / facts；`Depends On AC IDs` 必须排在当前 AC 之前；`Prerequisite Test IDs` / `Requires Tests Passed` 必须引用 earlier AC 的 Test IDs；不得存在循环依赖、future-change-only prerequisite、或只在 proof/fixed command 中隐式出现的 runtime dependency。
-7. **Gate 7 / 永久回归与有意义测试检查**：`production-default-acceptance-driven` 的每个 required behavior Test ID 必须在 `Regression Test Deposit` 中有 `required` 或 `deposited` 行，除非写明 scope-backed `not-applicable` 理由。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。
+7. **Gate 7 / 永久回归与有意义测试检查**：两个生产 schema 的每个 required behavior Test ID 必须在 `Regression Test Deposit` 中有 `required` 或 `deposited` 行，除非写明 source/scope-backed `not-applicable` 理由。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。`Test Layer Plan` 中不得用 smoke/browser proof 替代可低层稳定断言的 unit/component/API/DB/security 等层级。
 8. **Gate 8 / 任务级 TDD 与 proof 检查**：worker 应优先按当前 AC-local `Test IDs`、任务 `Test IDs`、`Proof:` 和 regression deposit（若适用）建立或补齐对应验证。实现完成前 proof 应能失败或暴露缺口；实现后必须通过 AC-owned Test ID 在 `Test Evidence Matrix` 中定义的 fixed command，并在 canonical evidence directory 产出 evidence。用户可见操作必须执行当前 schema 中定义的 runtime interaction / operation matrix proof；presence-only、static-only、API-only、implementation-detail 或 broad command proof 不得单独支撑勾选。
 9. **Gate 9 / 默认路径与 no-mock 检查**：凡 task 涉及 Route Handler、auth、session、DB、AI/provider、storage、queue、SSE、worker、external service adapter、env/config 或 deployment wiring，proof 必须覆盖真实导出、default dependency 或 default config。mock、stub、dependency injection、Playwright route intercept、fixture-only、手工注入 EventSource、直接 DB seed 或 isolated unit test 只能作为补充，除非 runtime matrix 明确说明该 row 是 source-compatible deterministic path 且另有测试覆盖被替换的 production boundary。
-10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 五张 runtime/test 矩阵、required evidence、canonical evidence directories 和 evidence ledger 都能回链到已完成任务和 proof，且 default schema 的 `Regression Test Deposit` 已落实或有 scope-backed 不适用理由，才可称为 ready for archive。
+10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、TDD red/green evidence、evidence ledger 和 `Regression Test Deposit` 都能回链到已完成任务和 proof，才可称为 ready for archive。
 
 ## 任务章节拆分
 
@@ -77,7 +79,7 @@
    - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足、default path 未证明或存在 blocker 的任务不得勾选。
 8. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，必须停止猜测并标明 blocker。
 9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
-10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 evidence ledger 条目，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。default schema worker 还必须按 `Regression Test Deposit` 落实永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 scope-backed 理由。
+10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 evidence ledger 条目，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、TDD red/green fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
 
 ## 主 Agent 职责
 
@@ -92,8 +94,9 @@
    - 三张 coverage 表的每一行都有已勾选任务、真实存在的 verification task ID、验证证据、projection/handling 处理和验收 proof。
    - `Runtime Acceptance Index` 每行都能解析到 owning AC、AC-local `Runtime Rows Owned`、checkbox `Runtime Rows`、Test IDs、Prerequisites/Provides/Consumes/Start Gate 和 `Verification Appendix` detail rows。
    - Runtime provision graph 无循环，所有 `Depends On AC IDs` 均排在 consumer AC 之前，所有 `Prerequisite Test IDs` / `Requires Tests Passed` 均引用 earlier AC 的 Test IDs，且没有 hidden future dependency。
-   - `Verification Appendix` 五张 runtime/test 矩阵的每个 mandatory row 都有已勾选任务、真实存在且只归属一个 AC、并匹配 exact `T-[0-9]{3}` 的 Test ID、fixed command、验证证据、basis、provider/consumer ownership 和 no-scope-expansion check。
-   - default schema 的 `Regression Test Deposit` 中每个 required behavior Test ID 都有永久回归文件或稳定测试入口、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和 `Not Testing` 边界；`not-applicable` 或 `blocked` 行有 scope-backed 理由。
+   - `Verification Appendix` 六张 runtime/test 矩阵的每个 mandatory row 都有已勾选任务、真实存在且只归属一个 AC、并匹配 exact `T-[0-9]{3}` 的 Test ID、fixed command、验证证据、basis、provider/consumer ownership 和 no-scope-expansion check；无 runtime 行为的 detail matrix 只能保留 source/scope-backed `Not applicable` 最小行。
+   - 两个生产 schema 的 `Test Layer Plan` 中每个 required behavior、preserve boundary 和 proof-only guard 都有 layer decision；省略适用层时理由不能只是“已有 smoke 覆盖”。
+   - 两个生产 schema 的 `Regression Test Deposit` 中每个 required behavior Test ID 都有永久回归文件或稳定测试入口、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和 `Not Testing` 边界；`not-applicable` 或 `blocked` 行有 source/scope-backed 理由。
    - 不存在违反当前 schema proof strength 的 presence-only、static-only、API-only、implementation-detail 或 broad-command 验收。
 6. 若验收 proof 失败揭示 proposal/spec/design/tasks 与 schema-specific coverage basis 不一致，主 agent 必须暂停代码修复并提出 artifact 更新；不得用实现绕过 artifact mismatch。
 
@@ -113,7 +116,7 @@
 - schema-aware `Acceptance-Driven Coverage` audit 结果。
 - 每个 AC 的 primary proof、required evidence、canonical evidence directories、evidence ledger、截图/DOM/API/DB/job/log/audit 等证据。
 - 执行的验证命令及结果。
-- default schema 的永久回归测试沉淀：新增或更新的 test/spec 文件、最小回归命令、CI tier，以及明确不测试的实现细节边界。
+- 两个生产 schema 的永久回归测试沉淀：新增或更新的 test/spec 文件、最小回归命令、CI tier，以及明确不测试的实现细节边界。
 - 未完成、被阻塞、未验证或需要用户决策的事项。
 
 不得在所有 AC section proof 未完成时声称 ready to archive。

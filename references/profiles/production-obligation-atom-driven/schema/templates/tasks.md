@@ -114,6 +114,8 @@ Runtime detail rows 只在对应矩阵定义；AC section、Runtime Acceptance I
 Test Evidence Matrix 是 fixed command、test file/name、evidence directory、ledger file、fixture boundary 和 CI runnable 状态的唯一事实来源。
 Test Layer Plan 是分层测试体系的唯一事实来源；不要只用一个 smoke/browser proof 覆盖可低层稳定断言的规则、表单状态、API contract、DB invariant 或安全边界。
 TDD red/green gate 依据 `openspec/schemas/shared/tdd-regression-gates.md`；required behavior 测试必须证明 red failure reason 正确，再用 green command 证明实现成功。
+Testing Quality Core 不可选：Test Layer Plan、Test Evidence Matrix、TDD red/green fields 和 Regression Test Deposit 必须始终存在。
+runtime detail matrices 可按需最小化；只有在 source/spec/design/tasks 均不触及对应 runtime 行为时，Runtime Surface / Operation / State / Async 矩阵才可保留最小 Not applicable 行并说明 source-backed 理由。
 worker 的主要输入应是对应 AC section 加上它引用的 Appendix rows，而不是完整全局矩阵。
 -->
 

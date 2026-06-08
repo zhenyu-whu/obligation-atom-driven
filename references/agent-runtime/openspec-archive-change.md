@@ -10,8 +10,8 @@
 
 - 对 `production-obligation-atom-driven` schema，归档前必须额外检查 `tasks.md` 的 `Acceptance-Driven Coverage`：`Obligation Atom Coverage` 每行只能有一个 exact `GA-####` 且 `Artifact Projection` 与 proposal register 一致，三张 coverage 表的 task ID 均能解析到已完成 checkbox，每个 AC 的 final verification / acceptance task 已完成，并且 evidence ledger 覆盖相关 `GA-####` 的 projection/proof 义务。
 - 对 `production-default-acceptance-driven` schema，归档前必须额外检查 `tasks.md` 的 `Acceptance-Driven Coverage`：`Scope Item Coverage` 每行只能有一个 exact `SI-###` 且 `Artifact Handling` 与 proposal `Change Scope Coverage` 一致，`Requirement / Scenario Coverage` 和 `Design Decision Coverage` 的 task ID 均能解析到已完成 checkbox，每个 AC 的 final verification / acceptance task 已完成，并且 evidence ledger 覆盖相关 `SI-###` 的 handling/proof 义务。
-- 对 `production-default-acceptance-driven` schema，归档前还必须检查 `Regression Test Deposit`：每个 required behavior Test ID 都有永久回归文件或稳定测试入口、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和 `Not Testing` 边界；`not-applicable` 或 `blocked` 行必须有 scope-backed 理由。
-- 两个生产 schema 都必须检查 `Runtime Acceptance Index`、AC-local contract 和 `Verification Appendix` 五张 runtime/test 矩阵能回链到已完成任务、fixed commands、canonical evidence directories 和 evidence ledger；Test ID 必须匹配 exact `T-[0-9]{3}`，不得带 AC 编号、slug、名称或字母后缀。
+- 两个生产 schema 归档前都必须检查 Testing Quality Core：`Test Layer Plan`、`Test Evidence Matrix`、TDD red/green fields 和 `Regression Test Deposit`。每个 required behavior Test ID 都必须有永久回归文件或稳定测试入口、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和 `Not Testing` 边界；`not-applicable` 或 `blocked` 行必须有 source/scope-backed 理由。不得用 smoke/browser proof 替代可低层稳定断言的 unit/component/API/DB/security 等层级。
+- 两个生产 schema 都必须检查 `Runtime Acceptance Index`、AC-local contract 和 `Verification Appendix` 六张 runtime/test 矩阵能回链到已完成任务、fixed commands、canonical evidence directories、TDD evidence 和 evidence ledger；Test ID 必须匹配 exact `T-[0-9]{3}`，不得带 AC 编号、slug、名称或字母后缀。无 runtime 行为的 runtime detail matrix 只能保留 source/scope-backed `Not applicable` 最小行。
 
 ## 同步与归档
 

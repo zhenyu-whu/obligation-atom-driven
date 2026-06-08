@@ -38,7 +38,9 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `schema_dir` defaults to `schema` when omitted.
 5. Sync bundled OpenSpec files into the target repository:
    - Copy every bundled production profile schema directory from `<skill-root>/references/profiles/<profile>/schema/` to `<repo-root>/openspec/schemas/<profile>/`, including both `production-obligation-atom-driven` and `production-default-acceptance-driven`.
+   - Copy `<skill-root>/references/shared/*.md` to `<repo-root>/openspec/schemas/shared/`, including the bundled `tdd-regression-gates.md` required by both production schemas.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
+   - Copy `<skill-root>/references/agent-runtime/scripts/` to `<repo-root>/openspec/agent-runtime/scripts/` when present.
    - Preserve the bundled apply runtime requirement that any apply-stage `worker` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
    - Create or update `<repo-root>/openspec/config.yaml` so the top-level `schema:` value is `<schema_name>`.
    - Preserve unrelated project-specific config entries when updating an existing `openspec/config.yaml`.
@@ -53,7 +55,9 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `openspec/schemas/production-obligation-atom-driven/templates/` contains the bundled templates.
    - `openspec/schemas/production-default-acceptance-driven/schema.yaml` exists.
    - `openspec/schemas/production-default-acceptance-driven/templates/` contains the bundled templates.
+   - `openspec/schemas/shared/tdd-regression-gates.md` exists.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
+   - `openspec/agent-runtime/scripts/validate_tasks_quality.py` exists when bundled.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
 
@@ -66,6 +70,8 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 - `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
 - `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
+- `references/agent-runtime/scripts/validate_tasks_quality.py`: optional local helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, and regression deposit status.
+- `references/shared/tdd-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/tdd-regression-gates.md`.
 
 ## Profile Contract
 
