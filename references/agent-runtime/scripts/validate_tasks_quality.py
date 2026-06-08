@@ -17,7 +17,17 @@ from pathlib import Path
 TEST_ID_RE = re.compile(r"\bT-[0-9]{3}\b")
 AC_ID_RE = re.compile(r"^AC-[0-9]{3}$")
 EVIDENCE_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/?$")
+LEDGER_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/ledger\.json$")
 BAD_TEST_ID_RE = re.compile(r"\bT-(?:AC[0-9]|[0-9]{3}[A-Za-z-])")
+TDD_STATUSES = {
+    "red-required",
+    "red-observed",
+    "green-passed",
+    "not-applicable",
+    "blocked",
+}
+FINAL_TDD_STATUSES = {"green-passed", "not-applicable", "blocked"}
+DEPOSIT_STATUSES = {"required", "deposited", "not-applicable", "blocked"}
 IMPLEMENTATION_DETAIL_TERMS = [
     "private helper",
     "mock call",
@@ -167,7 +177,7 @@ def validate_test_layer_plan(markdown: str, findings: list[Finding], allow_templ
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} 的 omitted layer 理由过弱"))
 
 
-def validate_test_evidence(markdown: str, findings: list[Finding], allow_template: bool) -> set[str]:
+def validate_test_evidence(markdown: str, findings: list[Finding], allow_template: bool, final: bool) -> set[str]:
     header, rows = extract_table(markdown, "Test Evidence Matrix")
     required_cols = {
         "Test ID",
@@ -176,12 +186,16 @@ def validate_test_evidence(markdown: str, findings: list[Finding], allow_templat
         "Test File / Name",
         "Layer",
         "Covers Rows",
+        "Default Path?",
+        "Fixture Boundary",
         "Red Command",
         "Expected Red Failure",
         "Observed Red Failure",
         "Green Command",
         "TDD Status",
+        "Requires Tests Passed",
         "Evidence Directory",
+        "Evidence Produced",
         "Ledger File",
         "CI Runnable?",
         "Scope Role",
@@ -218,11 +232,27 @@ def validate_test_evidence(markdown: str, findings: list[Finding], allow_templat
         evidence_dir = row.get("Evidence Directory", "").strip("` ")
         if evidence_dir and not EVIDENCE_RE.search(evidence_dir):
             findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Directory 不符合 canonical 路径：{evidence_dir}"))
+        ledger_file = row.get("Ledger File", "").strip("` ")
+        if ledger_file and not LEDGER_RE.search(ledger_file):
+            findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 必须是 canonical ledger.json 路径：{ledger_file}"))
+        if evidence_dir and ledger_file:
+            expected_prefix = evidence_dir.rstrip("/") + "/"
+            if not ledger_file.startswith(expected_prefix):
+                findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 不在 Evidence Directory 下"))
+        evidence_produced = row.get("Evidence Produced", "")
+        if evidence_produced and ("command.log" not in evidence_produced or "ledger.json" not in evidence_produced):
+            findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Produced 必须包含 command.log 和 ledger.json"))
+        if not row.get("CI Runnable?", "").strip():
+            findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 CI Runnable? 说明"))
         scope_role = row.get("Scope Role", "").lower()
+        tdd_status = row.get("TDD Status", "")
+        if tdd_status and tdd_status not in TDD_STATUSES:
+            findings.append(Finding("error", f"{test_id or '<unknown>'} TDD Status 不合法：{tdd_status}"))
         if "required behavior" in scope_role:
-            tdd_status = row.get("TDD Status", "")
             if tdd_status == "red-required":
                 findings.append(Finding("error", f"{test_id} required behavior 不能停留在 red-required"))
+            if final and tdd_status not in FINAL_TDD_STATUSES:
+                findings.append(Finding("error", f"{test_id} final audit 时 required behavior TDD Status 必须是 green-passed / not-applicable / blocked"))
             for col in ["Red Command", "Expected Red Failure", "Observed Red Failure", "Green Command", "TDD Status"]:
                 if not row.get(col, "").strip():
                     findings.append(Finding("error", f"{test_id} required behavior 缺少 TDD 字段：{col}"))
@@ -267,8 +297,23 @@ def validate_regression_deposit(
                 findings.append(Finding("error", f"Regression Deposit 引用了不存在的 Evidence row：{test_id}"))
             deposited_ids.add(test_id)
         status = row.get("Deposit Status", "")
+        if status and status not in DEPOSIT_STATUSES:
+            findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Deposit Status 不合法：{status}"))
         if final and status == "required":
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} 完成状态不能停留在 required"))
+        if status in {"required", "deposited"}:
+            for col in [
+                "Permanent Test File",
+                "Regression Command",
+                "Behavior Contract",
+                "Assertion Oracle",
+                "CI Tier",
+            ]:
+                if not row.get(col, "").strip():
+                    findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Regression Deposit 缺少 {col}"))
+            permanent = row.get("Permanent Test File", "")
+            if "test-results/" in permanent or "ledger" in permanent.lower():
+                findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Permanent Test File 不能指向一次性 evidence 或 ledger"))
         oracle = row.get("Assertion Oracle", "")
         if any(term in oracle for term in IMPLEMENTATION_DETAIL_TERMS):
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} 使用了 implementation-detail assertion oracle"))
@@ -338,7 +383,7 @@ def validate(markdown: str, allow_template: bool, final: bool) -> list[Finding]:
     if BAD_TEST_ID_RE.search(bad_id_source):
         findings.append(Finding("error", "发现带名称、AC 编号、slug 或字母后缀的非法 Test ID"))
     validate_test_layer_plan(markdown, findings, allow_template)
-    evidence_ids = validate_test_evidence(markdown, findings, allow_template)
+    evidence_ids = validate_test_evidence(markdown, findings, allow_template, final)
     validate_regression_deposit(markdown, evidence_ids, findings, allow_template, final)
     validate_runtime_not_applicable(markdown, findings, allow_template)
     validate_high_risk_layers(markdown, findings, allow_template)

@@ -222,6 +222,7 @@ artifacts:
       - 一个 `Test ID` 的 `Layer` 只能是单一稳定类别。若一个物理测试文件覆盖多个层，必须在 `Test Evidence Matrix` 中拆成多个 Test ID、稳定 test name/filter、固定命令和 evidence row；不得用一个 broad smoke/e2e script 同时登记为 unit/component/API/DB/security 的 primary proof。
       - smoke、browser E2E、staging smoke、ops check 或 final summary 只能登记其真实层级，可作为 supplemental/default-path proof；不得填入 unit/component/route/API/DB/security 层来替代可低层稳定断言。只有 source-backed 行为确实没有稳定低层 contract boundary 时才可省略低层，并且理由必须解释为什么该层不适用，不能写“已有 smoke 覆盖”或泛泛的“需要真实 readback”。
       - 写入或更新 `Test Evidence Matrix` 与 `Regression Test Deposit` 前，必须读取并遵守 `openspec/schemas/shared/tdd-regression-gates.md`。required behavior 的测试必须先证明自己能因正确 source-backed 行为缺口失败，再作为实现成功 proof；不得把测试后补的立即通过用例当作验收证据。
+      - 生成 `Test Evidence Matrix` 时必须把每个 `T-###` 的执行闭环写清楚：root-relative fixed command、red/green command、canonical evidence directory、`command.log`、`ledger.json`、CI/root/package 入口，以及最终 audit 可重跑的最小 regression command。只写“将产生截图/日志”或口述 evidence 不算完成定义。
 
       Runtime acceptance model 原则：
       - Runtime acceptance model 是 source-backed obligations 的验证投影，不是新的产品需求来源。每个 runtime row 必须回链到 proposal register row、spec requirement/scenario、design obligation、spec guard 或 verification obligation。
@@ -252,6 +253,7 @@ artifacts:
       - Smoke、browser E2E、staging smoke 或 broad workspace command 可以作为最高强度端到端 proof，但不得作为可低层测试的 rule、DTO、component state、API contract、DB invariant、auth/security/privacy boundary 的唯一永久回归沉淀。若 required behavior 只有 smoke/browser Test ID，且存在可稳定低层断言，这是 blocker。若确实只沉淀 smoke，`Test Layer Plan` 和 `Regression Test Deposit` 必须逐层记录不适用理由；缺少理由是 blocker。
       - `Regression Test Deposit` 的 `Deposit Status` 为 `required` 只表示计划，不表示已沉淀。所有 implementation tasks 勾选完成前，每个 required behavior 的沉淀行必须变为 `deposited`，或以 `blocked` / `not-applicable` 记录 source-backed 理由和后续 gate；不得在 `required` 状态下宣称 change ready。
       - 永久回归测试必须可被常规回归入口触达：优先使用 package/root test script、稳定 Playwright/Vitest file/filter、或已登记的 smoke/e2e/ops script。若 `Regression Command` 不能从仓库根目录稳定执行，或 `CI Runnable?` 只是口头 yes 而无 root/package/CI 入口说明，该 Test ID 不得算作完成。
+      - `deposited` 的含义是永久测试文件或稳定 smoke/e2e/ops 入口已经存在，且该 Test ID 的 latest green/final evidence 能证明 regression command 已在当前 worktree 通过；若 regression command 未运行、只登记计划路径、或只能依赖临时 evidence-only 文件，状态必须保持 `required` / `blocked`，不能写 `deposited`。
 
       Task-writing constraints：
       - 严格遵循 checkbox format。Apply phase 解析 `- [ ]` leaf tasks。
@@ -320,7 +322,7 @@ artifacts:
       - 每个 Test ID 必须出现在 owning AC 的 `Test IDs:` 和相关 checkbox `Test IDs:` 中，不得出现在其他 AC section。Broad command 可作为补充 evidence produced，但 primary proof 必须绑定 AC-owned Test ID、fixed command、row IDs 和 canonical evidence directory。
       - `Requires Tests Passed` 必须列出该 Test ID 可执行前必须已通过的 earlier AC Test IDs；没有前置测试时写 `None`。如果某 Test ID 的 fixed command 需要 API/DB/schema/provider 等 current-change surface，必须把提供该 surface 的 earlier AC Test IDs 写入该列，或把 provider work 内联到 owning AC。
       - `Evidence Directory` 必须使用 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`，其中 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。所有测试相关 evidence 必须保存或复制到该目录；`/tmp`、未复制的测试框架默认目录、agent 本地临时截图路径或口述路径不得作为最终验收 evidence。若 Playwright/Vitest/其他 runner 原始输出在别处，final verification task 必须复制或生成审阅所需的 curated artifacts 到 canonical directory。
-      - 每个 Test ID 的 evidence produced 至少应包含 `command.log`、`ledger.json`，并按 layer 产出 screenshot、trace、DOM snapshot、API facts、DB facts、job/event facts、log/audit facts 或 failure trace。`Ledger File` 必须位于该 Test ID 的 canonical evidence directory，并记录 `change`、`acId`、`testId`、`taskId`、`runtimeRows`、`command`、`result`、`artifacts[]` 和 default-path/fixture boundary facts。
+      - 每个 Test ID 的 evidence produced 至少应包含 `command.log`、`ledger.json`，并按 layer 产出 screenshot、trace、DOM snapshot、API facts、DB facts、job/event facts、log/audit facts 或 failure trace。`Ledger File` 必须位于该 Test ID 的 canonical evidence directory，并记录 `change`、`acId`、`testId`、`taskIds`、`runtimeRows`、`layer`、`fixedCommand`、`redCommand`、`redResult`、`greenCommand`、`greenResult`、`regressionCommand`、`regressionResult`、`cwd`、`exitCode`、`startedAt`、`finishedAt`、`artifacts[]`、TDD status 和 default-path/fixture boundary facts。
       - Fixture/mock 边界必须在 `Test Evidence Matrix` 的 `Fixture Boundary` 中逐 Test ID 声明：允许 mock/sandbox 的段、不能 mock 的 default path、以及另一个测试如何覆盖被 fixture 替换的 production path。AC 的 `Mock / Fixture Boundary:` 只保留人类可读摘要。Playwright route intercept、手工注入 `EventSource`、直接写 DB 构造终态、fixture snapshot 或 isolated unit test 不得作为 async/realtime/browser terminal state 的唯一 proof。
       - 对每个 async/realtime chain，至少应有 success terminal row 和 relevant failure terminal row 的自动 proof；若 source/design 明确只有单一终态或 failure deferred，必须在 matrix 和 owning AC 的 `Mock / Fixture Boundary:` 摘要中引用 source-backed deferred/guard 理由。
       - 对每个 user-visible operation，至少应有 user-equivalent browser/runtime proof；如果操作会改变 API/data/persistence，proof 必须在同一 AC 或互相引用的 paired tasks 中闭环到 API/data/readback。
@@ -374,6 +376,7 @@ artifacts:
       - 确认每个 required behavior Test ID 在 `Regression Test Deposit` 中有永久回归沉淀或 source-backed `not-applicable` 理由；沉淀行必须包含可维护 test file、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和明确的 `Not Testing` 实现细节边界。
       - 确认每个 required behavior 的 `Regression Test Deposit` 在完成时为 `deposited`，或有明确 `blocked` / `not-applicable` 理由；不得以 `required` 作为完成状态。
       - 确认每个永久回归命令能从仓库根目录稳定执行，并且可通过 root/package script、CI job、稳定 test file/filter 或登记的 smoke/e2e/ops script 触达；未接入常规回归入口的测试只能作为临时 evidence，不得作为 deposited。
+      - 确认每个已完成 Test ID 的 canonical evidence directory 中至少有 `command.log` 和 `ledger.json`，且 ledger 记录的 fixed/green/regression command、exit code、result、artifacts 和 fixture/default-path facts 与 `Test Evidence Matrix` 一致。
       - 确认没有 implementation-detail tests 被登记为 primary proof 或永久回归沉淀：不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、data-testid 存在或按钮 enabled 作为 required behavior 的 assertion oracle。
       - 确认 fixed command、evidence directory、ledger file、fixture boundary 和 CI runnable 状态只在 `Test Evidence Matrix` 中定义，AC section 和 checkbox task 只能引用 Test ID 或描述 evidence category。
       - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。
@@ -381,7 +384,7 @@ artifacts:
       - 确认 task 未要求 unplanned services、integrations、routes、scenes、pages、surfaces、objects、components、states、assets、APIs、tables、jobs、events、providers、deployment environments 或 source-out-of-scope behavior。
       - 确认每个 task 有 observable proof，而不只是 file-edit statement。
       - 确认没有任何 source-backed 用户可见操作只由 static DOM、screenshot、控件存在、API-only test 或 broad test command 覆盖；UI 操作、API/data mutation 和 persistence/readback 需要在同一 AC proof 中闭环，或明确拆成互相引用的 implementation 和 verification tasks。
-      - 如果仓库存在 `openspec/agent-runtime/scripts/validate_tasks_quality.py`，finalizing `tasks.md` 后必须运行 `python openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md` 并修复所有 error；该 helper 是 Testing Quality Core 的结构自查，不替代人工 source/spec/design 审查。
+      - 本生产 schema 的 runtime 必须提供 `openspec/agent-runtime/scripts/validate_tasks_quality.py`。finalizing `tasks.md` 后必须运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md` 并修复所有 error；若脚本缺失，先同步 bundled schema/runtime，脚本缺失本身是 schema sync blocker。该 helper 是 Testing Quality Core 的结构自查，不替代人工 source/spec/design 审查。
     requires:
       - proposal
       - specs
@@ -437,6 +440,6 @@ apply:
     - 对 state/branch/terminal outcomes，勾选相关 task 前必须执行对应 Test IDs，断言进入条件、可观察 UI/API 结果、数据或事件事实、允许的 next states、terminal 标记和 recovery/retry 行为。成功状态测试不能替代失败/dispatch/timeout/unauthorized 等独立终态。
     - 对 async/realtime chain，勾选相关 task 前必须证明 chain matrix 中要求的 success 和 relevant failure variants。手工注入 `EventSource`、Playwright route intercept、fixture snapshot、直接 DB seed 或 isolated unit test 可作为补充，但不能作为唯一 proof 替代 queue/worker/domain/outbox/SSE/browser/readback 的 required default path 或 source-compatible deterministic path。
     - 测试相关 evidence 必须由固定命令自动生成或由 final verification task 复制到 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`，其中 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。不得把 `/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径作为最终 proof。
-    - 工作时维护 AC/Test-local evidence ledger：对每个完成的 checkbox，按 `Test Evidence Matrix` 的 Ledger File 记录满足 task 的 fixed command、canonical rendered artifact、API/DB/job/storage/log/audit fact 或 default-path proof。
-    - 如果仓库存在 `openspec/agent-runtime/scripts/validate_tasks_quality.py`，实现前和最终 audit 前都必须运行 `python openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`；最终 audit 可加 `--final`，使 `Regression Test Deposit` 停留 `required` 的行成为 blocker。
+    - 工作时维护 AC/Test-local evidence ledger：对每个完成的 checkbox，按 `Test Evidence Matrix` 的 Ledger File 记录满足 task 的 fixed command、canonical rendered artifact、API/DB/job/storage/log/audit fact 或 default-path proof；没有当前 worktree 的命令输出、exit code、`command.log` 和 `ledger.json`，不得勾选依赖该 Test ID 的 task。
+    - 本生产 schema 的 runtime 必须提供 `openspec/agent-runtime/scripts/validate_tasks_quality.py`。实现前和最终 audit 前都必须运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`；最终 audit 必须加 `--final`，使 `Regression Test Deposit` 停留 `required`、TDD final 状态不完整、ledger 路径不 canonical 等问题成为 blocker。若脚本缺失，先同步 bundled schema/runtime，不得跳过。
     - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张矩阵、`Regression Test Deposit` 和 `openspec/schemas/shared/tdd-regression-gates.md` 的 red/green/anti-pattern gates 做最终 audit，对照 completed tasks、implementation evidence、verification evidence、Global Atoms、runtime rows、Test IDs、fixed commands、canonical evidence directories、evidence ledger、永久回归测试文件、回归命令和 anti-implementation-detail 边界。只有 audit 通过后，change 才 ready for archive。

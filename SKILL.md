@@ -70,7 +70,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 - `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
 - `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
-- `references/agent-runtime/scripts/validate_tasks_quality.py`: optional local helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, and regression deposit status.
+- `references/agent-runtime/scripts/validate_tasks_quality.py`: required production helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, canonical ledger paths, TDD final status, and regression deposit status.
 - `references/shared/tdd-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/tdd-regression-gates.md`.
 
 ## Profile Contract

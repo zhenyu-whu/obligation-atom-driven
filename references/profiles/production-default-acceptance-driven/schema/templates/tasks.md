@@ -110,6 +110,7 @@ Test Layer Plan 是分层测试体系的唯一事实来源；不要只用一个 
 TDD red/green gate 依据 `openspec/schemas/shared/tdd-regression-gates.md`；required behavior 测试必须证明 red failure reason 正确，再用 green command 证明实现成功。
 Testing Quality Core 不可选：Test Layer Plan、Test Evidence Matrix、TDD red/green fields 和 Regression Test Deposit 必须始终存在。
 runtime detail matrices 可按需最小化；只有在 proposal/spec/design/tasks 均不触及对应 runtime 行为时，Runtime Surface / Operation / State / Async 矩阵才可保留最小 Not applicable 行并说明 scope-backed 理由。
+最终完成不是表格声明：每个完成的 Test ID 必须有当前 worktree 的 fixed/green/regression command 证据、canonical command.log、ledger.json，以及 final `validate_tasks_quality.py --final` 通过或明确 blocker。
 -->
 
 ### Runtime Surface Inventory
@@ -153,6 +154,7 @@ runtime detail matrices 可按需最小化；只有在 proposal/spec/design/task
 <!--
 本表记录可长期维护的回归测试沉淀，不替代 Test Evidence Matrix 的验收 evidence。
 每个 required behavior Test ID 完成时必须为 deposited，或以 blocked / not-applicable 给出 scope-backed 理由；required 只表示计划，不能作为完成状态。
+deposited 表示永久测试文件或稳定 smoke/e2e/ops 入口已存在，regression command 已由当前 green/final evidence 证明可重跑；不能只登记计划路径或一次性 evidence-only 文件。
 永久回归命令必须是最小可重跑命令，并能通过 root/package script、CI job、稳定 test file/filter 或已登记 smoke/e2e/ops script 触达。
 smoke/e2e/ops 只能沉淀其真实层级；不得用一个 evidence-only smoke 脚本代表 unit/component/API/DB/security。若同一文件包含多层测试，必须用独立 Test ID、稳定 test name/filter 和独立 regression command 区分。
 -->

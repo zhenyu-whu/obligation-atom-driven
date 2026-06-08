@@ -32,6 +32,7 @@ Sources:
 - `Green Command` 必须重跑同一个 Test ID 的固定命令，证明同一断言从 red 变 green。
 - 如果 green 失败，优先修 production code，不得削弱断言、删除 edge case、放宽 security/privacy oracle 或改成匹配当前实现输出。
 - 只有相关 Test IDs green，且 required prerequisite tests 仍通过，才能勾选 implementation 或 acceptance task。
+- green 通过必须保存到该 Test ID 的 canonical evidence directory，至少包含 `command.log` 和 `ledger.json`。只在对话中口述“已通过”或只引用测试框架默认临时输出，不能作为 green evidence。
 
 ## Refactor Gate
 
@@ -73,7 +74,16 @@ Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象
 - `redResult`
 - `greenCommand`
 - `greenResult`
+- `regressionCommand`
+- `regressionResult`
+- `cwd`
+- `exitCode`
+- `startedAt`
+- `finishedAt`
 - `refactorRerun`
+- `artifacts`
+- `defaultPathFacts`
+- `fixtureBoundary`
 - `tddStatus`
 - `notApplicableReason`
 
@@ -87,4 +97,5 @@ Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象
 - green command 已通过，并保存 evidence。
 - 测试 oracle 不是实现细节，也不是 mock 行为。
 - regression command 可由常规入口触达。
+- `Regression Test Deposit` 为 `deposited` 时，永久测试文件或稳定 smoke/e2e/ops 入口必须存在，regression command 必须已在当前 worktree 运行通过，或与已保存 green command 完全等价并在 ledger 中明确说明。
 - 失败时会定位到目标行为缺口，而不是只证明测试文件、fixture 或 mock 存在。

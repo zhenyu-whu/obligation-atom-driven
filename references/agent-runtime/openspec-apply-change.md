@@ -34,7 +34,7 @@
    - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、forbidden-boundary 的 row/provider/consumer 关系，以及 AC 拓扑顺序。
    - evidence ledger targets：fixed commands、canonical `test-results/<change-slug>/<AC-ID>/<Test-ID>/` artifacts、browser/rendered artifacts、API/DB/job/storage/log/audit facts、default-production-path proof。
 9. 完成 change 选择、status / instructions 读取、context 解析、schema-specific preflight、common preflight、coverage gate 和进度展示后，才能分派 worker 或开始实现。
-10. 如果仓库存在 `openspec/agent-runtime/scripts/validate_tasks_quality.py`，必须在分派 worker 或开始实现前运行 `python openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`。若报告 error，先修订 artifacts；不得用实现绕过 Testing Quality Core 缺口。
+10. 两个生产 schema 的仓库必须提供 `openspec/agent-runtime/scripts/validate_tasks_quality.py`。在分派 worker 或开始实现前必须运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`。若脚本缺失，先同步 bundled schema/runtime；脚本缺失本身是 schema sync blocker。若报告 error，先修订 artifacts；不得用实现绕过 Testing Quality Core 缺口。
 
 ## Implementation + Acceptance Gates
 
@@ -45,9 +45,9 @@
 5. **Gate 5 / Runtime model 覆盖检查**：`Verification Appendix` 中每个 mandatory row 必须有 basis、scope role、provider/consumer ownership、AC ID、Test ID 和 no-scope-expansion check；每个 Test ID 必须绑定具体 covered row IDs，只能归属一个 exact `AC-###`，并且必须匹配 exact `T-[0-9]{3}`。fixed command、test file/name、evidence directory、ledger file、fixture boundary、Requires Tests Passed 和 CI runnable 状态只能在 `Test Evidence Matrix` 中定义。
 6. **Gate 6 / AC dependency 拓扑检查**：每个 AC 的 `Consumes` 必须只能引用 baseline 或 earlier AC 在 `Provides` 中提供的 runtime rows / contracts / facts；`Depends On AC IDs` 必须排在当前 AC 之前；`Prerequisite Test IDs` / `Requires Tests Passed` 必须引用 earlier AC 的 Test IDs；不得存在循环依赖、future-change-only prerequisite、或只在 proof/fixed command 中隐式出现的 runtime dependency。
 7. **Gate 7 / 永久回归与有意义测试检查**：两个生产 schema 的每个 required behavior Test ID 必须在 `Regression Test Deposit` 中有 `required` 或 `deposited` 行，除非写明 source/scope-backed `not-applicable` 理由。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。`Test Layer Plan` 中不得用 smoke/browser proof 替代可低层稳定断言的 unit/component/API/DB/security 等层级。
-8. **Gate 8 / 任务级 TDD 与 proof 检查**：worker 应优先按当前 AC-local `Test IDs`、任务 `Test IDs`、`Proof:` 和 regression deposit（若适用）建立或补齐对应验证。实现完成前 proof 应能失败或暴露缺口；实现后必须通过 AC-owned Test ID 在 `Test Evidence Matrix` 中定义的 fixed command，并在 canonical evidence directory 产出 evidence。用户可见操作必须执行当前 schema 中定义的 runtime interaction / operation matrix proof；presence-only、static-only、API-only、implementation-detail 或 broad command proof 不得单独支撑勾选。
+8. **Gate 8 / 任务级 TDD 与 proof 检查**：worker 应优先按当前 AC-local `Test IDs`、任务 `Test IDs`、`Proof:` 和 regression deposit（若适用）建立或补齐对应验证。实现完成前 proof 应能失败或暴露缺口；实现后必须通过 AC-owned Test ID 在 `Test Evidence Matrix` 中定义的 fixed command，并在 canonical evidence directory 产出 `command.log` 和 `ledger.json`。用户可见操作必须执行当前 schema 中定义的 runtime interaction / operation matrix proof；presence-only、static-only、API-only、implementation-detail 或 broad command proof 不得单独支撑勾选。
 9. **Gate 9 / 默认路径与 no-mock 检查**：凡 task 涉及 Route Handler、auth、session、DB、AI/provider、storage、queue、SSE、worker、external service adapter、env/config 或 deployment wiring，proof 必须覆盖真实导出、default dependency 或 default config。mock、stub、dependency injection、Playwright route intercept、fixture-only、手工注入 EventSource、直接 DB seed 或 isolated unit test 只能作为补充，除非 runtime matrix 明确说明该 row 是 source-compatible deterministic path 且另有测试覆盖被替换的 production boundary。
-10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、TDD red/green evidence、evidence ledger 和 `Regression Test Deposit` 都能回链到已完成任务和 proof，才可称为 ready for archive。
+10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、TDD red/green evidence、evidence ledger、`Regression Test Deposit`、以及 `validate_tasks_quality.py --final` 都能回链到已完成任务和 proof，才可称为 ready for archive。
 
 ## 任务章节拆分
 
@@ -79,7 +79,7 @@
    - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足、default path 未证明或存在 blocker 的任务不得勾选。
 8. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，必须停止猜测并标明 blocker。
 9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
-10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 evidence ledger 条目，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、TDD red/green fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
+10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 `command.log` 和 `ledger.json`，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。ledger 必须记录 fixed/green/regression command、cwd、exit code、result、artifacts 和 default-path/fixture facts。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、TDD red/green fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
 
 ## 主 Agent 职责
 
@@ -97,6 +97,8 @@
    - `Verification Appendix` 六张 runtime/test 矩阵的每个 mandatory row 都有已勾选任务、真实存在且只归属一个 AC、并匹配 exact `T-[0-9]{3}` 的 Test ID、fixed command、验证证据、basis、provider/consumer ownership 和 no-scope-expansion check；无 runtime 行为的 detail matrix 只能保留 source/scope-backed `Not applicable` 最小行。
    - 两个生产 schema 的 `Test Layer Plan` 中每个 required behavior、preserve boundary 和 proof-only guard 都有 layer decision；省略适用层时理由不能只是“已有 smoke 覆盖”。
    - 两个生产 schema 的 `Regression Test Deposit` 中每个 required behavior Test ID 都有永久回归文件或稳定测试入口、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和 `Not Testing` 边界；`not-applicable` 或 `blocked` 行有 source/scope-backed 理由。
+   - 每个 completed Test ID 的 canonical evidence directory 都有 `command.log` 和 `ledger.json`，ledger 内容与 `Test Evidence Matrix`、TDD red/green fields、Regression Deposit 和实际命令结果一致；`deposited` 不得只代表计划路径。
+   - 最终 audit 已运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md --final` 且无 error。
    - 不存在违反当前 schema proof strength 的 presence-only、static-only、API-only、implementation-detail 或 broad-command 验收。
 6. 若验收 proof 失败揭示 proposal/spec/design/tasks 与 schema-specific coverage basis 不一致，主 agent 必须暂停代码修复并提出 artifact 更新；不得用实现绕过 artifact mismatch。
 
