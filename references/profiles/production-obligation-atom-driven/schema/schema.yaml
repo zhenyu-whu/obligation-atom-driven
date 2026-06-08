@@ -54,7 +54,7 @@ artifacts:
       - `Capabilities` 必须匹配 final packet 的 capability atom views，除非 packet 记录 source-backed conflict 或 blocker。
       - `Production Source Coverage` 必须列出 proposal register 中 exact source files、line ranges 和 `GA-####`。不得新增宽泛整篇文档读取义务。
       - `Source Window Read Set` 必须列出每个重读 source window、匹配 `GA-####`，以及重读是否改变或确认 proposal interpretation。
-      - `Non-Goals` 必须包含 explicit non-goal、later-change、preserve、prototype-only、superseded 或 forbidden-drift atoms 对本 change 的约束。
+      - `Non-Goals` 必须包含 explicit non-goal、later-change、preserve、prototype-only、superseded 或其他明确边界 atoms 对本 change 的约束。
       - Proposal 必须把 source 只留给 propose/design 的实现细节（例如 API route 命名或最小 schema 选择）保留为 open design decisions，而不是伪装成 source-defined。
 
       必需章节：
@@ -121,7 +121,7 @@ artifacts:
       Final alignment gate：
       - 每个 spec file 必须以 `## Production Alignment Gate` 结束。
       - 若已存在的 spec file 覆盖任何非 `spec-requirement` direct atom，必须在 gate 前包含 `## Artifact Projection Notes`，列出 `Global Atom ID`、`Artifact Projection`、`Spec Handling` 和 `Design / Tasks Handoff`。不得为了这张表单独创建 spec file。
-      - Gate 必须列出 covered Global Atom IDs、artifact projection coverage、source docs and line ranges read、capability atom view file consumed、product workflow coverage、prototype route/object/responsive coverage（相关时）、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和 forbidden drift checked。
+      - Gate 必须列出 covered Global Atom IDs、artifact projection coverage、source docs and line ranges read、capability atom view file consumed、product workflow coverage、prototype route/object/responsive coverage（相关时）、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和明确边界/负向行为 coverage。
       - Gate 必须包含 `Orphan direct atoms: none` 或列出 blockers，并列出用于 exact behavior 的 focused source windows。
       - 如果任何 spec-level relevant direct atom 未被 requirement/scenario、已有 spec file 的 Artifact Projection Notes 或 gate 表示，停止并修订 proposal/specs 后再继续。纯 design/verification-only capability 的 closure 在 design/tasks 阶段检查。
     requires:
@@ -148,7 +148,7 @@ artifacts:
       - 当 obligation atoms 定义行为但未定义 exact implementation shape 时，design 必须选择最小 source-compatible technical shape，并标记为 source-backed implementation decision。不得增加产品 scope、新 capability、新 provider、新 persistent domain concept 或新的 user-visible workflow。
       - Design 不得把 source-backed production behavior 替换成 placeholder、diagnostic、mock-only、static-only、fixture-only、registry-only 或 sandbox-only 行为，除非相关 atom 明确是 deferred、non-goal、contextual、reference-only 或 prototype-only-not-production。
       - 每个 source-backed implementation decision 必须记录：它解决的 source gap、选择的最小技术形态、满足的 `GA-####`，以及为避免 scope expansion 而拒绝的更大替代方案。
-      - `design-obligation` atom 必须在适用 domain 上有 module/data/API/auth/worker/frontend/ops/deployment placement；`verification-obligation` atom 必须交给 Verification Design 或 tasks proof；`spec-guard` atom 必须体现为 forbidden drift、preserve 或 non-goal guard。无法 placement 时记录 blocker，不得留给 implementer 猜测。
+      - `design-obligation` atom 必须在适用 domain 上有 module/data/API/auth/worker/frontend/ops/deployment placement；`verification-obligation` atom 必须交给 Verification Design 或 tasks proof；`spec-guard` atom 必须体现为稳定 MUST NOT、preserve 或 non-goal guard。无法 placement 时记录 blocker，不得留给 implementer 猜测。
 
       Section depth requirements：
       - Architecture / Module Boundary Design 必须列出 package ownership、import direction、exported entry points、forbidden imports 和 cross-package contract locations。
@@ -158,7 +158,7 @@ artifacts:
       - Frontend / UX / Prototype Fidelity Design 必须定义 route/component responsibilities、props/events/state model、state transitions、disabled/failure/retry behavior、responsive variants 和 local-versus-persisted state。
       - 对每个会改变数据、状态、route 或用户可见结果的 UI control，Frontend / UX / Prototype Fidelity Design 必须定义 owner component、runtime/client-server boundary、event trigger、handler/action/API route、request payload、response merge 或 reload persistence、submitting/disabled/error/retry behavior。若框架需要浏览器端 runtime、hydration 或 client component 才能绑定事件，design 必须明确该边界；server/static markup 不能单独视为 mutating control 的完整设计。
       - Observability / Ops / Deployment Design 必须定义 log/event categories、allowed and forbidden fields、config keys or categories、environment differences、migration ordering、staging smoke expectations 和 rollback constraints。
-      - Verification Design 必须把每个主要行为映射到 concrete proof：unit、DB integration、route/API、worker/job、SSE/outbox、provider sandbox、storage/asset、component、E2E、responsive visual/DOM check、static forbidden-drift check、config validation、log redaction assertion 或 staging smoke。
+      - Verification Design 必须把每个主要行为映射到 concrete proof：unit、DB integration、route/API、worker/job、SSE/outbox、provider sandbox、storage/asset、component、E2E、responsive visual/DOM check、明确负向边界检查、config validation、log redaction assertion 或 staging smoke。
       - 对用户可见的 mutating/selection/action control，Verification Design 必须映射到 positive interaction proof：通过实际点击、输入、选择、blur/submit 或键盘操作触发，并断言 API/data 结果和 rendered UI 更新。静态 DOM、截图、`data-testid`、enabled/disabled 断言或 SSR/static render 只能作为补充，不能单独证明交互能力。
 
       必需章节：
@@ -179,7 +179,7 @@ artifacts:
       - **Open Questions**
 
       `Production Alignment Gate` 必须回答：
-      - 哪些 Global Atom IDs 被 implemented、preserved、deferred 或作为 forbidden-drift guard。
+      - 哪些 Global Atom IDs 被 implemented、preserved、deferred 或作为明确边界/负向 guard。
       - 每个 artifact projection 是否被正确消费，尤其是 `design-obligation`、`verification-obligation` 和 `spec-guard` 是否没有被伪装成 spec requirement。
       - 每个 spec scenario 是否有 design 中对应的 implementation contract。
       - 每个 direct atom 是否有 design obligation 或 explicit blocker。
@@ -213,7 +213,7 @@ artifacts:
       - 将 missing 或 failed proposal/spec/design alignment gates 视为 blockers。
       - Finalizing tasks 前建立 proposal `GA-####` rows、artifact projection map、spec scenarios、design obligations、AC sections、checkbox task IDs、coverage table references、Runtime Appendix rows 和 Test Evidence rows 的索引。每个 coverage table task ID 必须解析到实际 checkbox task。
       - Finalizing tasks 前必须先建立 runtime acceptance model，再把该模型分层写入 `Runtime Acceptance Index`、AC-local execution contracts、checkbox tasks 和 `Verification Appendix`；不得先粗分 AC 再用 broad proof 补洞。
-      - Finalizing tasks 前必须建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 forbidden boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
+      - Finalizing tasks 前必须建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 explicit negative boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
       - 若某个 AC 的 primary proof、fixed command 或 Required Evidence 消费 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC；不得把问题留到 apply 阶段。
       - 写入时必须明确 artifact information ownership：coverage tables 只负责 source/spec/design coverage；`Runtime Acceptance Index` 只负责 AC 到 row/Test ID 的路由；AC section 是人工审阅和 worker 执行主入口；`Verification Appendix` 是 runtime row 详情、fixed commands、evidence directories、ledger files、fixture boundaries 和 CI runnable 状态的唯一事实来源；`Regression Test Deposit` 是永久回归测试文件、常规回归命令、行为断言 oracle 和“不测实现细节”边界的唯一事实来源。
       - Testing Quality Core 不可选：每个 change 的 `tasks.md` 都必须包含 `Test Layer Plan`、`Test Evidence Matrix`、TDD red/green fields 和 `Regression Test Deposit`。complexity gate 只能决定 runtime detail matrices 的展开深度，不能关闭分层测试、固定证据、TDD 或永久回归沉淀。
@@ -230,7 +230,7 @@ artifacts:
       - 通用 web 最佳实践只能用于选择 proof 形态、测试层级和 evidence 强度，不能产生 source 外的 route、control、state、API、job、event、provider、storage、retry、offline、toast 或 lifecycle 行为。
       - 如果 proposal/spec/design 中出现 operation verbs、status enum、stage、terminal state、failure branch、disabled/loading/empty/retry/recovery branch、async queue/worker/provider/SSE/storage chain、auth/security branch 或 responsive variant，tasks 必须把它们抽取成 runtime acceptance model rows。
       - runtime detail matrices 可按实际 runtime 触达面最小化，但不能删除。若 change 确实不触及 route/control/API/data mutation/auth/DB/worker/SSE/storage/provider/state/branch，对应 `Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix` 可以只保留最小 `Not applicable` 行，并必须写明 source-backed 理由。只要 proposal/spec/design/tasks 任一处出现对应 runtime 行为，就必须展开对应矩阵行。
-      - Runtime acceptance model 必须同时抽取 provision relationship：`baseline-provided` 表示来自已归档 dependency 或现有代码，`provided-by-current-ac` 表示本 change 某个 AC 创建或证明，`consumed-by-current-ac` 表示某 AC 的 proof 依赖该 row，`future-change-only` 表示不得纳入当前 AC，`forbidden-boundary` 表示只能用于 preserve/negative proof。
+      - Runtime acceptance model 必须同时抽取 provision relationship：`baseline-provided` 表示来自已归档 dependency 或现有代码，`provided-by-current-ac` 表示本 change 某个 AC 创建或证明，`consumed-by-current-ac` 表示某 AC 的 proof 依赖该 row，`future-change-only` 表示不得纳入当前 AC，`explicit-negative-boundary` 表示只能用于 preserve/negative proof。
       - Provider AC 可以是 backend/data/API/security contract AC，也可以是 vertical user-visible AC；判断标准不是 layer 名称，而是它是否拥有可独立验收的 source-backed contract、negative path、security/privacy/idempotency 或 migration proof。没有独立 source-backed contract 的 setup work 应内联到消费它的 vertical AC。
       - Runtime acceptance model 的完整细节用于主 agent preflight 和最终 audit；每个 worker 的主要输入必须是当前 AC-local execution contract 以及该 AC 引用的 Appendix rows，不得要求 worker 从完整全局矩阵自行推断当前责任。
       - 如果实现过程中发现新的 runtime state、branch、operation、event、job、API 或 terminal outcome，必须先更新 tasks 的 runtime acceptance model、AC-local execution contract 和 AC proof，再实现或勾选任务；不得让实现悄悄扩大状态空间。
@@ -238,7 +238,8 @@ artifacts:
       测试生成原则：
       - 测试必须从 source-backed behavior contract 反推，而不是从实现代码结构、私有 helper、当前组件层级、className、调用次数或临时实现分支反推。
       - 每个 `Scope Role = required behavior` 的 Test ID 默认必须遵守 `openspec/schemas/shared/tdd-regression-gates.md` 的 Red Gate、Green Gate、Behavior Oracle 和 Mock Policy。若 red-first 不适用，必须在 `Test Evidence Matrix` 的 TDD fields 和 `Regression Test Deposit` 中写明 source-backed reason。
-      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；边界、未授权、敏感字段和 forbidden drift 用 security/negative 或 config/ops/check。最小充分层拥有 primary proof ownership，不得被更高层 smoke/browser Test ID 替代。
+      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；明确 MUST NOT、未授权、敏感字段等稳定负向契约用 security/negative 或 config/ops/check。最小充分层拥有 primary proof ownership，不得被更高层 smoke/browser Test ID 替代。
+      - 不得为“防止未来新增能力”生成全仓结构冻结式 guard 测试或默认门禁，例如完整 route/file/table allowlist、禁止未来 package/API route/DB table、或按当前源码清单断言必须完全相等。只有当用户显式要求架构冻结，且该冻结本身是稳定产品/安全契约时，才可生成这类检查；否则应把边界拆到对应 production owner 的稳定负向行为测试，或在 design/tasks 中作为非阻断说明记录。
       - 不得为了提高测试数量而生成 implementation-detail tests。以下测试只能作为补充，不能作为 required behavior 的 primary proof 或永久回归沉淀：只断言函数被调用、mock 被调用次数、私有方法返回、非契约 DOM 层级、快照全文、className、data-testid 存在、按钮 enabled、静态 markup 或截图存在。
       - `Must Fail Before Implementation` 不能只是 yes/no 标记。required behavior 的 Test Evidence row 必须给出 `Red Command`、`Expected Red Failure`、`Observed Red Failure`、`Green Command` 和 `TDD Status`；red 失败原因必须匹配 source/spec/design/runtime row 缺口，不能是语法、fixture、环境或测试自身错误。
       - 如果 red command 直接通过，必须修正测试 oracle，或把该 Test ID 明确改为 preserve/baseline/not-applicable proof 并记录 source-backed reason；不得继续用该测试证明新增或变更行为成功。

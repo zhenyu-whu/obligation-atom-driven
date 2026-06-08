@@ -15,7 +15,7 @@ artifacts:
       - 若用户请求本身足够明确，优先用它定义 change boundary；若请求含糊，先读取现有 specs/code 建立 baseline，并在仍无法安全判断时只提出必要澄清。
       - 若 change 修改 existing capability，读取对应 `openspec/specs/<capability>/spec.md`。若新增 capability，使用 kebab-case capability 名称。
       - Proposal 必须包含 `Change Scope Coverage`，用 change-local `SI-###` 标识 material scope item。`SI-###` 只在本 change 内有效，不是全局编号。
-      - `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`spec` 表示应进入 requirement/scenario；`guard` 表示 non-goal、MUST NOT、preserve 或 forbidden drift；`design` 表示主要由 design 决定实现形态；`proof` 表示主要由 tasks/test/evidence 验证；`context` 只提供背景，不生成实现范围。
+      - `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`spec` 表示应进入 requirement/scenario；`guard` 表示 non-goal、MUST NOT、preserve 或明确负向边界；`design` 表示主要由 design 决定实现形态；`proof` 表示主要由 tasks/test/evidence 验证；`context` 只提供背景，不生成实现范围。
       - 下游 artifacts 必须引用 exact `SI-###`，不得使用 ranges。每个 material scope item 必须有 downstream coverage expectation。
       - Proposal 可以保留 open design decisions，但不得把尚未确认的实现选择伪装成用户已要求的产品范围。
       - 当用户请求描述可见操作或控件能力时，proposal 必须保留具体 operation verb 和可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
@@ -76,7 +76,7 @@ artifacts:
 
       Final alignment gate：
       - 每个 spec file 必须以 `## Production Alignment Gate` 结束。
-      - Gate 必须列出 covered scope items、artifact handling、baseline/input consumed、product workflow coverage、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和 forbidden drift checked。
+      - Gate 必须列出 covered scope items、artifact handling、baseline/input consumed、product workflow coverage、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和明确边界/负向行为 coverage。
       - 如果任何 spec-relevant scope item 未被 requirement/scenario 或 guard 表示，停止并修订 proposal/specs。
     requires:
       - proposal
@@ -119,7 +119,7 @@ artifacts:
       - **Open Questions**
 
       `Production Alignment Gate` 必须回答：
-      - 哪些 `SI-###` 被 implemented、preserved、deferred 或作为 forbidden-drift guard。
+      - 哪些 `SI-###` 被 implemented、preserved、deferred 或作为明确边界/负向 guard。
       - 每个 artifact handling 是否被正确消费，尤其是 `design`、`proof` 和 `guard` 是否没有被伪装成 spec requirement。
       - 每个 spec scenario 是否有 design 中对应的 implementation contract。
       - 每个 data mutation 是否在适用时有 table/column/constraint/transaction/idempotency details。
@@ -147,7 +147,7 @@ artifacts:
       - 读取 proposal、所有实际生成的 delta specs 和 design。
       - 建立 scope items、artifact handling、spec scenarios、design decisions、AC sections、checkbox task IDs、coverage table references、Runtime Appendix rows 和 Test Evidence rows 的索引。每个 coverage table task ID 必须解析到实际 checkbox task。
       - 先建立 runtime acceptance model，再把该模型分层写入 `Runtime Acceptance Index`、AC-local execution contracts、checkbox tasks 和 `Verification Appendix`。
-      - 建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 forbidden boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
+      - 建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 explicit negative boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
       - 若某个 AC 的 primary proof、fixed command 或 Required Evidence 消费 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC。
       - 写入时必须明确 artifact information ownership：coverage tables 只负责 proposal/spec/design coverage；`Runtime Acceptance Index` 只负责 AC 到 row/Test ID 的路由；AC section 是人工审阅和 worker 执行主入口；`Verification Appendix` 是 runtime row 详情、fixed commands、evidence directories、ledger files、fixture boundaries 和 CI runnable 状态的唯一事实来源；`Regression Test Deposit` 是永久回归测试文件、常规回归命令、行为断言 oracle 和“不测实现细节”边界的唯一事实来源。
       - Testing Quality Core 不可选：每个 change 的 `tasks.md` 都必须包含 `Test Layer Plan`、`Test Evidence Matrix`、TDD red/green fields 和 `Regression Test Deposit`。complexity gate 只能决定 runtime detail matrices 的展开深度，不能关闭分层测试、固定证据、TDD 或永久回归沉淀。
@@ -169,7 +169,8 @@ artifacts:
       测试生成原则：
       - 测试必须从 behavior contract 反推，而不是从私有 helper、当前组件层级、className、调用次数或临时实现分支反推。
       - 每个 `Scope Role = required behavior` 的 Test ID 默认必须遵守 `openspec/schemas/shared/tdd-regression-gates.md` 的 Red Gate、Green Gate、Behavior Oracle 和 Mock Policy。若 red-first 不适用，必须在 `Test Evidence Matrix` 的 TDD fields 和 `Regression Test Deposit` 中写明 scope-backed reason。
-      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；边界、未授权、敏感字段和 forbidden drift 用 security/negative 或 config/ops/check。最小充分层拥有 primary proof ownership，不得被更高层 smoke/browser Test ID 替代。
+      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；明确 MUST NOT、未授权、敏感字段等稳定负向契约用 security/negative 或 config/ops/check。最小充分层拥有 primary proof ownership，不得被更高层 smoke/browser Test ID 替代。
+      - 不得为“防止未来新增能力”生成全仓结构冻结式 guard 测试或默认门禁，例如完整 route/file/table allowlist、禁止未来 package/API route/DB table、或按当前源码清单断言必须完全相等。只有当用户显式要求架构冻结，且该冻结本身是稳定产品/安全契约时，才可生成这类检查；否则应把边界拆到对应 production owner 的稳定负向行为测试，或在 design/tasks 中作为非阻断说明记录。
       - 不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。
       - `Must Fail Before Implementation` 不能只是 yes/no 标记。required behavior 的 Test Evidence row 必须给出 `Red Command`、`Expected Red Failure`、`Observed Red Failure`、`Green Command` 和 `TDD Status`；red 失败原因必须匹配 scope/spec/design 缺口，不能是语法、fixture、环境或测试自身错误。
       - 如果 red command 直接通过，必须修正测试 oracle，或把该 Test ID 明确改为 preserve/baseline/not-applicable proof 并记录 reason；不得继续用该测试证明新增或变更行为成功。

@@ -10,9 +10,9 @@
 
 <!-- 将此 change 映射到 Global Atom IDs、source files、line ranges 与 exact original sources。不要用整篇文档代替精准 line ranges。 -->
 
-| Global Atom ID | Artifact Projection | Source Document / Lines | Design Consumption | Implementation Boundary |
-| --- | --- | --- | --- | --- |
-| `GA-0001` | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
+| Global Atom ID | Artifact Projection                                                                                    | Source Document / Lines   | Design Consumption                    | Implementation Boundary                         |
+| -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------- | ----------------------------------------------- |
+| `GA-0001`      | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
 
 ## Decisions
 
@@ -44,7 +44,7 @@
 
 ## Verification Design
 
-<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / static guard / smoke。用户可见操作必须有 positive interaction proof；静态 DOM、截图或 SSR/static render 只能作补充。 -->
+<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / stable negative boundary check / smoke。用户可见操作必须有 positive interaction proof；静态 DOM、截图或 SSR/static render 只能作补充。不要生成完整 route/file/table allowlist 这类全仓结构冻结式 guard，除非用户显式要求架构冻结。 -->
 
 ## Rollout / Compatibility
 
@@ -53,7 +53,7 @@
 ## Production Alignment Gate
 
 - Global Atom IDs implemented / preserved / deferred: <!-- GA-0001 implemented, GA-0002 preserved, GA-0003 deferred；逐个枚举 exact IDs，不使用 ranges -->
-- Artifact Projection handling: <!-- design-obligation 已进入 design；verification-obligation 已进入 Verification Design/tasks handoff；spec-guard 已体现 preserve/forbidden drift；无 projection mismatch -->
+- Artifact Projection handling: <!-- design-obligation 已进入 design；verification-obligation 已进入 Verification Design/tasks handoff；spec-guard 已体现 preserve / stable negative behavior；无 projection mismatch -->
 - Spec scenarios covered by design: <!-- requirement/scenario names -->
 - Orphan direct atoms: <!-- none / exact GA blockers -->
 - Source-backed implementation decisions minimal: <!-- 是 / blocker；列出关键 decision 与 rejected expansion -->
