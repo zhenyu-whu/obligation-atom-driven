@@ -71,6 +71,25 @@ LOWER_LAYER_TERMS = [
     "config",
     "ops",
 ]
+TEST_FILE_PATH_RE = re.compile(
+    r"(?:^|[\s`])"
+    r"((?:apps|packages|tests|openspec/changes|test-results)/[^\s`|,;，。]+?\."
+    r"(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs))"
+)
+OWNER_LOCAL_LAYERS = {
+    "unit",
+    "component",
+    "route/api contract",
+    "db integration",
+    "db/integration",
+    "security/negative",
+}
+REPO_LEVEL_TEST_DIR_ALLOWLIST = {
+    "e2e",
+    "runtime",
+    "smoke",
+    "ops",
+}
 
 
 @dataclass
@@ -92,6 +111,80 @@ def is_separator(cells: list[str]) -> bool:
 
 def is_template_row(cells: list[str]) -> bool:
     return any("<!--" in cell for cell in cells)
+
+
+def extract_change_slug(markdown: str) -> str:
+    title = re.search(r"^#\s+Implementation Tasks:\s*([A-Za-z0-9_.-]+)\s*$", markdown, re.MULTILINE)
+    if title:
+        return title.group(1)
+    evidence_path = re.search(r"\btest-results/([^/]+)/AC-[0-9]{3}/T-[0-9]{3}/", markdown)
+    return evidence_path.group(1) if evidence_path else ""
+
+
+def change_slug_prefixes(change_slug: str) -> set[str]:
+    parts = [part for part in re.split(r"[-_]+", change_slug) if part]
+    prefixes = {change_slug}
+    prefixes.update("-".join(parts[:idx]) for idx in range(2, len(parts) + 1))
+    prefixes.update("_".join(parts[:idx]) for idx in range(2, len(parts) + 1))
+    return prefixes
+
+
+def extract_test_file_paths(text: str) -> list[str]:
+    return [match.strip("` ") for match in TEST_FILE_PATH_RE.findall(text)]
+
+
+def validate_test_file_ownership(
+    *,
+    test_id: str,
+    layer: str,
+    field_name: str,
+    field_value: str,
+    change_slug: str,
+    findings: list[Finding],
+    reported: set[str],
+) -> None:
+    prefixes = change_slug_prefixes(change_slug) if change_slug else set()
+    normalized_layer = layer.strip().lower()
+    for path in extract_test_file_paths(field_value):
+        if path.startswith("openspec/changes/"):
+            key = f"{test_id}|{path}|openspec-change"
+            if key not in reported:
+                findings.append(Finding("error", f"{test_id} {field_name} 不能把永久测试代码放在 openspec/changes：{path}"))
+                reported.add(key)
+            continue
+        if path.startswith("test-results/"):
+            key = f"{test_id}|{path}|test-results"
+            if key not in reported:
+                findings.append(Finding("error", f"{test_id} {field_name} 不能把 evidence 目录当作永久测试文件：{path}"))
+                reported.add(key)
+            continue
+        if not path.startswith("tests/"):
+            continue
+
+        parts = path.split("/")
+        test_bucket = parts[1] if len(parts) > 1 else ""
+        if test_bucket in prefixes:
+            key = f"{test_id}|{path}|change-scope"
+            if key not in reported:
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id} {field_name} 使用了按 change slug 聚合的测试目录：{path}；"
+                        "永久测试应按 packages/apps owner 放置，或放入 tests/e2e、tests/runtime 等长期入口",
+                    )
+                )
+                reported.add(key)
+        if normalized_layer in OWNER_LOCAL_LAYERS and test_bucket not in REPO_LEVEL_TEST_DIR_ALLOWLIST:
+            key = f"{test_id}|{path}|owner-local-{normalized_layer}"
+            if key not in reported:
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id} 的 {layer or '<unknown layer>'} 测试不应放在仓库级 feature 测试目录：{path}；"
+                        "请靠近对应 packages/apps production owner 放置",
+                    )
+                )
+                reported.add(key)
 
 
 def extract_table(markdown: str, heading: str) -> tuple[list[str], list[dict[str, str]]]:
@@ -177,7 +270,14 @@ def validate_test_layer_plan(markdown: str, findings: list[Finding], allow_templ
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} 的 omitted layer 理由过弱"))
 
 
-def validate_test_evidence(markdown: str, findings: list[Finding], allow_template: bool, final: bool) -> set[str]:
+def validate_test_evidence(
+    markdown: str,
+    findings: list[Finding],
+    allow_template: bool,
+    final: bool,
+    change_slug: str,
+    reported_ownership: set[str],
+) -> set[str]:
     header, rows = extract_table(markdown, "Test Evidence Matrix")
     required_cols = {
         "Test ID",
@@ -229,6 +329,16 @@ def validate_test_evidence(markdown: str, findings: list[Finding], allow_templat
             findings.append(Finding("error", f"{test_id or '<unknown>'} 的 Layer 必须是单一层级"))
         if not row.get("Fixed Command", "").strip():
             findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 Fixed Command"))
+        for col in ["Test File / Name", "Fixed Command", "Red Command", "Green Command"]:
+            validate_test_file_ownership(
+                test_id=test_id or "<unknown>",
+                layer=layer,
+                field_name=col,
+                field_value=row.get(col, ""),
+                change_slug=change_slug,
+                findings=findings,
+                reported=reported_ownership,
+            )
         evidence_dir = row.get("Evidence Directory", "").strip("` ")
         if evidence_dir and not EVIDENCE_RE.search(evidence_dir):
             findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Directory 不符合 canonical 路径：{evidence_dir}"))
@@ -265,6 +375,8 @@ def validate_regression_deposit(
     findings: list[Finding],
     allow_template: bool,
     final: bool,
+    change_slug: str,
+    reported_ownership: set[str],
 ) -> None:
     header, rows = extract_table(markdown, "Regression Test Deposit")
     required_cols = {
@@ -314,6 +426,24 @@ def validate_regression_deposit(
             permanent = row.get("Permanent Test File", "")
             if "test-results/" in permanent or "ledger" in permanent.lower():
                 findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Permanent Test File 不能指向一次性 evidence 或 ledger"))
+            validate_test_file_ownership(
+                test_id=", ".join(ids) if ids else row.get("AC ID", "<unknown>"),
+                layer="",
+                field_name="Permanent Test File",
+                field_value=permanent,
+                change_slug=change_slug,
+                findings=findings,
+                reported=reported_ownership,
+            )
+            validate_test_file_ownership(
+                test_id=", ".join(ids) if ids else row.get("AC ID", "<unknown>"),
+                layer="",
+                field_name="Regression Command",
+                field_value=row.get("Regression Command", ""),
+                change_slug=change_slug,
+                findings=findings,
+                reported=reported_ownership,
+            )
         oracle = row.get("Assertion Oracle", "")
         if any(term in oracle for term in IMPLEMENTATION_DETAIL_TERMS):
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} 使用了 implementation-detail assertion oracle"))
@@ -378,13 +508,15 @@ def validate_high_risk_layers(markdown: str, findings: list[Finding], allow_temp
 
 def validate(markdown: str, allow_template: bool, final: bool) -> list[Finding]:
     findings: list[Finding] = []
+    change_slug = extract_change_slug(markdown)
+    reported_ownership: set[str] = set()
     add_missing_headings(markdown, findings)
     bad_id_source = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL) if allow_template else markdown
     if BAD_TEST_ID_RE.search(bad_id_source):
         findings.append(Finding("error", "发现带名称、AC 编号、slug 或字母后缀的非法 Test ID"))
     validate_test_layer_plan(markdown, findings, allow_template)
-    evidence_ids = validate_test_evidence(markdown, findings, allow_template, final)
-    validate_regression_deposit(markdown, evidence_ids, findings, allow_template, final)
+    evidence_ids = validate_test_evidence(markdown, findings, allow_template, final, change_slug, reported_ownership)
+    validate_regression_deposit(markdown, evidence_ids, findings, allow_template, final, change_slug, reported_ownership)
     validate_runtime_not_applicable(markdown, findings, allow_template)
     validate_high_risk_layers(markdown, findings, allow_template)
     return findings
