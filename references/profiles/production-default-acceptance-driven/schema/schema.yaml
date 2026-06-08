@@ -150,6 +150,11 @@ artifacts:
       - 建立 runtime provision graph：列出每个 runtime surface / operation / state / branch / chain / Test ID 由 baseline、current-change AC、future change 还是 forbidden boundary 提供，并区分每个 AC 的 `provides`、`consumes`、`depends-on` 和 `start-gate`。AC sections 必须按该 graph 的拓扑顺序生成。
       - 若某个 AC 的 primary proof、fixed command 或 Required Evidence 消费 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC。
       - 写入时必须明确 artifact information ownership：coverage tables 只负责 proposal/spec/design coverage；`Runtime Acceptance Index` 只负责 AC 到 row/Test ID 的路由；AC section 是人工审阅和 worker 执行主入口；`Verification Appendix` 是 runtime row 详情、fixed commands、evidence directories、ledger files、fixture boundaries 和 CI runnable 状态的唯一事实来源；`Regression Test Deposit` 是永久回归测试文件、常规回归命令、行为断言 oracle 和“不测实现细节”边界的唯一事实来源。
+      - 写入时必须先建立 `Test Layer Plan`，再写 `Test Evidence Matrix`。`Test Layer Plan` 必须按 AC/behavior 列出需要的 unit、component、route/API contract、DB/integration、browser E2E、security/negative、config/ops/check 等测试层；每个被省略的适用层都必须有 scope-backed 不适用理由。
+      - `Test Layer Plan` 是不可降级的分层测试契约。`Required Layers` 中每个适用层都必须映射到独立 exact `T-###`；同一 `T-###` 不得同时代表 unit、component、route/API contract、DB/integration、browser E2E、security/negative 或 config/ops/check 等多个 required layer。
+      - 一个 `Test ID` 的 `Layer` 只能是单一稳定类别。若一个物理测试文件覆盖多个层，必须在 `Test Evidence Matrix` 中拆成多个 Test ID、稳定 test name/filter、固定命令和 evidence row；不得用一个 broad smoke/e2e script 同时登记为 unit/component/API/DB/security 的 primary proof。
+      - smoke、browser E2E、staging smoke、ops check 或 final summary 只能登记其真实层级，可作为 supplemental/default-path proof；不得填入 unit/component/route/API/DB/security 层来替代可低层稳定断言。只有行为确实没有稳定低层 contract boundary 时才可省略低层，并且理由必须解释为什么该层不适用，不能写“已有 smoke 覆盖”或泛泛的“需要真实 readback”。
+      - 写入或更新 `Test Evidence Matrix` 与 `Regression Test Deposit` 前，必须读取并遵守 `openspec/schemas/shared/tdd-regression-gates.md`。required behavior 的测试必须先证明自己能因正确行为缺口失败，再作为实现成功 proof；不得把测试后补的立即通过用例当作验收证据。
 
       Runtime acceptance model 原则：
       - 每个 runtime row 必须回链到 proposal scope item、spec requirement/scenario、design decision 或明确的 proof requirement。无法回链的 row 只能作为非阻断工程辅助，不得成为 AC scope、产品行为或完成门禁。
@@ -160,9 +165,20 @@ artifacts:
 
       测试生成原则：
       - 测试必须从 behavior contract 反推，而不是从私有 helper、当前组件层级、className、调用次数或临时实现分支反推。
-      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；边界、未授权、敏感字段和 forbidden drift 用 security/negative 或 config/ops/check。
+      - 每个 `Scope Role = required behavior` 的 Test ID 默认必须遵守 `openspec/schemas/shared/tdd-regression-gates.md` 的 Red Gate、Green Gate、Behavior Oracle 和 Mock Policy。若 red-first 不适用，必须在 `Test Evidence Matrix` 的 TDD fields 和 `Regression Test Deposit` 中写明 scope-backed reason。
+      - 每个 required behavior Test ID 都必须优先选择最小充分测试层：纯规则/解析/校验/映射/脱敏/状态机用 unit；组件状态、表单、编辑器、权限态和错误态用 component；route/DTO/auth/response contract 用 route/API contract；事务、幂等、索引、迁移和持久化 invariant 用 DB/integration；queue/worker/retry/补偿用 worker/job integration；跨页面真实用户路径用 browser E2E；边界、未授权、敏感字段和 forbidden drift 用 security/negative 或 config/ops/check。最小充分层拥有 primary proof ownership，不得被更高层 smoke/browser Test ID 替代。
       - 不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。
+      - `Must Fail Before Implementation` 不能只是 yes/no 标记。required behavior 的 Test Evidence row 必须给出 `Red Command`、`Expected Red Failure`、`Observed Red Failure`、`Green Command` 和 `TDD Status`；red 失败原因必须匹配 scope/spec/design 缺口，不能是语法、fixture、环境或测试自身错误。
+      - 如果 red command 直接通过，必须修正测试 oracle，或把该 Test ID 明确改为 preserve/baseline/not-applicable proof 并记录 reason；不得继续用该测试证明新增或变更行为成功。
+      - Green 阶段失败时必须修 production implementation，不得削弱断言、删除 edge/failure/security case、放宽 privacy oracle，或改成匹配当前实现输出。
+      - Mock 只能隔离外部、慢速或非确定性边界；不得断言 mock 行为本身，不得为了测试向 production code 增加 test-only API。每个 mock/fixture 必须说明被替代的真实 side effects 以及由哪个 default-path proof 覆盖。
       - 每个 required behavior Test ID 必须有 fixed command、canonical evidence directory、ledger file 和 `Regression Test Deposit` 行；proof-only、config/ops/check、staging-only 或一次性 readiness 可写 not-applicable，但必须给出 scope-backed 理由。
+      - 对每个用户可见的 mutating/selection/action control，除 browser E2E/default-path proof 外，还必须在 `Test Layer Plan` 中考虑 component 层对表单状态、权限态、错误/恢复、pending/disabled 和本地敏感状态生命周期的覆盖；若不新增 component 测试，必须说明为什么该组件状态无法通过仓库 component test project 稳定测试。`需要真实 actor/readback` 只能解释 API/DB/default-path 层，不足以省略表单、权限、pending/error 或本地敏感状态的 component proof。
+      - 对每个 route/API/DTO/auth/security contract，除端到端 smoke 外，还必须在 `Test Layer Plan` 中考虑 route/API contract、unit 或 security/negative 层，并给出独立 Test ID。直接浏览器 smoke 中截获 request/response 或看见 UI 成功，不能等同 route/API contract 的永久沉淀，除非明确没有可调用 contract boundary。
+      - 对每个 data mutation、transaction、migration、idempotency、redaction、audit 或 persistence invariant，除 UI/browser proof 外，还必须在 `Test Layer Plan` 中考虑 DB/integration 或 security/negative 层，并给出独立 Test ID；只断言 UI 成功不得作为 stored data、audit、redaction 或 persistence invariant 的唯一永久回归。
+      - Smoke、browser E2E、staging smoke 或 broad workspace command 可以作为最高强度端到端 proof，但不得作为可低层测试的 rule、DTO、component state、API contract、DB invariant、auth/security/privacy boundary 的唯一永久回归沉淀。若 required behavior 只有 smoke/browser Test ID，且存在可稳定低层断言，这是 blocker。若确实只沉淀 smoke，`Test Layer Plan` 和 `Regression Test Deposit` 必须逐层记录不适用理由；缺少理由是 blocker。
+      - `Regression Test Deposit` 的 `Deposit Status` 为 `required` 只表示计划，不表示已沉淀。所有 implementation tasks 勾选完成前，每个 required behavior 的沉淀行必须变为 `deposited`，或以 `blocked` / `not-applicable` 记录 scope-backed 理由和后续 gate；不得在 `required` 状态下宣称 change ready。
+      - 永久回归测试必须可被常规回归入口触达：优先使用 package/root test script、稳定 Playwright/Vitest file/filter、或已登记的 smoke/e2e/ops script。若 `Regression Command` 不能从仓库根目录稳定执行，或 `CI Runnable?` 只是口头 yes 而无 root/package/CI 入口说明，该 Test ID 不得算作完成。
 
       Task-writing constraints：
       - 严格遵循 checkbox format。
@@ -187,8 +203,16 @@ artifacts:
       - `### Operation Coverage Matrix`
       - `### State / Branch Coverage Matrix`
       - `### Async / Realtime Chain Matrix`
+      - `### Test Layer Plan`
       - `### Test Evidence Matrix`
       - `### Regression Test Deposit`
+
+      Matrix column constraints：
+      - `Test Layer Plan` columns 至少包含：`AC ID`、`Behavior / Boundary`、`Scope Basis`、`Required Layers`、`Test IDs By Layer`、`Omitted Layers / Reason`、`Primary Proof Layer`、`Regression Entry`、`No-Scope-Expansion Check`。它必须解释为什么某个 behavior 只用 smoke/browser 或只用低层测试仍足够；不得留空。
+      - `Test Evidence Matrix` columns 至少包含：`Test ID`、`AC ID`、`Fixed Command`、`Test File / Name`、`Layer`、`Covers Rows`、`Default Path?`、`Fixture Boundary`、`Must Fail Before Implementation`、`Red Command`、`Expected Red Failure`、`Observed Red Failure`、`Green Command`、`TDD Status`、`Requires Tests Passed`、`Evidence Directory`、`Evidence Produced`、`Ledger File`、`CI Runnable?`、`Scope Basis`、`Artifact Handling`、`Scope Role`、`No-Scope-Expansion Check`。required behavior 的 `TDD Status` 完成时只能是 `green-passed`、`not-applicable` 或 `blocked`，不能停留在 `red-required`。
+      - `Test IDs By Layer` 必须对 `Required Layers` 中每个适用层使用不同 exact `T-###`。同一 Test ID 不得出现在多个 required layer 下；若某层只是 supplemental 或 not-applicable，必须在该层 cell 中标明并指出唯一 primary layer。
+      - `Test Evidence Matrix` 的 `Layer` 必须是单一层级，禁止写 `browser E2E + route/API + DB integration` 这类组合层；组合 proof 必须拆成多行、多 Test ID、多固定命令或稳定 filter。
+      - `Regression Test Deposit` 一行可以列同一 AC 的多个 Test ID，但每个 Test ID 必须已有独立 Evidence row。不得把多个测试层折叠到同一个 smoke/evidence-only 文件，除非该文件内存在可由稳定 test name/filter 区分的长期测试，并且每层都有独立 regression command。
 
       Proof strength：
       - 用户可见行为必须包含 user-equivalent interaction、browser-rendered DOM/screenshot、responsive、accessibility 或 visual evidence。
@@ -204,8 +228,13 @@ artifacts:
       - 确认每个 material design decision 映射到 AC section。
       - 确认 `Runtime Acceptance Index` 中每个 owning row 都能解析到 AC-local `Runtime Rows Owned:`、`Test IDs:`、checkbox `Runtime Rows:` / `Test IDs:` 和 `Verification Appendix` detail matrix rows。
       - 确认 AC section 输出顺序是 runtime provision graph 的拓扑序。
+      - 确认每个 required behavior、preserve boundary 和 proof-only guard 都在 `Test Layer Plan` 中有测试层选择；省略 unit/component/API/DB/browser/security/config 等适用层时必须有 scope-backed 理由，且理由不能只是“已有 smoke 覆盖”。
+      - 确认 `Required Layers` 中每个适用层都有独立 Test ID，且没有同一 Test ID 被登记为多个 required layer 或组合 `Layer`。若只有 smoke/browser Test ID 覆盖多个可低层断言，tasks 不可 final。
       - 确认每个 Test ID 有 fixed command、canonical evidence directory、ledger file、local/CI runnable 标记，并出现在 owning AC 的 `Test IDs:` 和相关 checkbox trace 中。
+      - 确认每个 required behavior Test ID 满足 `openspec/schemas/shared/tdd-regression-gates.md`：red command 先失败且失败原因正确，green command 后通过，或有 scope-backed `not-applicable` / `blocked` reason；不得把立即通过的测试登记为新增/变更行为的 success proof。
       - 确认每个 required behavior Test ID 在 `Regression Test Deposit` 中有永久回归沉淀或 scope-backed `not-applicable` 理由。
+      - 确认每个 required behavior 的 `Regression Test Deposit` 在完成时为 `deposited`，或有明确 `blocked` / `not-applicable` 理由；不得以 `required` 作为完成状态。
+      - 确认每个永久回归命令能从仓库根目录稳定执行，并且可通过 root/package script、CI job、稳定 test file/filter 或登记的 smoke/e2e/ops script 触达；未接入常规回归入口的测试只能作为临时 evidence，不得作为 deposited。
       - 确认没有 implementation-detail tests 被登记为 primary proof 或永久回归沉淀。
       - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。
     requires:
@@ -226,10 +255,11 @@ apply:
     - AC sections、AC-local execution contract fields、checkbox task IDs、trace inheritance / overrides、coverage table rows、AC-owned Test IDs、Prerequisites/Provides/Consumes/Start Gate 和 proof/evidence requirements。
     - `Runtime Acceptance Index`：每个 AC 的 scope basis、runtime surface rows、operation rows、state/branch rows、async/realtime rows、Test IDs、Provides Rows、Consumes Rows、Depends On AC IDs、Prerequisite Test IDs、Start Gate、scope role、no-scope-expansion check 和 detail matrix row references。
     - `Verification Appendix`：runtime/test detail row IDs、scope basis、scope role、provider/consumer ownership、AC ID、Requires Tests Passed、Test IDs 和 no-scope-expansion checks。
-    - Test evidence matrix：每个 Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation、requires tests passed、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced。
+    - Test layer plan：每个 AC/behavior 的 required test layers、Test IDs by layer、omitted layers / reason、primary proof layer 和 regression entry。
+    - Test evidence matrix：每个 Test ID、owning AC ID、fixed command、test file/name、layer、covered row IDs、default path 标记、fixture boundary、must-fail-before-implementation、red command、expected red failure、observed red failure、green command、TDD status、requires tests passed、canonical evidence directory、ledger file、CI runnable 标记和 evidence produced。
     - Regression test deposit：每个 AC/Test ID 的永久测试文件、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier、Not Testing 边界和 deposit status。
 
-    若 preflight index 发现 missing scope item coverage、unresolved task IDs、runtime index 缺失或与 AC-local contract 不一致、mandatory runtime row 缺少 scope basis / provider / consumer / AC ID / Test ID、Test ID 不匹配 exact `T-[0-9]{3}`、同一 Test ID 出现在多个 AC-local contracts、缺少 fixed command、缺少 canonical evidence directory、required behavior Test ID 缺少 `Regression Test Deposit` 行、AC consumes 后置 AC 才提供的 runtime row、Depends On AC IDs 形成循环、checkbox trace 字段缺失、缺少 final verification task、英文主导 task descriptions、用户可见操作只有 presence-only/static proof，或 proof 弱于 proposal/spec/design，暂停并更新 artifacts 后再编辑代码。
+    若 preflight index 发现 missing scope item coverage、unresolved task IDs、runtime index 缺失或与 AC-local contract 不一致、mandatory runtime row 缺少 scope basis / provider / consumer / AC ID / Test ID、缺少 `Test Layer Plan`、Test Layer Plan 未覆盖 required behavior / preserve boundary / proof-only guard、省略适用测试层但没有 scope-backed 理由、`Required Layers` 多层却复用同一 Test ID、同一 Test ID 被登记到多个 required layer、Test Evidence row 的 `Layer` 是组合层、smoke/browser/ops/final summary Test ID 被登记为 unit/component/API/DB/security primary proof、Omitted Layers reason 只是“已有 smoke 覆盖”或泛泛“需要真实 readback”、Test ID 不匹配 exact `T-[0-9]{3}`、同一 Test ID 出现在多个 AC-local contracts、缺少 fixed command、缺少 canonical evidence directory、required behavior Test ID 缺少 `Red Command` / `Expected Red Failure` / `Observed Red Failure` / `Green Command` / `TDD Status` 且没有 scope-backed not-applicable reason、red run 直接通过却被登记为新增/变更行为 proof、red failure 是语法/fixture/环境/测试自身错误、required behavior Test ID 缺少 `Regression Test Deposit` 行、Regression Deposit 只停留在 `required` 且被当作完成、Regression Deposit 用 smoke/evidence-only 文件代表可低层稳定断言、永久回归命令不能从仓库根目录稳定执行、CI Runnable 缺少 root/package/CI 入口说明、AC consumes 后置 AC 才提供的 runtime row、Depends On AC IDs 形成循环、checkbox trace 字段缺失、缺少 final verification task、英文主导 task descriptions、用户可见操作只有 presence-only/static proof，或 proof 弱于 proposal/spec/design，暂停并更新 artifacts 后再编辑代码。
 
     Implementation 和 acceptance 在本 schema 中是同一个 workflow：
     - 按依赖顺序处理 AC sections。
@@ -237,10 +267,13 @@ apply:
     - 编辑任何 task 前，确认当前 AC 的 `Prerequisites:`、`Depends On AC IDs` 和 `Prerequisite Test IDs` 已完成且证据存在；若未满足，必须先处理前置 AC 或修订 tasks。
     - 编辑任何 task 前，读取该 task 的 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:` 和 `Overrides:` 字段。`Trace: inherits AC-###` 表示 task 继承 AC-level scope/spec/design/no-scope/mock policy。
     - 不实现无法追溯到 proposal、specs、design 或现有 baseline 的行为。
-    - 优先建立或补齐该 AC-local `Test IDs:` 和 task `Test IDs:` 对应的自动测试，并同时落实 `Regression Test Deposit` 中的永久回归测试。
+    - 优先建立或补齐该 AC-local `Test IDs:` 和 task `Test IDs:` 对应的自动测试，并同时落实 `Regression Test Deposit` 中的永久回归测试。写 required behavior production code 前，按 `openspec/schemas/shared/tdd-regression-gates.md` 执行 red command 并确认失败原因匹配 behavior gap；实现完成后用同一 Test ID 的 green command 证明通过。实现完成前，`Test Layer Plan` 中每个 required layer 对应的独立 Test ID 必须存在或有 blocked/not-applicable 理由；实现后相关 Test IDs、最小 regression commands 和 evidence ledger 必须通过或记录 blocker。
+    - 写 production code 前，先为每个 required layer 创建或补齐对应测试代码。若实现过程中发现组件状态、DTO/route contract、DB invariant、security/privacy boundary 或纯规则可低层稳定测试，必须新增对应 Test ID、Evidence row 和 Regression Deposit 行；不得把新低层责任塞进既有 smoke/browser Test ID。
+    - 如果 red command 直接通过、失败原因不符合预期、或只证明 mock/fixture/实现细节存在，先修测试或修订 artifacts，不得进入 production implementation。Green 阶段失败时修实现，不得削弱测试 oracle。
+    - 如果某个 behavior 只由 smoke/browser E2E 覆盖，而该 behavior 存在可低层稳定断言的 rule、DTO、component state、API contract、DB invariant 或 security boundary，必须先补齐对应低层测试或更新 artifacts 写明不适用理由；不得用单一 smoke 脚本替代分层测试体系。
     - 除非 task 的 `Proof:` 已执行且 linked acceptance slice 达到所需 fidelity，否则不得标记 task complete。
     - 如果实现新增或发现新的 operation、state、branch、terminal outcome、async step、event、job、provider branch、storage branch、auth/security branch 或 responsive variant，先更新 `Verification Appendix`、`Runtime Acceptance Index`、owning AC-local contract、AC tasks 和 Test Evidence Matrix，再继续实现或勾选。
     - 对用户可见的 mutating/selection/action control，勾选相关 task 前必须通过实际 runtime surface 执行 user-equivalent interaction，并断言 handler/API 被触发、响应或持久化数据正确、rendered UI 更新且 reload/readback 后仍成立。
     - 测试相关 evidence 必须由固定命令自动生成或由 final verification task 复制到 `test-results/<change-slug>/<AC-ID>/<Test-ID>/`，其中 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。
     - 工作时维护 AC/Test-local evidence ledger。
-    - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 五张矩阵和 `Regression Test Deposit` 做最终 audit。只有 audit 通过后，change 才 ready for archive。
+    - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张矩阵、`Regression Test Deposit` 和 `openspec/schemas/shared/tdd-regression-gates.md` 的 red/green/anti-pattern gates 做最终 audit。只有 audit 通过后，change 才 ready for archive。

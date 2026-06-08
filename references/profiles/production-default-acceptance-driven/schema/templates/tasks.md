@@ -106,6 +106,8 @@ Mock Policy:
 本节是 runtime/test 明细的唯一事实来源，不属于 executable work section。
 Runtime detail rows 只在对应矩阵定义；AC section、Runtime Acceptance Index 和 checkbox tasks 只引用 row IDs。
 Test Evidence Matrix 是 fixed command、test file/name、evidence directory、ledger file、fixture boundary 和 CI runnable 状态的唯一事实来源。
+Test Layer Plan 是分层测试体系的唯一事实来源；不要只用一个 smoke/browser proof 覆盖可低层稳定断言的规则、表单状态、API contract、DB invariant 或安全边界。
+TDD red/green gate 依据 `openspec/schemas/shared/tdd-regression-gates.md`；required behavior 测试必须证明 red failure reason 正确，再用 green command 证明实现成功。
 -->
 
 ### Runtime Surface Inventory
@@ -132,14 +134,27 @@ Test Evidence Matrix 是 fixed command、test file/name、evidence directory、l
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | <!-- CH-001 --> | <!-- user action/system job。 --> | <!-- queue/action dispatch。 --> | <!-- worker/consumer processing。 --> | <!-- domain/data change。 --> | <!-- event/outbox/log fact。 --> | <!-- SSE/poll/readback。 --> | <!-- success/failure terminal UI。 --> | <!-- failed/dispatch_failed/timeout 或 Not applicable。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / forbidden-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 chain。 --> |
 
+### Test Layer Plan
+
+| AC ID | Behavior / Boundary | Scope Basis | Required Layers | Test IDs By Layer | Omitted Layers / Reason | Primary Proof Layer | Regression Entry | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- AC-001 --> | <!-- 外部行为、preserve boundary 或 proof-only guard。 --> | <!-- SI/spec/design。 --> | <!-- unit / component / route/API contract / DB integration / browser E2E / security/negative / config/ops/check。 --> | <!-- 每个 Required Layer 必须有独立 exact T-###，例如 unit: T-001；component: T-002；browser E2E: T-003。同一 T-### 不得出现在多个 required layer；smoke/browser 只能填自己的真实层级，不能填作 unit/component/API/DB。 --> | <!-- 被省略的适用层必须写 scope-backed 理由；不要只写“已有 smoke 覆盖”或“需要真实 readback”。 --> | <!-- 最终验收主 proof 层，例如 browser E2E + DB integration；主 proof 可以跨层，但各层必须有独立 Test ID。 --> | <!-- root/package/CI 可触达的最小回归入口；未接入时写 blocked。 --> | <!-- 不用单一 smoke 替代可低层稳定断言的行为。 --> |
+
 ### Test Evidence Matrix
 
-| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path? | Fixture Boundary | Must Fail Before Implementation | Requires Tests Passed | Evidence Directory | Evidence Produced | Ledger File | CI Runnable? | Scope Basis | Artifact Handling | Scope Role | No-Scope-Expansion Check |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| <!-- T-001；必须匹配 exact T-###，禁止 T-005B / T-AC005-... / T-001-smoke。 --> | <!-- AC-001；只能有一个 AC ID，禁止多个 AC 或 shared。 --> | <!-- `pnpm test:e2e tests/e2e/example.spec.ts`；必须可本地/CI 重跑。 --> | <!-- test file / stable test name or filter。 --> | <!-- unit / component / route/API contract / DB integration / worker/job integration / realtime/SSE integration / browser E2E / visual/responsive / security/negative / config/ops/check。 --> | <!-- RS-001, OP-001, ST-001, CH-001。 --> | <!-- yes/no + reason。 --> | <!-- mocked/sandboxed segments and paired default-path proof。 --> | <!-- yes/no + expected failing gap。 --> | <!-- None / T-000；只能引用 earlier AC 的 Test ID。 --> | <!-- `test-results/<change-slug>/AC-001/T-001/`；最后一级目录必须与 Test ID 完全一致。 --> | <!-- command.log、ledger.json、DOM/screenshot、trace、API/DB/job/log facts、failure trace。 --> | <!-- `test-results/<change-slug>/AC-001/T-001/ledger.json`。 --> | <!-- yes/no + reason。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- 不引入 scope 外 behavior。 --> |
+| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path? | Fixture Boundary | Must Fail Before Implementation | Red Command | Expected Red Failure | Observed Red Failure | Green Command | TDD Status | Requires Tests Passed | Evidence Directory | Evidence Produced | Ledger File | CI Runnable? | Scope Basis | Artifact Handling | Scope Role | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- T-001；必须匹配 exact T-###，禁止 T-005B / T-AC005-... / T-001-smoke。 --> | <!-- AC-001；只能有一个 AC ID，禁止多个 AC 或 shared。 --> | <!-- `pnpm test:e2e tests/e2e/example.spec.ts`；必须可从仓库根目录稳定重跑。 --> | <!-- test file / stable test name or filter；同一文件覆盖多层时用不同 Test ID + stable filter 拆行。 --> | <!-- 只能写单一层级：unit / component / route/API contract / DB integration / worker/job integration / realtime/SSE integration / browser E2E / visual/responsive / security/negative / config/ops/check。禁止 browser E2E + API + DB 组合层。 --> | <!-- RS-001, OP-001, ST-001, CH-001。 --> | <!-- yes/no + reason。 --> | <!-- mocked/sandboxed segments and paired default-path proof。 --> | <!-- yes/no + expected failing gap；required behavior 默认 yes。 --> | <!-- red 阶段固定命令；通常与 Fixed Command 相同，必须可从仓库根目录重跑。 --> | <!-- 预期失败缺口，必须来自 SI/spec/design/runtime row，不是测试错误。 --> | <!-- 实际失败摘要和 evidence path；失败原因必须匹配 Expected Red Failure。 --> | <!-- green 阶段重跑命令；通常与 Fixed Command 相同。 --> | <!-- red-required / red-observed / green-passed / not-applicable / blocked；完成时不能停留 red-required。 --> | <!-- None / T-000；只能引用 earlier AC 的 Test ID。 --> | <!-- `test-results/<change-slug>/AC-001/T-001/`；最后一级目录必须与 Test ID 完全一致。 --> | <!-- command.log、ledger.json、red/green failure trace、DOM/screenshot、trace、API/DB/job/log facts。 --> | <!-- `test-results/<change-slug>/AC-001/T-001/ledger.json`。 --> | <!-- yes + root/package/CI entry；或 no + blocker reason。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- 不引入 scope 外 behavior。 --> |
 
 ### Regression Test Deposit
 
+<!--
+本表记录可长期维护的回归测试沉淀，不替代 Test Evidence Matrix 的验收 evidence。
+每个 required behavior Test ID 完成时必须为 deposited，或以 blocked / not-applicable 给出 scope-backed 理由；required 只表示计划，不能作为完成状态。
+永久回归命令必须是最小可重跑命令，并能通过 root/package script、CI job、稳定 test file/filter 或已登记 smoke/e2e/ops script 触达。
+smoke/e2e/ops 只能沉淀其真实层级；不得用一个 evidence-only smoke 脚本代表 unit/component/API/DB/security。若同一文件包含多层测试，必须用独立 Test ID、稳定 test name/filter 和独立 regression command 区分。
+-->
+
 | AC ID | Test IDs | Permanent Test File | Regression Command | Behavior Contract | Assertion Oracle | Fixture Boundary | CI Tier | Not Testing | Deposit Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| <!-- AC-001 --> | <!-- T-001；可列同一 AC 的多个 exact T-###。 --> | <!-- 仓库内长期维护的 test/spec 文件；not-applicable 时写 N/A + 理由。 --> | <!-- 最小可重跑命令，例如 package-level test 或稳定 file/filter；不要只写 broad workspace command。 --> | <!-- 来自 proposal/spec/design 的外部行为契约。 --> | <!-- 断言依据：用户可见结果、API contract、DB invariant、安全边界、错误分支等。 --> | <!-- 允许的 fixture/mock 和必须保留 default path 的边界。 --> | <!-- PR-fast / PR-integration / nightly / release / manual-staging。 --> | <!-- 明确不测的实现细节，例如私有函数、调用次数、DOM 层级、样式类名、快照全文。 --> | <!-- required / deposited / not-applicable / blocked；not-applicable 或 blocked 必须含 reason。 --> |
+| <!-- AC-001 --> | <!-- T-001；可列同一 AC 的多个 exact T-###，但每个 Test ID 必须已有独立 Evidence row。 --> | <!-- 仓库内长期维护的 test/spec/smoke/e2e 文件；不得只指向临时 evidence-only smoke 代表低层测试；not-applicable 时写 N/A + 理由。 --> | <!-- 最小可重跑命令，例如 package-level test、稳定 file/filter 或登记 smoke/e2e/ops script；不要只写 broad workspace command。 --> | <!-- 来自 proposal/spec/design 的外部行为契约。 --> | <!-- 断言依据：用户可见结果、API contract、DB invariant、安全边界、错误分支等。 --> | <!-- 允许的 fixture/mock 和必须保留 default path 的边界。 --> | <!-- PR-fast / PR-integration / nightly / release / manual-staging；说明入口。 --> | <!-- 明确不测的实现细节，例如私有函数、调用次数、DOM 层级、样式类名、快照全文。 --> | <!-- required / deposited / not-applicable / blocked；完成时 required 不可保留，not-applicable 或 blocked 必须含 reason。 --> |
