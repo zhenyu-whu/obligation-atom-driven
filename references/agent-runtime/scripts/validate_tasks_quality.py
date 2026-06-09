@@ -8,6 +8,7 @@ are easy to drift when agents edit a large tasks.md artifact by hand.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -19,6 +20,12 @@ AC_ID_RE = re.compile(r"^AC-[0-9]{3}$")
 EVIDENCE_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/?$")
 LEDGER_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/ledger\.json$")
 BAD_TEST_ID_RE = re.compile(r"\bT-(?:AC[0-9]|[0-9]{3}[A-Za-z-])")
+PNPM_TEST_FORWARDED_ARGS_RE = re.compile(
+    r"\bpnpm\b[^\n|`]*\b(?:run\s+)?test(?::[A-Za-z0-9:_-]+)?\b[^\n|`]*\s--\s+"
+)
+PNPM_BROAD_TEST_RE = re.compile(
+    r"^\s*`?pnpm(?:\s+--filter\s+\S+)?\s+(?:run\s+)?test(?::[A-Za-z0-9:_-]+)?\s*`?\s*$"
+)
 TDD_STATUSES = {
     "red-required",
     "red-observed",
@@ -28,6 +35,41 @@ TDD_STATUSES = {
 }
 FINAL_TDD_STATUSES = {"green-passed", "not-applicable", "blocked"}
 DEPOSIT_STATUSES = {"required", "deposited", "not-applicable", "blocked"}
+LEDGER_REQUIRED_FIELDS = {
+    "testId",
+    "acId",
+    "behaviorContract",
+    "assertionOracle",
+    "fixedCommand",
+    "redCommand",
+    "expectedRedFailure",
+    "observedRedFailure",
+    "redResult",
+    "greenCommand",
+    "greenResult",
+    "regressionCommand",
+    "regressionResult",
+    "cwd",
+    "exitCode",
+    "startedAt",
+    "finishedAt",
+    "artifacts",
+    "defaultPathFacts",
+    "fixtureBoundary",
+    "tddStatus",
+    "notApplicableReason",
+}
+BROWSER_E2E_MARKERS = [
+    "@playwright/test",
+    "chromium",
+    "firefox",
+    "webkit",
+    "page.goto",
+    "browser.newContext",
+    "context.newPage",
+    "getByRole(",
+    "locator(",
+]
 IMPLEMENTATION_DETAIL_TERMS = [
     "private helper",
     "mock call",
@@ -131,6 +173,59 @@ def change_slug_prefixes(change_slug: str) -> set[str]:
 
 def extract_test_file_paths(text: str) -> list[str]:
     return [match.strip("` ") for match in TEST_FILE_PATH_RE.findall(text)]
+
+
+def strip_cell_markup(value: str) -> str:
+    return value.strip().strip("`").strip()
+
+
+def validate_fixed_command_shape(
+    *, test_id: str, field_name: str, command: str, findings: list[Finding]
+) -> None:
+    normalized = strip_cell_markup(command)
+    if not normalized:
+        return
+    if PNPM_BROAD_TEST_RE.match(normalized):
+        findings.append(
+            Finding(
+                "error",
+                f"{test_id} {field_name} 是 broad test command，不能作为单个 Test ID 的最小固定命令：{normalized}",
+            )
+        )
+    if PNPM_TEST_FORWARDED_ARGS_RE.search(normalized):
+        findings.append(
+            Finding(
+                "error",
+                f"{test_id} {field_name} 通过 pnpm test/test:e2e 的 `--` 透传 file/filter；"
+                "这类参数可能被 runner 当作 positional args 而不是 test-name filter。"
+                "请使用 `pnpm exec vitest ... <file> -t <name>`、Playwright 直接命令，或专用 package script。",
+            )
+        )
+
+
+def validate_browser_e2e_file(
+    *, test_id: str, test_file_field: str, findings: list[Finding]
+) -> None:
+    paths = extract_test_file_paths(test_file_field)
+    if not paths:
+        findings.append(Finding("error", f"{test_id} browser E2E 缺少可检查的 Test File path"))
+        return
+    for path_text in paths:
+        path = Path(path_text)
+        if not path.exists():
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not any(marker in source for marker in BROWSER_E2E_MARKERS):
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} Layer 标为 browser E2E，但 {path_text} 未发现 Playwright/browser runtime markers；"
+                    "直接调用 route handler、repository 或状态机只能登记为 integration/component/unit 层，不能登记为 browser E2E。",
+                )
+            )
 
 
 def validate_test_file_ownership(
@@ -277,7 +372,7 @@ def validate_test_evidence(
     final: bool,
     change_slug: str,
     reported_ownership: set[str],
-) -> set[str]:
+) -> tuple[set[str], list[dict[str, str]]]:
     header, rows = extract_table(markdown, "Test Evidence Matrix")
     required_cols = {
         "Test ID",
@@ -310,10 +405,12 @@ def validate_test_evidence(
         findings.append(Finding("error", f"Test Evidence Matrix 缺少列：{', '.join(missing)}"))
 
     seen: set[str] = set()
+    effective_rows: list[dict[str, str]] = []
     for row in rows:
         values = list(row.values())
         if allow_template and is_template_row(values):
             continue
+        effective_rows.append(row)
         test_id = row.get("Test ID", "")
         ac_id = row.get("AC ID", "")
         if not TEST_ID_RE.fullmatch(test_id):
@@ -329,6 +426,13 @@ def validate_test_evidence(
             findings.append(Finding("error", f"{test_id or '<unknown>'} 的 Layer 必须是单一层级"))
         if not row.get("Fixed Command", "").strip():
             findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 Fixed Command"))
+        for col in ["Fixed Command", "Red Command", "Green Command"]:
+            validate_fixed_command_shape(
+                test_id=test_id or "<unknown>",
+                field_name=col,
+                command=row.get(col, ""),
+                findings=findings,
+            )
         for col in ["Test File / Name", "Fixed Command", "Red Command", "Green Command"]:
             validate_test_file_ownership(
                 test_id=test_id or "<unknown>",
@@ -354,6 +458,12 @@ def validate_test_evidence(
             findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Produced 必须包含 command.log 和 ledger.json"))
         if not row.get("CI Runnable?", "").strip():
             findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 CI Runnable? 说明"))
+        if layer.strip().lower() == "browser e2e":
+            validate_browser_e2e_file(
+                test_id=test_id or "<unknown>",
+                test_file_field=row.get("Test File / Name", ""),
+                findings=findings,
+            )
         scope_role = row.get("Scope Role", "").lower()
         tdd_status = row.get("TDD Status", "")
         if tdd_status and tdd_status not in TDD_STATUSES:
@@ -366,7 +476,7 @@ def validate_test_evidence(
             for col in ["Red Command", "Expected Red Failure", "Observed Red Failure", "Green Command", "TDD Status"]:
                 if not row.get(col, "").strip():
                     findings.append(Finding("error", f"{test_id} required behavior 缺少 TDD 字段：{col}"))
-    return seen
+    return seen, effective_rows
 
 
 def validate_regression_deposit(
@@ -377,7 +487,7 @@ def validate_regression_deposit(
     final: bool,
     change_slug: str,
     reported_ownership: set[str],
-) -> None:
+) -> dict[str, dict[str, str]]:
     header, rows = extract_table(markdown, "Regression Test Deposit")
     required_cols = {
         "AC ID",
@@ -399,6 +509,7 @@ def validate_regression_deposit(
         return
 
     deposited_ids: set[str] = set()
+    deposit_by_id: dict[str, dict[str, str]] = {}
     for row in rows:
         values = list(row.values())
         if allow_template and is_template_row(values):
@@ -408,6 +519,7 @@ def validate_regression_deposit(
             if test_id not in evidence_ids:
                 findings.append(Finding("error", f"Regression Deposit 引用了不存在的 Evidence row：{test_id}"))
             deposited_ids.add(test_id)
+            deposit_by_id[test_id] = row
         status = row.get("Deposit Status", "")
         if status and status not in DEPOSIT_STATUSES:
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Deposit Status 不合法：{status}"))
@@ -444,12 +556,142 @@ def validate_regression_deposit(
                 findings=findings,
                 reported=reported_ownership,
             )
+            validate_fixed_command_shape(
+                test_id=", ".join(ids) if ids else row.get("AC ID", "<unknown>"),
+                field_name="Regression Command",
+                command=row.get("Regression Command", ""),
+                findings=findings,
+            )
         oracle = row.get("Assertion Oracle", "")
         if any(term in oracle for term in IMPLEMENTATION_DETAIL_TERMS):
             findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} 使用了 implementation-detail assertion oracle"))
     missing_deposit = evidence_ids - deposited_ids
     if missing_deposit and not allow_template:
         findings.append(Finding("error", f"以下 Test ID 缺少 Regression Deposit 行：{', '.join(sorted(missing_deposit))}"))
+    return deposit_by_id
+
+
+def validate_evidence_deposit_consistency(
+    evidence_rows: list[dict[str, str]],
+    deposit_by_id: dict[str, dict[str, str]],
+    findings: list[Finding],
+    final: bool,
+) -> None:
+    for row in evidence_rows:
+        test_id = row.get("Test ID", "")
+        deposit = deposit_by_id.get(test_id)
+        if not deposit:
+            continue
+        evidence_status = row.get("TDD Status", "")
+        deposit_status = deposit.get("Deposit Status", "")
+        scope_role = row.get("Scope Role", "").lower()
+        if deposit_status == "deposited" and evidence_status == "blocked":
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} Regression Deposit 为 deposited，但 Test Evidence TDD Status 仍是 blocked",
+                )
+            )
+        if (
+            final
+            and "required behavior" in scope_role
+            and deposit_status == "deposited"
+            and evidence_status != "green-passed"
+        ):
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} final audit 中 deposited required behavior 必须是 green-passed，当前为 {evidence_status or '<empty>'}",
+                )
+            )
+
+
+def read_json(path: Path) -> dict[str, object] | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} JSON 解析失败：{exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} 顶层必须是 JSON object")
+    return value
+
+
+def validate_final_ledgers(
+    *,
+    evidence_rows: list[dict[str, str]],
+    deposit_by_id: dict[str, dict[str, str]],
+    change_slug: str,
+    findings: list[Finding],
+) -> None:
+    declared_ids = {row.get("Test ID", "") for row in evidence_rows}
+    for row in evidence_rows:
+        test_id = row.get("Test ID", "")
+        ac_id = row.get("AC ID", "")
+        ledger_field = strip_cell_markup(row.get("Ledger File", ""))
+        if not ledger_field:
+            continue
+        ledger_path = Path(ledger_field)
+        try:
+            ledger = read_json(ledger_path)
+        except ValueError as exc:
+            findings.append(Finding("error", str(exc)))
+            continue
+        if ledger is None:
+            findings.append(Finding("error", f"{test_id} final ledger 不存在：{ledger_field}"))
+            continue
+
+        missing = sorted(field for field in LEDGER_REQUIRED_FIELDS if field not in ledger)
+        if missing:
+            findings.append(Finding("error", f"{test_id} ledger 缺少必需字段：{', '.join(missing)}"))
+        if ledger.get("testId") != test_id:
+            findings.append(Finding("error", f"{test_id} ledger.testId 不匹配：{ledger.get('testId')!r}"))
+        if ledger.get("acId") != ac_id:
+            findings.append(Finding("error", f"{test_id} ledger.acId 不匹配：{ledger.get('acId')!r}"))
+        if "ac" in ledger and "acId" not in ledger:
+            findings.append(Finding("error", f"{test_id} ledger 使用 ac 而不是 acId"))
+        for field, matrix_col in [
+            ("fixedCommand", "Fixed Command"),
+            ("redCommand", "Red Command"),
+            ("greenCommand", "Green Command"),
+            ("tddStatus", "TDD Status"),
+        ]:
+            expected = strip_cell_markup(row.get(matrix_col, ""))
+            actual = ledger.get(field)
+            if expected and actual != expected:
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id} ledger.{field} 与 Test Evidence Matrix 不一致",
+                    )
+                )
+        deposit = deposit_by_id.get(test_id)
+        if deposit:
+            expected_regression = strip_cell_markup(deposit.get("Regression Command", ""))
+            if expected_regression and ledger.get("regressionCommand") != expected_regression:
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id} ledger.regressionCommand 与 Regression Deposit 不一致",
+                    )
+                )
+        artifacts = ledger.get("artifacts")
+        if not isinstance(artifacts, list) or not {"command.log", "ledger.json"}.issubset(set(map(str, artifacts))):
+            findings.append(Finding("error", f"{test_id} ledger.artifacts 必须是包含 command.log 和 ledger.json 的数组"))
+
+    if change_slug:
+        evidence_root = Path("test-results") / change_slug
+        if evidence_root.exists():
+            for ledger_path in evidence_root.glob("AC-*/T-*/ledger.json"):
+                test_id = ledger_path.parent.name
+                if test_id not in declared_ids:
+                    findings.append(
+                        Finding(
+                            "error",
+                            f"发现未在 Test Evidence Matrix 登记的 orphan ledger：{ledger_path.as_posix()}",
+                        )
+                    )
 
 
 def validate_runtime_not_applicable(markdown: str, findings: list[Finding], allow_template: bool) -> None:
@@ -515,8 +757,31 @@ def validate(markdown: str, allow_template: bool, final: bool) -> list[Finding]:
     if BAD_TEST_ID_RE.search(bad_id_source):
         findings.append(Finding("error", "发现带名称、AC 编号、slug 或字母后缀的非法 Test ID"))
     validate_test_layer_plan(markdown, findings, allow_template)
-    evidence_ids = validate_test_evidence(markdown, findings, allow_template, final, change_slug, reported_ownership)
-    validate_regression_deposit(markdown, evidence_ids, findings, allow_template, final, change_slug, reported_ownership)
+    evidence_ids, evidence_rows = validate_test_evidence(
+        markdown,
+        findings,
+        allow_template,
+        final,
+        change_slug,
+        reported_ownership,
+    )
+    deposit_by_id = validate_regression_deposit(
+        markdown,
+        evidence_ids,
+        findings,
+        allow_template,
+        final,
+        change_slug,
+        reported_ownership,
+    )
+    validate_evidence_deposit_consistency(evidence_rows, deposit_by_id, findings, final)
+    if final and not allow_template:
+        validate_final_ledgers(
+            evidence_rows=evidence_rows,
+            deposit_by_id=deposit_by_id,
+            change_slug=change_slug,
+            findings=findings,
+        )
     validate_runtime_not_applicable(markdown, findings, allow_template)
     validate_high_risk_layers(markdown, findings, allow_template)
     return findings

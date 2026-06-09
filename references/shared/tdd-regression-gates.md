@@ -30,6 +30,7 @@ Sources:
 进入 green 阶段后，只写让 red 测试通过所需的最小 production change：
 
 - `Green Command` 必须重跑同一个 Test ID 的固定命令，证明同一断言从 red 变 green。
+- `Fixed Command` / `Red Command` / `Green Command` / `Regression Command` 必须是真正最小且可定位该 Test ID 的命令。对 Vitest/Playwright 等 runner，不得用 `pnpm test -- <file> -t <name>`、`pnpm test:e2e -- <file> -t <name>` 或任何 `pnpm test* -- ...` 透传 selector 的形式作为单个 Test ID 的固定命令；这类参数可能被 runner 当作 `--` 后的 positional args，导致实际运行整包或整目录测试。需要 selector 时，使用 runner 直接命令、`pnpm exec vitest/playwright ...`，或专用 package/root script。
 - 如果 green 失败，优先修 production code，不得削弱断言、删除 edge case、放宽 security/privacy oracle 或改成匹配当前实现输出。
 - 只有相关 Test IDs green，且 required prerequisite tests 仍通过，才能勾选 implementation 或 acceptance task。
 - green 通过必须保存到该 Test ID 的 canonical evidence directory，至少包含 `command.log` 和 `ledger.json`。只在对话中口述“已通过”或只引用测试框架默认临时输出，不能作为 green evidence。
@@ -50,6 +51,21 @@ Sources:
 - 不得作为 required behavior primary oracle：私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled、当前实现输出。
 - 测试名称、fixture 和断言应描述“应该发生什么”，而不是“代码现在怎么写”。
 
+## Test Layer Code Requirements
+
+`Test Evidence Matrix.Layer` 必须反映测试代码实际使用的 harness/runtime。目录、文件名、脚本名、截图存在或 agent 口述不能提升测试层级：
+
+- `unit`：只覆盖纯函数、规则、解析/校验、映射、脱敏、状态机或小型 adapter contract；不得触发真实 HTTP、浏览器 DOM、DB、queue/worker 或 storage side effect。直接调用状态机/reducer 只能登记为 unit/state-machine。
+- `component`：必须 mount/hydrate/render 到可交互 component harness，并用 role/label/text/query + user event 或真实 DOM event 证明表单、权限、pending/disabled、错误/恢复等用户可触发状态。`renderToStaticMarkup`、字符串 DOM、snapshot、reducer/state-machine 调用只能作为 supplemental proof。
+- `route/API contract`：必须调用实际 route handler、server action、API entry、RPC resolver 或 service contract boundary，并构造 Request/session/auth/context，断言 status、DTO、错误、auth/ownership/privacy/redaction 和 default wiring。
+- `DB/integration`：必须覆盖真实 database/repository/transaction/migration/readback/invariant path；只 mock repository、断言 SQL 字符串或 mapper 调用不算。
+- `worker/job integration`：必须覆盖 enqueue/consume 或 production-compatible processor boundary，并断言 retry、idempotency、terminal mutation、job/log/audit fact。
+- `realtime/SSE integration`：必须覆盖 event/outbox/SSE/polling/subscription/readback chain，并断言 event shape、ordering、terminal state 或 recovery。
+- `browser E2E`：必须使用 Playwright/WebDriver/Cypress 或等价真实浏览器 runtime，启动 browser/context/page，执行 navigation 和 user-equivalent actions，并通过 rendered DOM、network/readback、URL、screenshot/trace 或 reload persistence 断言用户路径。直接 import route handler、repository、server action、状态机或 component reducer 的 `tests/e2e/**` 文件不是 browser E2E。
+- `visual/responsive`：必须用真实浏览器 viewport、screenshot、bounding box、pixel diff 或 accessibility/layout query 证明视觉/响应式状态。
+- `security/negative`：必须覆盖未授权、越权、MUST NOT、敏感字段、redaction、asset access、audit/log 或隐私边界；只断言 error class、mock throw 或私有 flag 不算 primary proof。
+- `config/ops/check`：只能证明稳定 config/env/build/migration/deployment/static gate，不替代 required behavior 的 unit/component/API/DB/browser/security 测试。
+
 ## Mock Policy
 
 Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象：
@@ -65,9 +81,10 @@ Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象
 每个 required behavior Test ID 的 evidence ledger 至少记录：
 
 - `testId`
-- `acId`
+- `acId`（不得用 `ac` 代替）
 - `behaviorContract`
 - `assertionOracle`
+- `fixedCommand`
 - `redCommand`
 - `expectedRedFailure`
 - `observedRedFailure`
@@ -88,6 +105,8 @@ Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象
 - `notApplicableReason`
 
 `tddStatus` 只能使用 `red-required`、`red-observed`、`green-passed`、`not-applicable` 或 `blocked`。完成状态不能停留在 `red-required`。
+
+`artifacts` 必须是数组，至少包含 `command.log` 和 `ledger.json`。`fixedCommand`、`redCommand`、`greenCommand`、`regressionCommand`、`tddStatus` 必须与 `Test Evidence Matrix` / `Regression Test Deposit` 中对应字段完全一致。`Regression Test Deposit = deposited` 的 required behavior Test ID 必须对应 `tddStatus = green-passed`，不能仍是 `blocked` 或 `not-applicable`。
 
 ## Completion Rule
 
