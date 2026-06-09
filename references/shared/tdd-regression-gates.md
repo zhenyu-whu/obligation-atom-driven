@@ -78,6 +78,8 @@ Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象
 
 ## Required Ledger Fields
 
+Canonical ledger 字段、`tddStatus` 枚举和 required artifacts 的机器可验事实源是 `openspec/schemas/shared/evidence-ledger.schema.json`。本节是人类可读摘要；若摘要与 JSON schema 冲突，以 JSON schema 和 `validate_tasks_quality.py` 为准。
+
 每个 required behavior Test ID 的 evidence ledger 至少记录：
 
 - `testId`
@@ -104,9 +106,9 @@ Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象
 - `tddStatus`
 - `notApplicableReason`
 
-`tddStatus` 只能使用 `red-required`、`red-observed`、`green-passed`、`not-applicable` 或 `blocked`。完成状态不能停留在 `red-required`。
+`tddStatus` 只能使用 `red-required`、`red-observed`、`green-passed`、`not-applicable` 或 `blocked`。完成状态不能停留在 `red-required`；禁止使用 `red-green`、`passed`、`green` 等口语状态。
 
-`artifacts` 必须是数组，至少包含 `command.log` 和 `ledger.json`。`fixedCommand`、`redCommand`、`greenCommand`、`regressionCommand`、`tddStatus` 必须与 `Test Evidence Matrix` / `Regression Test Deposit` 中对应字段完全一致。`Regression Test Deposit = deposited` 的 required behavior Test ID 必须对应 `tddStatus = green-passed`，不能仍是 `blocked` 或 `not-applicable`。
+`artifacts` 必须是数组，至少包含裸文件名 `command.log` 和 `ledger.json`；可以额外列截图、trace、DOM、API/DB/job/log/audit fact 文件名。`fixedCommand`、`redCommand`、`greenCommand`、`regressionCommand`、`tddStatus` 必须与 `Test Evidence Matrix` / `Regression Test Deposit` 中对应字段完全一致。`Regression Test Deposit = deposited` 的 required behavior Test ID 必须对应 `tddStatus = green-passed`，且 ledger 的 `greenResult` 和 `regressionResult` 必须证明通过，不能仍是 `blocked`、`not-applicable` 或占位空结果。
 
 ## Completion Rule
 

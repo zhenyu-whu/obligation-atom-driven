@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openspec.local/schemas/shared/evidence-ledger.schema.json",
+  "title": "OpenSpec Evidence Ledger",
+  "description": "Canonical evidence ledger contract shared by production OpenSpec schemas, validators, and ledger generation tools.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "testId",
+    "acId",
+    "behaviorContract",
+    "assertionOracle",
+    "fixedCommand",
+    "redCommand",
+    "expectedRedFailure",
+    "observedRedFailure",
+    "redResult",
+    "greenCommand",
+    "greenResult",
+    "regressionCommand",
+    "regressionResult",
+    "cwd",
+    "exitCode",
+    "startedAt",
+    "finishedAt",
+    "artifacts",
+    "defaultPathFacts",
+    "fixtureBoundary",
+    "tddStatus",
+    "notApplicableReason"
+  ],
+  "properties": {
+    "testId": {
+      "type": "string",
+      "pattern": "^T-[0-9]{3}$"
+    },
+    "acId": {
+      "type": "string",
+      "pattern": "^AC-[0-9]{3}$"
+    },
+    "behaviorContract": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assertionOracle": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fixedCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "redCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expectedRedFailure": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observedRedFailure": {
+      "type": "string",
+      "minLength": 1
+    },
+    "redResult": {
+      "type": ["object", "string", "null"]
+    },
+    "greenCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "greenResult": {
+      "type": ["object", "string", "null"]
+    },
+    "regressionCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "regressionResult": {
+      "type": ["object", "string", "null"]
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exitCode": {
+      "type": ["integer", "null"]
+    },
+    "startedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "finishedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 2
+    },
+    "defaultPathFacts": {
+      "type": ["object", "string", "array"]
+    },
+    "fixtureBoundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tddStatus": {
+      "type": "string",
+      "enum": [
+        "red-required",
+        "red-observed",
+        "green-passed",
+        "not-applicable",
+        "blocked"
+      ]
+    },
+    "notApplicableReason": {
+      "type": ["string", "null"]
+    }
+  },
+  "x-canonicalArtifacts": [
+    "command.log",
+    "ledger.json"
+  ]
+}

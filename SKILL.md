@@ -38,7 +38,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `schema_dir` defaults to `schema` when omitted.
 5. Sync bundled OpenSpec files into the target repository:
    - Copy every bundled production profile schema directory from `<skill-root>/references/profiles/<profile>/schema/` to `<repo-root>/openspec/schemas/<profile>/`, including both `production-obligation-atom-driven` and `production-default-acceptance-driven`.
-   - Copy `<skill-root>/references/shared/*.md` to `<repo-root>/openspec/schemas/shared/`, including the bundled `tdd-regression-gates.md` required by both production schemas.
+   - Copy `<skill-root>/references/shared/*` to `<repo-root>/openspec/schemas/shared/`, including the bundled `tdd-regression-gates.md` and `evidence-ledger.schema.json` required by both production schemas.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
    - Copy `<skill-root>/references/agent-runtime/scripts/` to `<repo-root>/openspec/agent-runtime/scripts/` when present.
    - Preserve the bundled apply runtime requirement that any apply-stage `worker` or `reviewer` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
@@ -57,7 +57,8 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `openspec/schemas/production-default-acceptance-driven/templates/` contains the bundled templates.
    - `openspec/schemas/shared/tdd-regression-gates.md` exists.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
-   - `openspec/agent-runtime/scripts/validate_tasks_quality.py` exists when bundled.
+   - `openspec/agent-runtime/scripts/validate_tasks_quality.py` and `openspec/agent-runtime/scripts/write_evidence_ledger.py` exist when bundled.
+   - `openspec/schemas/shared/evidence-ledger.schema.json` exists.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
 
@@ -71,7 +72,9 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
 - `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` and `reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
 - `references/agent-runtime/scripts/validate_tasks_quality.py`: required production helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, canonical ledger paths, TDD final status, and regression deposit status.
+- `references/agent-runtime/scripts/write_evidence_ledger.py`: required production helper for generating canonical `test-results/<change>/<AC>/<T>/ledger.json` files from `tasks.md` evidence and regression deposit rows.
 - `references/shared/tdd-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/tdd-regression-gates.md`.
+- `references/shared/evidence-ledger.schema.json`: shared machine-readable evidence ledger contract required by both production schemas. It is synced to `openspec/schemas/shared/evidence-ledger.schema.json`.
 
 ## Profile Contract
 

@@ -35,7 +35,7 @@ TDD_STATUSES = {
 }
 FINAL_TDD_STATUSES = {"green-passed", "not-applicable", "blocked"}
 DEPOSIT_STATUSES = {"required", "deposited", "not-applicable", "blocked"}
-LEDGER_REQUIRED_FIELDS = {
+FALLBACK_LEDGER_REQUIRED_FIELDS = {
     "testId",
     "acId",
     "behaviorContract",
@@ -59,6 +59,7 @@ LEDGER_REQUIRED_FIELDS = {
     "tddStatus",
     "notApplicableReason",
 }
+CANONICAL_LEDGER_ARTIFACTS = {"command.log", "ledger.json"}
 BROWSER_E2E_MARKERS = [
     "@playwright/test",
     "chromium",
@@ -138,6 +139,81 @@ REPO_LEVEL_TEST_DIR_ALLOWLIST = {
 class Finding:
     severity: str
     message: str
+
+
+@dataclass(frozen=True)
+class LedgerContract:
+    required_fields: set[str]
+    tdd_statuses: set[str]
+    canonical_artifacts: set[str]
+
+
+def find_ledger_schema_path() -> Path | None:
+    candidates = [
+        Path("openspec/schemas/shared/evidence-ledger.schema.json"),
+        Path(__file__).resolve().parents[2] / "schemas" / "shared" / "evidence-ledger.schema.json",
+        Path(__file__).resolve().parents[2] / "shared" / "evidence-ledger.schema.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def load_ledger_contract(findings: list[Finding]) -> LedgerContract:
+    path = find_ledger_schema_path()
+    if path is None:
+        findings.append(
+            Finding(
+                "error",
+                "缺少共享 ledger schema：openspec/schemas/shared/evidence-ledger.schema.json",
+            )
+        )
+        return LedgerContract(
+            required_fields=set(FALLBACK_LEDGER_REQUIRED_FIELDS),
+            tdd_statuses=set(TDD_STATUSES),
+            canonical_artifacts=set(CANONICAL_LEDGER_ARTIFACTS),
+        )
+    try:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        findings.append(Finding("error", f"{path} 无法读取或解析：{exc}"))
+        return LedgerContract(
+            required_fields=set(FALLBACK_LEDGER_REQUIRED_FIELDS),
+            tdd_statuses=set(TDD_STATUSES),
+            canonical_artifacts=set(CANONICAL_LEDGER_ARTIFACTS),
+        )
+
+    required = schema.get("required", [])
+    if not isinstance(required, list) or not all(isinstance(field, str) for field in required):
+        findings.append(Finding("error", f"{path} 缺少合法的 required 字段数组"))
+        required_fields = set(FALLBACK_LEDGER_REQUIRED_FIELDS)
+    else:
+        required_fields = set(required)
+
+    properties = schema.get("properties", {})
+    tdd_enum = {}
+    if isinstance(properties, dict):
+        tdd_enum = properties.get("tddStatus", {})
+    statuses = tdd_enum.get("enum", []) if isinstance(tdd_enum, dict) else []
+    if not isinstance(statuses, list) or not all(isinstance(status, str) for status in statuses):
+        findings.append(Finding("error", f"{path} 缺少合法的 tddStatus enum"))
+        tdd_statuses = set(TDD_STATUSES)
+    else:
+        tdd_statuses = set(statuses)
+
+    canonical = schema.get("x-canonicalArtifacts", list(CANONICAL_LEDGER_ARTIFACTS))
+    if not isinstance(canonical, list) or not all(isinstance(item, str) for item in canonical):
+        findings.append(Finding("error", f"{path} 缺少合法的 x-canonicalArtifacts"))
+        canonical_artifacts = set(CANONICAL_LEDGER_ARTIFACTS)
+    else:
+        canonical_artifacts = set(canonical)
+
+    return LedgerContract(
+        required_fields=required_fields,
+        tdd_statuses=tdd_statuses,
+        canonical_artifacts=canonical_artifacts,
+    )
 
 
 def split_row(line: str) -> list[str]:
@@ -372,6 +448,7 @@ def validate_test_evidence(
     final: bool,
     change_slug: str,
     reported_ownership: set[str],
+    ledger_contract: LedgerContract,
 ) -> tuple[set[str], list[dict[str, str]]]:
     header, rows = extract_table(markdown, "Test Evidence Matrix")
     required_cols = {
@@ -466,7 +543,7 @@ def validate_test_evidence(
             )
         scope_role = row.get("Scope Role", "").lower()
         tdd_status = row.get("TDD Status", "")
-        if tdd_status and tdd_status not in TDD_STATUSES:
+        if tdd_status and tdd_status not in ledger_contract.tdd_statuses:
             findings.append(Finding("error", f"{test_id or '<unknown>'} TDD Status 不合法：{tdd_status}"))
         if "required behavior" in scope_role:
             if tdd_status == "red-required":
@@ -506,7 +583,7 @@ def validate_regression_deposit(
         findings.append(Finding("error", f"Regression Test Deposit 缺少列：{', '.join(missing)}"))
     if not rows:
         findings.append(Finding("error", "Regression Test Deposit 必须存在至少一行"))
-        return
+        return {}
 
     deposited_ids: set[str] = set()
     deposit_by_id: dict[str, dict[str, str]] = {}
@@ -575,7 +652,7 @@ def validate_evidence_deposit_consistency(
     evidence_rows: list[dict[str, str]],
     deposit_by_id: dict[str, dict[str, str]],
     findings: list[Finding],
-    final: bool,
+    strict_ids: set[str],
 ) -> None:
     for row in evidence_rows:
         test_id = row.get("Test ID", "")
@@ -593,7 +670,7 @@ def validate_evidence_deposit_consistency(
                 )
             )
         if (
-            final
+            test_id in strict_ids
             and "required behavior" in scope_role
             and deposit_status == "deposited"
             and evidence_status != "green-passed"
@@ -602,6 +679,13 @@ def validate_evidence_deposit_consistency(
                 Finding(
                     "error",
                     f"{test_id} final audit 中 deposited required behavior 必须是 green-passed，当前为 {evidence_status or '<empty>'}",
+                )
+            )
+        if test_id in strict_ids and "required behavior" in scope_role and deposit_status == "required":
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} evidence gate 中 required behavior 的 Regression Deposit 不能停留在 required",
                 )
             )
 
@@ -618,15 +702,37 @@ def read_json(path: Path) -> dict[str, object] | None:
     return value
 
 
-def validate_final_ledgers(
+def result_indicates_pass(value: object) -> bool:
+    if isinstance(value, dict):
+        status = str(value.get("status", "")).lower()
+        exit_code = value.get("exitCode")
+        if status in {"passed", "pass", "ok", "success"}:
+            return True
+        if exit_code == 0 and status not in {"failed", "error", "blocked"}:
+            return True
+    if isinstance(value, str):
+        lowered = value.lower()
+        return any(token in lowered for token in ["passed", "green", "exit 0", "exitcode 0"])
+    return False
+
+
+def validate_ledgers(
     *,
     evidence_rows: list[dict[str, str]],
     deposit_by_id: dict[str, dict[str, str]],
     change_slug: str,
     findings: list[Finding],
+    ledger_contract: LedgerContract,
+    scope_ac: str | None = None,
+    check_orphans: bool = False,
 ) -> None:
     declared_ids = {row.get("Test ID", "") for row in evidence_rows}
-    for row in evidence_rows:
+    scoped_rows = [
+        row
+        for row in evidence_rows
+        if not scope_ac or strip_cell_markup(row.get("AC ID", "")) == scope_ac
+    ]
+    for row in scoped_rows:
         test_id = row.get("Test ID", "")
         ac_id = row.get("AC ID", "")
         ledger_field = strip_cell_markup(row.get("Ledger File", ""))
@@ -642,7 +748,7 @@ def validate_final_ledgers(
             findings.append(Finding("error", f"{test_id} final ledger 不存在：{ledger_field}"))
             continue
 
-        missing = sorted(field for field in LEDGER_REQUIRED_FIELDS if field not in ledger)
+        missing = sorted(field for field in ledger_contract.required_fields if field not in ledger)
         if missing:
             findings.append(Finding("error", f"{test_id} ledger 缺少必需字段：{', '.join(missing)}"))
         if ledger.get("testId") != test_id:
@@ -676,14 +782,27 @@ def validate_final_ledgers(
                         f"{test_id} ledger.regressionCommand 与 Regression Deposit 不一致",
                     )
                 )
+            if deposit.get("Deposit Status", "") == "deposited":
+                for result_field in ["greenResult", "regressionResult"]:
+                    result = ledger.get(result_field)
+                    if not result_indicates_pass(result):
+                        findings.append(
+                            Finding(
+                                "error",
+                                f"{test_id} Regression Deposit 为 deposited，但 ledger.{result_field} 未证明通过",
+                            )
+                        )
         artifacts = ledger.get("artifacts")
-        if not isinstance(artifacts, list) or not {"command.log", "ledger.json"}.issubset(set(map(str, artifacts))):
-            findings.append(Finding("error", f"{test_id} ledger.artifacts 必须是包含 command.log 和 ledger.json 的数组"))
+        artifact_names = set(map(str, artifacts)) if isinstance(artifacts, list) else set()
+        if not isinstance(artifacts, list) or not ledger_contract.canonical_artifacts.issubset(artifact_names):
+            required = ", ".join(sorted(ledger_contract.canonical_artifacts))
+            findings.append(Finding("error", f"{test_id} ledger.artifacts 必须是包含 {required} 的数组"))
 
-    if change_slug:
+    if check_orphans and change_slug:
         evidence_root = Path("test-results") / change_slug
         if evidence_root.exists():
-            for ledger_path in evidence_root.glob("AC-*/T-*/ledger.json"):
+            glob_pattern = f"{scope_ac}/T-*/ledger.json" if scope_ac else "AC-*/T-*/ledger.json"
+            for ledger_path in evidence_root.glob(glob_pattern):
                 test_id = ledger_path.parent.name
                 if test_id not in declared_ids:
                     findings.append(
@@ -748,10 +867,20 @@ def validate_high_risk_layers(markdown: str, findings: list[Finding], allow_temp
         )
 
 
-def validate(markdown: str, allow_template: bool, final: bool) -> list[Finding]:
+def validate(
+    markdown: str,
+    allow_template: bool,
+    final: bool,
+    evidence: bool = False,
+    ac_id: str | None = None,
+) -> list[Finding]:
     findings: list[Finding] = []
+    if ac_id and not AC_ID_RE.fullmatch(ac_id):
+        findings.append(Finding("error", f"--ac 必须是单一 AC-###：{ac_id}"))
+        return findings
     change_slug = extract_change_slug(markdown)
     reported_ownership: set[str] = set()
+    ledger_contract = load_ledger_contract(findings)
     add_missing_headings(markdown, findings)
     bad_id_source = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL) if allow_template else markdown
     if BAD_TEST_ID_RE.search(bad_id_source):
@@ -764,6 +893,7 @@ def validate(markdown: str, allow_template: bool, final: bool) -> list[Finding]:
         final,
         change_slug,
         reported_ownership,
+        ledger_contract,
     )
     deposit_by_id = validate_regression_deposit(
         markdown,
@@ -774,13 +904,41 @@ def validate(markdown: str, allow_template: bool, final: bool) -> list[Finding]:
         change_slug,
         reported_ownership,
     )
-    validate_evidence_deposit_consistency(evidence_rows, deposit_by_id, findings, final)
-    if final and not allow_template:
-        validate_final_ledgers(
-            evidence_rows=evidence_rows,
+    final_ids = {row.get("Test ID", "") for row in evidence_rows} if final else set()
+    scoped_ids = {
+        row.get("Test ID", "")
+        for row in evidence_rows
+        if ac_id and strip_cell_markup(row.get("AC ID", "")) == ac_id
+    }
+    strict_ids = final_ids | scoped_ids
+    validate_evidence_deposit_consistency(evidence_rows, deposit_by_id, findings, strict_ids)
+    deposited_rows = [
+        row
+        for row in evidence_rows
+        if deposit_by_id.get(row.get("Test ID", ""), {}).get("Deposit Status", "") == "deposited"
+    ]
+    if deposited_rows and not allow_template and not (final or evidence or ac_id):
+        validate_ledgers(
+            evidence_rows=deposited_rows,
             deposit_by_id=deposit_by_id,
             change_slug=change_slug,
             findings=findings,
+            ledger_contract=ledger_contract,
+        )
+    if (final or evidence or ac_id) and not allow_template:
+        scoped_rows = (
+            [row for row in evidence_rows if strip_cell_markup(row.get("AC ID", "")) == ac_id]
+            if ac_id
+            else evidence_rows
+        )
+        validate_ledgers(
+            evidence_rows=scoped_rows,
+            deposit_by_id=deposit_by_id,
+            change_slug=change_slug,
+            findings=findings,
+            ledger_contract=ledger_contract,
+            scope_ac=ac_id,
+            check_orphans=True,
         )
     validate_runtime_not_applicable(markdown, findings, allow_template)
     validate_high_risk_layers(markdown, findings, allow_template)
@@ -792,10 +950,18 @@ def main() -> int:
     parser.add_argument("tasks_md", type=Path)
     parser.add_argument("--allow-template", action="store_true", help="ignore placeholder rows containing HTML comments")
     parser.add_argument("--final", action="store_true", help="treat required regression deposits as errors")
+    parser.add_argument("--evidence", action="store_true", help="validate evidence ledgers for the selected scope")
+    parser.add_argument("--ac", help="validate evidence only for one AC-### scope")
     args = parser.parse_args()
 
     markdown = args.tasks_md.read_text(encoding="utf-8")
-    findings = validate(markdown, allow_template=args.allow_template, final=args.final)
+    findings = validate(
+        markdown,
+        allow_template=args.allow_template,
+        final=args.final,
+        evidence=args.evidence,
+        ac_id=args.ac,
+    )
     for finding in findings:
         print(f"{finding.severity.upper()}: {finding.message}", file=sys.stderr)
     return 1 if any(f.severity == "error" for f in findings) else 0
