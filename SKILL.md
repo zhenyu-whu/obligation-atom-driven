@@ -10,7 +10,7 @@ Use this skill to configure a repository so OpenSpec changes use one of the bund
 ## Profiles
 
 - `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes canonical change packets and `obligation-atom-index.md` from `openspec/orchestrate`, preserves `GA-####` IDs, and uses projection-aware proposal/spec/design/tasks artifacts.
-- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> tasks model, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and adds lightweight `SI-###` change-local scope coverage, AC acceptance slices, fixed `T-###` tests, evidence ledgers, and regression test deposits.
+- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> tasks model, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and adds lightweight `SI-###` change-local scope coverage, AC acceptance slices, fixed `T-###` tests, execution evidence, optional audit ledgers, and regression test deposits.
 
 The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification for that profile must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
 
@@ -38,7 +38,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `schema_dir` defaults to `schema` when omitted.
 5. Sync bundled OpenSpec files into the target repository:
    - Copy every bundled production profile schema directory from `<skill-root>/references/profiles/<profile>/schema/` to `<repo-root>/openspec/schemas/<profile>/`, including both `production-obligation-atom-driven` and `production-default-acceptance-driven`.
-   - Copy `<skill-root>/references/shared/*` to `<repo-root>/openspec/schemas/shared/`, including the bundled `tdd-regression-gates.md` and `evidence-ledger.schema.json` required by both production schemas.
+   - Copy `<skill-root>/references/shared/*` to `<repo-root>/openspec/schemas/shared/`, including the bundled `tdd-regression-gates.md` and optional audit `evidence-ledger.schema.json` used by both production schemas.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
    - Copy `<skill-root>/references/agent-runtime/scripts/` to `<repo-root>/openspec/agent-runtime/scripts/` when present.
    - Preserve the bundled apply runtime requirement that any apply-stage `worker` or `reviewer` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
@@ -71,10 +71,10 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 - `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
 - `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` and `reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
-- `references/agent-runtime/scripts/validate_tasks_quality.py`: required production helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, canonical ledger paths, TDD final status, and regression deposit status.
-- `references/agent-runtime/scripts/write_evidence_ledger.py`: required production helper for generating canonical `test-results/<change>/<AC>/<T>/ledger.json` files from `tasks.md` evidence and regression deposit rows.
+- `references/agent-runtime/scripts/validate_tasks_quality.py`: required production helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, execution evidence, optional ledger consistency, TDD final status, and regression deposit status.
+- `references/agent-runtime/scripts/write_evidence_ledger.py`: optional production helper for generating `test-results/<change>/<AC>/<T>/ledger.json` audit receipts from `tasks.md` evidence and regression deposit rows.
 - `references/shared/tdd-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/tdd-regression-gates.md`.
-- `references/shared/evidence-ledger.schema.json`: shared machine-readable evidence ledger contract required by both production schemas. It is synced to `openspec/schemas/shared/evidence-ledger.schema.json`.
+- `references/shared/evidence-ledger.schema.json`: shared machine-readable optional audit ledger contract used by both production schemas. It is synced to `openspec/schemas/shared/evidence-ledger.schema.json`.
 
 ## Profile Contract
 

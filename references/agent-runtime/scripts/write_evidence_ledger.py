@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Write a canonical OpenSpec evidence ledger for one Test ID.
+"""Write an optional OpenSpec audit ledger for one Test ID.
 
 The tool reads Test Evidence Matrix and Regression Test Deposit from tasks.md,
 then merges those canonical fields with an existing ledger or result JSON files.
-It avoids hand-written drift between tasks.md and test-results/**/ledger.json.
+It avoids hand-written drift when an apply/reviewer/archive audit receipt is
+useful. Ordinary test commands are not required to generate this file.
 """
 
 from __future__ import annotations
@@ -88,7 +89,7 @@ def artifact_names(existing: object, extras: list[str]) -> list[str]:
             names.append(Path(str(item)).name)
     for item in extras:
         names.append(Path(item).name)
-    names.extend(["command.log", "ledger.json"])
+    names.extend(["command.log"])
     seen: set[str] = set()
     ordered: list[str] = []
     for name in names:
@@ -113,7 +114,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("tasks_md", type=Path)
     parser.add_argument("--test-id", required=True)
-    parser.add_argument("--output", type=Path, help="ledger path; defaults to Test Evidence Matrix Ledger File")
+    parser.add_argument("--output", type=Path, help="ledger path; defaults to Test Evidence Matrix Ledger File or Evidence Directory/ledger.json")
     parser.add_argument("--no-merge-existing", action="store_true")
     parser.add_argument("--red-result-json")
     parser.add_argument("--green-result-json")
@@ -138,9 +139,15 @@ def main() -> int:
         print(f"ERROR: Regression Test Deposit 中找不到 {args.test_id}", file=sys.stderr)
         return 1
 
-    ledger_path = args.output or Path(strip_cell_markup(evidence_row.get("Ledger File", "")))
-    if not ledger_path:
-        print(f"ERROR: {args.test_id} 缺少 Ledger File", file=sys.stderr)
+    ledger_field = strip_cell_markup(evidence_row.get("Ledger File", ""))
+    evidence_dir = strip_cell_markup(evidence_row.get("Evidence Directory", "")).rstrip("/")
+    ledger_path = args.output
+    if ledger_path is None and ledger_field:
+        ledger_path = Path(ledger_field)
+    if ledger_path is None and evidence_dir:
+        ledger_path = Path(evidence_dir) / "ledger.json"
+    if ledger_path is None:
+        print(f"ERROR: {args.test_id} 缺少 Ledger File 或 Evidence Directory，无法推导 optional audit ledger 输出路径", file=sys.stderr)
         return 1
 
     existing: dict[str, object] = {}
@@ -197,7 +204,17 @@ def main() -> int:
             "exitCode": exit_code,
             "startedAt": existing.get("startedAt") or now_iso(),
             "finishedAt": existing.get("finishedAt") or now_iso(),
-            "artifacts": artifact_names(existing.get("artifacts"), args.artifact),
+            "artifacts": artifact_names(
+                existing.get("artifacts"),
+                [
+                    *args.artifact,
+                    *[
+                        path
+                        for path in [args.red_result_json, args.green_result_json, args.regression_result_json]
+                        if path
+                    ],
+                ],
+            ),
             "defaultPathFacts": existing.get("defaultPathFacts") or {"defaultPath": evidence_row.get("Default Path?", "")},
             "fixtureBoundary": evidence_row.get("Fixture Boundary", "") or deposit_row.get("Fixture Boundary", ""),
             "tddStatus": evidence_row.get("TDD Status", ""),

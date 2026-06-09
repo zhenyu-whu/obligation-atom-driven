@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openspec.local/schemas/shared/evidence-ledger.schema.json",
-  "title": "OpenSpec Evidence Ledger",
-  "description": "Canonical evidence ledger contract shared by production OpenSpec schemas, validators, and ledger generation tools.",
+  "title": "OpenSpec Optional Apply Audit Ledger",
+  "description": "Optional apply/reviewer/archive audit receipt contract shared by production OpenSpec schemas, validators, and ledger generation tools. Ordinary test commands are not required to generate this file; current worktree execution evidence remains the source of truth.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -99,7 +99,7 @@
       "items": {
         "type": "string"
       },
-      "minItems": 2
+      "minItems": 1
     },
     "defaultPathFacts": {
       "type": ["object", "string", "array"]
@@ -123,7 +123,6 @@
     }
   },
   "x-canonicalArtifacts": [
-    "command.log",
-    "ledger.json"
+    "command.log"
   ]
 }

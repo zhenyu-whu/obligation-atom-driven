@@ -59,7 +59,21 @@ FALLBACK_LEDGER_REQUIRED_FIELDS = {
     "tddStatus",
     "notApplicableReason",
 }
-CANONICAL_LEDGER_ARTIFACTS = {"command.log", "ledger.json"}
+CANONICAL_LEDGER_ARTIFACTS = {"command.log"}
+EXECUTION_EVIDENCE_FILES = {
+    "command.log",
+    "green-result.json",
+    "regression-result.json",
+    "junit.xml",
+    "results.xml",
+    "report.json",
+    "test-report.json",
+    "results.json",
+}
+EXECUTION_EVIDENCE_NAME_RE = re.compile(
+    r"(?:command|green|regression|result|report|junit|vitest|playwright).*\.(?:log|json|xml)$",
+    re.IGNORECASE,
+)
 BROWSER_E2E_MARKERS = [
     "@playwright/test",
     "chromium",
@@ -468,7 +482,6 @@ def validate_test_evidence(
         "Requires Tests Passed",
         "Evidence Directory",
         "Evidence Produced",
-        "Ledger File",
         "CI Runnable?",
         "Scope Role",
         "No-Scope-Expansion Check",
@@ -525,14 +538,14 @@ def validate_test_evidence(
             findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Directory 不符合 canonical 路径：{evidence_dir}"))
         ledger_file = row.get("Ledger File", "").strip("` ")
         if ledger_file and not LEDGER_RE.search(ledger_file):
-            findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 必须是 canonical ledger.json 路径：{ledger_file}"))
+            findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 若填写，必须是 canonical ledger.json 路径：{ledger_file}"))
         if evidence_dir and ledger_file:
             expected_prefix = evidence_dir.rstrip("/") + "/"
             if not ledger_file.startswith(expected_prefix):
                 findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 不在 Evidence Directory 下"))
         evidence_produced = row.get("Evidence Produced", "")
-        if evidence_produced and ("command.log" not in evidence_produced or "ledger.json" not in evidence_produced):
-            findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Produced 必须包含 command.log 和 ledger.json"))
+        if evidence_produced and not text_mentions_execution_evidence(evidence_produced):
+            findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Produced 必须包含 command.log 或等价 CI/runner 执行日志"))
         if not row.get("CI Runnable?", "").strip():
             findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 CI Runnable? 说明"))
         if layer.strip().lower() == "browser e2e":
@@ -716,6 +729,70 @@ def result_indicates_pass(value: object) -> bool:
     return False
 
 
+def text_mentions_execution_evidence(value: str) -> bool:
+    lowered = value.lower()
+    return any(
+        token in lowered
+        for token in [
+            "command.log",
+            "green-result.json",
+            "regression-result.json",
+            "runner",
+            "ci",
+            "junit",
+            "report",
+            "result",
+        ]
+    )
+
+
+def execution_evidence_artifact(evidence_dir: Path) -> str | None:
+    if not evidence_dir.exists():
+        return None
+    if not evidence_dir.is_dir():
+        return None
+    for name in EXECUTION_EVIDENCE_FILES:
+        candidate = evidence_dir / name
+        if candidate.exists():
+            return candidate.as_posix()
+    for child in evidence_dir.iterdir():
+        if child.is_file() and EXECUTION_EVIDENCE_NAME_RE.search(child.name):
+            return child.as_posix()
+    return None
+
+
+def read_optional_result(path: Path, test_id: str, findings: list[Finding]) -> dict[str, object] | None:
+    try:
+        return read_json(path)
+    except ValueError as exc:
+        findings.append(Finding("error", f"{test_id} result evidence 无法读取：{exc}"))
+        return None
+
+
+def read_execution_result_artifact(evidence_dir: Path | None, test_id: str, findings: list[Finding]) -> object:
+    if evidence_dir is None or not evidence_dir.exists() or not evidence_dir.is_dir():
+        return None
+    for name in EXECUTION_EVIDENCE_FILES:
+        candidate = evidence_dir / name
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        if candidate.suffix == ".json":
+            try:
+                value = read_json(candidate)
+            except ValueError:
+                value = None
+            if result_indicates_pass(value):
+                return value
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            findings.append(Finding("error", f"{test_id} execution evidence 无法读取：{candidate.as_posix()}：{exc}"))
+            continue
+        if result_indicates_pass(text):
+            return text
+    return None
+
+
 def validate_ledgers(
     *,
     evidence_rows: list[dict[str, str]],
@@ -735,47 +812,80 @@ def validate_ledgers(
     for row in scoped_rows:
         test_id = row.get("Test ID", "")
         ac_id = row.get("AC ID", "")
-        ledger_field = strip_cell_markup(row.get("Ledger File", ""))
-        if not ledger_field:
-            continue
-        ledger_path = Path(ledger_field)
-        try:
-            ledger = read_json(ledger_path)
-        except ValueError as exc:
-            findings.append(Finding("error", str(exc)))
-            continue
-        if ledger is None:
-            findings.append(Finding("error", f"{test_id} final ledger 不存在：{ledger_field}"))
-            continue
-
-        missing = sorted(field for field in ledger_contract.required_fields if field not in ledger)
-        if missing:
-            findings.append(Finding("error", f"{test_id} ledger 缺少必需字段：{', '.join(missing)}"))
-        if ledger.get("testId") != test_id:
-            findings.append(Finding("error", f"{test_id} ledger.testId 不匹配：{ledger.get('testId')!r}"))
-        if ledger.get("acId") != ac_id:
-            findings.append(Finding("error", f"{test_id} ledger.acId 不匹配：{ledger.get('acId')!r}"))
-        if "ac" in ledger and "acId" not in ledger:
-            findings.append(Finding("error", f"{test_id} ledger 使用 ac 而不是 acId"))
-        for field, matrix_col in [
-            ("fixedCommand", "Fixed Command"),
-            ("redCommand", "Red Command"),
-            ("greenCommand", "Green Command"),
-            ("tddStatus", "TDD Status"),
-        ]:
-            expected = strip_cell_markup(row.get(matrix_col, ""))
-            actual = ledger.get(field)
-            if expected and actual != expected:
+        evidence_dir_field = strip_cell_markup(row.get("Evidence Directory", "")).rstrip("/")
+        evidence_dir = Path(evidence_dir_field) if evidence_dir_field else None
+        if evidence_dir is None:
+            findings.append(Finding("error", f"{test_id} 缺少 Evidence Directory，无法校验执行证据"))
+        else:
+            artifact = execution_evidence_artifact(evidence_dir)
+            if artifact is None:
                 findings.append(
                     Finding(
                         "error",
-                        f"{test_id} ledger.{field} 与 Test Evidence Matrix 不一致",
+                        f"{test_id} 缺少当前 worktree 执行证据：{evidence_dir.as_posix()} 下需要 command.log 或 runner/CI result/report",
                     )
                 )
+        green_result = (
+            read_optional_result(evidence_dir / "green-result.json", test_id, findings)
+            if evidence_dir is not None
+            else None
+        )
+        regression_result = (
+            read_optional_result(evidence_dir / "regression-result.json", test_id, findings)
+            if evidence_dir is not None
+            else None
+        )
+        execution_result = read_execution_result_artifact(evidence_dir, test_id, findings)
+        ledger_field = strip_cell_markup(row.get("Ledger File", ""))
+        ledger_path = Path(ledger_field) if ledger_field else None
+        if ledger_path is None and evidence_dir is not None:
+            default_ledger = evidence_dir / "ledger.json"
+            if default_ledger.exists():
+                ledger_path = default_ledger
+        ledger: dict[str, object] | None = None
+        if ledger_path is not None:
+            try:
+                ledger = read_json(ledger_path)
+            except ValueError as exc:
+                findings.append(Finding("error", str(exc)))
+            if ledger is None and ledger_field:
+                findings.append(Finding("warning", f"{test_id} 声明了可选 audit ledger，但文件不存在：{ledger_field}"))
+
+        if ledger is not None:
+            missing = sorted(field for field in ledger_contract.required_fields if field not in ledger)
+            if missing:
+                findings.append(Finding("error", f"{test_id} ledger 缺少必需字段：{', '.join(missing)}"))
+            if ledger.get("testId") != test_id:
+                findings.append(Finding("error", f"{test_id} ledger.testId 不匹配：{ledger.get('testId')!r}"))
+            if ledger.get("acId") != ac_id:
+                findings.append(Finding("error", f"{test_id} ledger.acId 不匹配：{ledger.get('acId')!r}"))
+            if "ac" in ledger and "acId" not in ledger:
+                findings.append(Finding("error", f"{test_id} ledger 使用 ac 而不是 acId"))
+            for field, matrix_col in [
+                ("fixedCommand", "Fixed Command"),
+                ("redCommand", "Red Command"),
+                ("greenCommand", "Green Command"),
+                ("tddStatus", "TDD Status"),
+            ]:
+                expected = strip_cell_markup(row.get(matrix_col, ""))
+                actual = ledger.get(field)
+                if expected and actual != expected:
+                    findings.append(
+                        Finding(
+                            "error",
+                            f"{test_id} ledger.{field} 与 Test Evidence Matrix 不一致",
+                        )
+                    )
+            artifacts = ledger.get("artifacts")
+            artifact_names = set(map(str, artifacts)) if isinstance(artifacts, list) else set()
+            if not isinstance(artifacts, list) or not ledger_contract.canonical_artifacts.issubset(artifact_names):
+                required = ", ".join(sorted(ledger_contract.canonical_artifacts))
+                findings.append(Finding("error", f"{test_id} ledger.artifacts 必须是包含 {required} 的数组"))
+
         deposit = deposit_by_id.get(test_id)
         if deposit:
             expected_regression = strip_cell_markup(deposit.get("Regression Command", ""))
-            if expected_regression and ledger.get("regressionCommand") != expected_regression:
+            if ledger is not None and expected_regression and ledger.get("regressionCommand") != expected_regression:
                 findings.append(
                     Finding(
                         "error",
@@ -783,20 +893,31 @@ def validate_ledgers(
                     )
                 )
             if deposit.get("Deposit Status", "") == "deposited":
-                for result_field in ["greenResult", "regressionResult"]:
-                    result = ledger.get(result_field)
-                    if not result_indicates_pass(result):
-                        findings.append(
-                            Finding(
-                                "error",
-                                f"{test_id} Regression Deposit 为 deposited，但 ledger.{result_field} 未证明通过",
-                            )
+                ledger_green = ledger.get("greenResult") if ledger is not None else None
+                ledger_regression = ledger.get("regressionResult") if ledger is not None else None
+                green_passed = (
+                    result_indicates_pass(green_result)
+                    or result_indicates_pass(ledger_green)
+                    or result_indicates_pass(execution_result)
+                )
+                regression_passed = result_indicates_pass(regression_result) or result_indicates_pass(ledger_regression)
+                green_command = strip_cell_markup(row.get("Green Command", ""))
+                if expected_regression and green_command and expected_regression == green_command and green_passed:
+                    regression_passed = True
+                if not green_passed:
+                    findings.append(
+                        Finding(
+                            "error",
+                            f"{test_id} Regression Deposit 为 deposited，但 green-result.json 或 optional ledger.greenResult 未证明通过",
                         )
-        artifacts = ledger.get("artifacts")
-        artifact_names = set(map(str, artifacts)) if isinstance(artifacts, list) else set()
-        if not isinstance(artifacts, list) or not ledger_contract.canonical_artifacts.issubset(artifact_names):
-            required = ", ".join(sorted(ledger_contract.canonical_artifacts))
-            findings.append(Finding("error", f"{test_id} ledger.artifacts 必须是包含 {required} 的数组"))
+                    )
+                if not regression_passed:
+                    findings.append(
+                        Finding(
+                            "error",
+                            f"{test_id} Regression Deposit 为 deposited，但 regression-result.json、等价 Green Command 或 optional ledger.regressionResult 未证明通过",
+                        )
+                    )
 
     if check_orphans and change_slug:
         evidence_root = Path("test-results") / change_slug
@@ -950,7 +1071,7 @@ def main() -> int:
     parser.add_argument("tasks_md", type=Path)
     parser.add_argument("--allow-template", action="store_true", help="ignore placeholder rows containing HTML comments")
     parser.add_argument("--final", action="store_true", help="treat required regression deposits as errors")
-    parser.add_argument("--evidence", action="store_true", help="validate evidence ledgers for the selected scope")
+    parser.add_argument("--evidence", action="store_true", help="validate execution evidence and optional audit ledgers for the selected scope")
     parser.add_argument("--ac", help="validate evidence only for one AC-### scope")
     args = parser.parse_args()
 
