@@ -41,7 +41,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - Copy `<skill-root>/references/shared/*.md` to `<repo-root>/openspec/schemas/shared/`, including the bundled `tdd-regression-gates.md` required by both production schemas.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
    - Copy `<skill-root>/references/agent-runtime/scripts/` to `<repo-root>/openspec/agent-runtime/scripts/` when present.
-   - Preserve the bundled apply runtime requirement that any apply-stage `worker` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
+   - Preserve the bundled apply runtime requirement that any apply-stage `worker` or `reviewer` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
    - Create or update `<repo-root>/openspec/config.yaml` so the top-level `schema:` value is `<schema_name>`.
    - Preserve unrelated project-specific config entries when updating an existing `openspec/config.yaml`.
    - If target schema or runtime files already exist and differ, inspect the differences and update them intentionally.
@@ -69,7 +69,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 - `references/profiles/production-default-acceptance-driven/`: profile metadata and schema files for post-greenfield production evolution.
 - `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
-- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
+- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` and `reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
 - `references/agent-runtime/scripts/validate_tasks_quality.py`: required production helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, canonical ledger paths, TDD final status, and regression deposit status.
 - `references/shared/tdd-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/tdd-regression-gates.md`.
 

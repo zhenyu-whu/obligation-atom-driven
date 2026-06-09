@@ -52,7 +52,7 @@
    - route/API、DB/integration、worker/job、realtime/SSE、visual/responsive、security/negative、config/ops/check 必须分别证明实际 contract/DB/processor/event/render/security/config boundary；只证明 mock、fixture、私有 helper、静态文件存在或 broad command 通过是 blocker。
 8. **Gate 8 / 任务级 TDD 与 proof 检查**：worker 应优先按当前 AC-local `Test IDs`、任务 `Test IDs`、`Proof:`、test layer code requirements 和 regression deposit（若适用）建立或补齐对应验证。实现完成前 proof 应能失败或暴露缺口；实现后必须通过 AC-owned Test ID 在 `Test Evidence Matrix` 中定义的 fixed command，并在 canonical evidence directory 产出 `command.log` 和 `ledger.json`。用户可见操作必须执行当前 schema 中定义的 runtime interaction / operation matrix proof；presence-only、static-only、API-only、implementation-detail 或 broad command proof 不得单独支撑勾选。
 9. **Gate 9 / 默认路径与 no-mock 检查**：凡 task 涉及 Route Handler、auth、session、DB、AI/provider、storage、queue、SSE、worker、external service adapter、env/config 或 deployment wiring，proof 必须覆盖真实导出、default dependency 或 default config。mock、stub、dependency injection、Playwright route intercept、fixture-only、手工注入 EventSource、直接 DB seed 或 isolated unit test 只能作为补充，除非 runtime matrix 明确说明该 row 是 source-compatible deterministic path 且另有测试覆盖被替换的 production boundary。
-10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、TDD red/green evidence、evidence ledger、`Regression Test Deposit`、以及 `validate_tasks_quality.py --final` 都能回链到已完成任务和 proof，才可称为 ready for archive。
+10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、TDD red/green evidence、evidence ledger、`Regression Test Deposit`、`validate_tasks_quality.py --final`、以及独立 `reviewer` subagent 复核结论都能回链到已完成任务和 proof，且 reviewer 返回 pass，才可称为 ready for archive。
 
 ## 任务章节拆分
 
@@ -86,33 +86,32 @@
 9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
 10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的 fixed command，并在 `test-results/<change-slug>/<AC-ID>/<Test-ID>/` 提供 `command.log` 和 `ledger.json`，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。ledger 必须使用 `acId` 字段并记录 behavior contract、assertion oracle、fixed/red/green/regression command、red/green/regression result、cwd、exit code、started/finished 时间、artifacts 数组、default-path facts、fixture boundary、TDD status 和 not-applicable reason。`/tmp`、未复制的 runner 默认输出、agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、test layer code requirements、TDD red/green fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
 
+## Reviewer Subagent 复核
+
+1. 所有 implementation `worker` subagent 自然返回完成且没有明确 blocker 后，必须启动一个独立 `reviewer` subagent 执行最终复核检验。这是所有任务实现后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
+2. `reviewer` subagent 必须在所有 worker 结束后启动，且不得与 implementation worker 并行运行；若任一 worker 返回 blocker 或仍有未完成实现任务，先汇报 blocker，不得启动 reviewer。
+3. 创建或启动 apply-stage `reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`，并且不得降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` reviewer，必须暂停 apply 并向用户报告 blocker，不得由主 agent 替代复核。
+4. 主 agent 启动 reviewer 时必须传入：change 名称、schema 名称、`contextFiles`、proposal/specs/design/tasks 路径、所有 worker 最终报告、worker 报告的改动范围、所有 AC/Test ID/evidence ledger 路径、fixed commands、Regression Test Deposit 状态，以及 reviewer 需要复核的 coverage/runtime/test 矩阵路径。主 agent 不得为了准备 reviewer 输入而自行审查 diff、打开 evidence ledger、重跑验证命令或预先判断 worker 结果是否可信。
+5. reviewer 负责独立复核：检查代码 diff、artifacts、tasks checkbox、coverage/runtime/test 矩阵、evidence ledger、Regression Test Deposit、固定验证命令结果、跨 AC 集成冲突、默认路径/no-mock 约束、TDD red/green 证据，并运行必要的复核命令，包括 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md --final`。
+6. reviewer 只输出复核报告和 pass/blocker 结论，不得直接修改代码、artifacts、checkbox、evidence ledger 或测试文件。若发现 blocker，主 agent 只汇报 reviewer blocker；不得自行接手修复、替 worker 补 proof、替 reviewer 复验，除非用户在 blocker 汇报后明确要求继续处理。
+7. 只有 reviewer 返回 pass，才可在最终汇报中声称复核通过或 ready to archive。reviewer 未运行、运行失败、无法满足模型/推理配置、或返回 blocker 时，不得声称 ready to archive。
+
 ## 主 Agent 职责
 
-1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、按 AC section 串行分派 worker、逐个等待 worker 自然返回结果、统一审查改动、执行最终 coverage/proof audit、汇总证据。
-2. 主 agent 必须等待所有已分派 worker 的任务全部完成或明确 blocker 后，才能开始主 agent 自己的统一审查、集成修复、额外测试、proof audit、tasks checkbox 更新和最终汇总。
+1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、按 AC section 串行分派 worker、逐个等待 worker 自然返回结果，在所有 worker 完成后启动 reviewer，并汇总 worker 与 reviewer 返回的完成状态、证据路径、验证命令结果和 blocker。
+2. 主 agent 必须等待所有已分派 worker 的任务全部完成或明确 blocker；若全部 worker 完成且无 blocker，必须等待 reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。worker 已声明完成的 AC section、checkbox、proof、evidence、fixed command 结果和 ledger 视为 worker 输出，reviewer 的 pass/blocker 视为最终复核输出；主 agent 不得再次复核、重测、审查 diff、重新跑验证命令、重新检查 evidence ledger、重新执行 coverage/proof audit，或以主 agent 判断覆盖 worker/reviewer 的结论。
 3. 任一 worker 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查未完成 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手实现。
-4. 主 agent 不得打断、停止、关闭或要求正在运行的 worker 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 worker 自然返回最终完成或明确 blocker。
-5. 统一 audit 至少确认：
-   - 相关代码改动符合 AC section、task trace inheritance/overrides、schema-specific coverage IDs、spec/design 和原始依据。
-   - 每个已勾选 task 都有实现证据和 proof 证据。
-   - 每个 AC section 的 primary proof 和 required evidence 已满足。
-   - 三张 coverage 表的每一行都有已勾选任务、真实存在的 verification task ID、验证证据、projection/handling 处理和验收 proof。
-   - `Runtime Acceptance Index` 每行都能解析到 owning AC、AC-local `Runtime Rows Owned`、checkbox `Runtime Rows`、Test IDs、Prerequisites/Provides/Consumes/Start Gate 和 `Verification Appendix` detail rows。
-   - Runtime provision graph 无循环，所有 `Depends On AC IDs` 均排在 consumer AC 之前，所有 `Prerequisite Test IDs` / `Requires Tests Passed` 均引用 earlier AC 的 Test IDs，且没有 hidden future dependency。
-   - `Verification Appendix` 六张 runtime/test 矩阵的每个 mandatory row 都有已勾选任务、真实存在且只归属一个 AC、并匹配 exact `T-[0-9]{3}` 的 Test ID、fixed command、验证证据、basis、provider/consumer ownership 和 no-scope-expansion check；无 runtime 行为的 detail matrix 只能保留 source/scope-backed `Not applicable` 最小行。
-   - 两个生产 schema 的 `Test Layer Plan` 中每个 required behavior、preserve boundary 和 proof-only guard 都有 layer decision；省略适用层时理由不能只是“已有 smoke 覆盖”。
-   - 两个生产 schema 的 `Regression Test Deposit` 中每个 required behavior Test ID 都有永久回归文件或稳定测试入口、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier 和 `Not Testing` 边界；`not-applicable` 或 `blocked` 行有 source/scope-backed 理由。
-   - 每个 completed Test ID 的 canonical evidence directory 都有 `command.log` 和 `ledger.json`，ledger 内容与 `Test Evidence Matrix`、TDD red/green fields、Regression Deposit 和实际命令结果一致；`deposited` 不得只代表计划路径，也不得与 `blocked` / `not-applicable` TDD status 混用。
-   - 最终 audit 已运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md --final` 且无 error。
-   - 不存在违反当前 schema proof strength 的 presence-only、static-only、API-only、implementation-detail 或 broad-command 验收。
-6. 若验收 proof 失败揭示 proposal/spec/design/tasks 与 schema-specific coverage basis 不一致，主 agent 必须暂停代码修复并提出 artifact 更新；不得用实现绕过 artifact mismatch。
+4. 任一 reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手复核。
+5. 主 agent 不得打断、停止、关闭或要求正在运行的 worker/reviewer 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 worker 自然返回最终完成或明确 blocker，并等待 reviewer 自然返回 pass 或明确 blocker。
+6. worker 或 reviewer 返回明确 blocker 时，主 agent 只记录 blocker 并向用户汇报；不得自行接手修复、替 worker 补 proof、替 worker 勾选或取消 checkbox、替 reviewer 复验，除非用户在 blocker 汇报后明确要求主 agent 继续处理。
+7. worker 或 reviewer 返回完成但摘要缺少路径、命令结果或 blocker 状态等汇总必需信息时，主 agent 可以要求同一个 subagent 补充说明；这不构成主 agent 复核，主 agent 不得自行打开文件或运行命令来补齐。
 
 ## 状态更新
 
 1. task checkbox 由负责对应 AC section 的 worker 执行。
 2. worker 只能勾选自己 section 内已经完成且满足 AC-level source/scope、projection/handling、No-Scope Boundary、Mock Policy、task `Proof`、linked spec scenario、linked design obligation/decision、default runtime path verification 和 AC/task override 约束的任务。
-3. 主 agent 在统一 audit 中核对 worker 已勾选任务是否可信；若发现误勾选、proof 不足或 coverage 行未覆盖，必须指出并纠偏。
-4. 不需要更新独立 acceptance status；AC 的通过状态由该 section 下所有任务完成、required evidence 产出、coverage audit 通过共同表示。
+3. 主 agent 不核对 worker 已勾选任务是否可信，不复验 proof 是否充分，也不纠偏 worker 的勾选结果；worker 的 checkbox 更新和完成声明是该 AC section 的状态来源。
+4. 不需要更新独立 acceptance status；AC 的通过状态由负责该 section 的 worker 完成声明、checkbox 更新、required evidence 产出和 worker 报告的 coverage 状态共同表示。
 
 ## 最终汇报
 
@@ -120,10 +119,11 @@
 
 - 已完成 AC sections 和任务。
 - 每个 worker 的关键改动范围。
-- schema-aware `Acceptance-Driven Coverage` audit 结果。
-- 每个 AC 的 primary proof、required evidence、canonical evidence directories、evidence ledger、截图/DOM/API/DB/job/log/audit 等证据。
-- 执行的验证命令及结果。
+- worker 报告的 schema-aware `Acceptance-Driven Coverage` 状态。
+- worker 报告的每个 AC 的 primary proof、required evidence、canonical evidence directories、evidence ledger、截图/DOM/API/DB/job/log/audit 等证据。
+- worker 执行的验证命令及结果。
+- reviewer 的复核结论、复核命令及 pass/blocker 报告。
 - 两个生产 schema 的永久回归测试沉淀：新增或更新的 test/spec 文件、最小回归命令、CI tier，以及明确不测试的实现细节边界。
 - 未完成、被阻塞、未验证或需要用户决策的事项。
 
-不得在所有 AC section proof 未完成时声称 ready to archive。
+不得在所有 AC section proof 均由对应 worker 报告完成且 reviewer 返回 pass 前声称 ready to archive。
