@@ -80,6 +80,38 @@ def minimal_tasks(
 """
 
 
+def with_ac_section(markdown: str, *, ac_id: str, task_id: str, test_ids: str) -> str:
+    section = f"""## {ac_id} sample
+
+Test IDs:
+
+- {test_ids}
+
+- [ ] {task_id} 验证 sample。
+      Trace: inherits {ac_id}
+      Runtime Rows: RS-001
+      Test IDs: {test_ids}
+      Acceptance: sample behavior
+      Proof: observable evidence
+      Overrides: None
+
+"""
+    return markdown.replace("## Verification Appendix", section + "## Verification Appendix")
+
+
+def with_pending_second_ac_evidence(markdown: str) -> str:
+    row = (
+        '| T-002 | AC-002 | `pnpm exec vitest run apps/example/example.test.ts -t "T-002 sample"` '
+        '| `apps/example/example.test.ts` / `T-002 sample` | unit | RS-001, OP-001, ST-001 '
+        '| service-contract | no mocks | `pnpm exec vitest run apps/example/example.test.ts -t "T-002 sample"` '
+        '| behavior gap | Pending apply red run '
+        '| `pnpm exec vitest run apps/example/example.test.ts -t "T-002 sample"` '
+        '| red-required | None | `test-results/schema-test/AC-002/T-002/` '
+        '| Pending apply execution evidence: command.log |  | yes, root command | required behavior | no expansion |'
+    )
+    return markdown.replace("\n### Regression Test Deposit", f"\n{row}\n\n### Regression Test Deposit")
+
+
 class ValidateTasksQualityTests(unittest.TestCase):
     def run_in_temp(self, func) -> None:
         cwd = Path.cwd()
@@ -97,11 +129,70 @@ class ValidateTasksQualityTests(unittest.TestCase):
         findings = validator.validate(minimal_tasks(), allow_template=False, final=False)
         self.assertEqual([], [f for f in findings if f.severity == "error"], self.messages(findings))
 
+    def test_plan_gate_rejects_checkbox_test_id_owned_by_other_ac(self) -> None:
+        findings = validator.validate(
+            with_ac_section(minimal_tasks(), ac_id="AC-002", task_id="AC-002.1", test_ids="T-001"),
+            allow_template=False,
+            final=False,
+        )
+        text = self.messages(findings)
+        self.assertIn("非 owning AC Test ID", text)
+        self.assertIn("AC-001", text)
+        self.assertIn("AC-002", text)
+
     def test_final_gate_rejects_pending_apply_tdd(self) -> None:
         findings = validator.validate(minimal_tasks(), allow_template=False, final=True, evidence=True)
         text = self.messages(findings)
         self.assertIn("red-required", text)
         self.assertIn("Observed Red Failure", text)
+
+    def test_scoped_evidence_gate_ignores_pending_rows_from_other_ac(self) -> None:
+        findings = []
+        markdown = with_pending_second_ac_evidence(
+            minimal_tasks(
+                tdd_status="green-passed",
+                observed_red="red failed as expected: behavior gap",
+                evidence_produced="command.log",
+                deposit_status="deposited",
+            )
+        )
+        validator.validate_test_evidence(
+            markdown,
+            findings,
+            False,
+            False,
+            True,
+            "AC-001",
+            "schema-test",
+            set(),
+            validator.LedgerContract(set(), set(validator.TDD_STATUSES), set()),
+        )
+        self.assertNotIn("T-002 evidence/final audit", self.messages(findings))
+
+    def test_final_test_evidence_gate_remains_global_for_pending_rows(self) -> None:
+        findings = []
+        markdown = with_pending_second_ac_evidence(
+            minimal_tasks(
+                tdd_status="green-passed",
+                observed_red="red failed as expected: behavior gap",
+                evidence_produced="command.log",
+                deposit_status="deposited",
+            )
+        )
+        validator.validate_test_evidence(
+            markdown,
+            findings,
+            False,
+            True,
+            True,
+            "AC-001",
+            "schema-test",
+            set(),
+            validator.LedgerContract(set(), set(validator.TDD_STATUSES), set()),
+        )
+        text = self.messages(findings)
+        self.assertIn("T-002 evidence/final audit", text)
+        self.assertIn("T-002 final audit", text)
 
     def test_final_gate_allows_empty_optional_ledger(self) -> None:
         def scenario(root: Path) -> None:

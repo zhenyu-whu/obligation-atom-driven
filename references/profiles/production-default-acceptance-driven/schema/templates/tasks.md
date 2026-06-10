@@ -4,25 +4,26 @@
 本节是 proposal/spec/design 到 AC/task 的覆盖索引，不是 executable work。
 每个 material scope item、requirement scenario 或 material design decision 使用一行；不要用 aggregate rows 替代底层 scope items、scenarios 或 decisions。
 所有 Implementation Task IDs / Verification Task IDs 必须解析到下方实际 checkbox task；不要只引用 AC heading。
+区分 Scope/Artifact Owner AC 与 Runtime/Test Evidence Owner AC：两者不同时，本节只记录 handoff；AC-local Test IDs 和 checkbox Test IDs 仍必须留在 Test Evidence Matrix.AC ID 指定的 owning AC。
 -->
 
 ### Scope Item Coverage
 
 | Scope Item ID                                                          | Artifact Handling                                | Scope Summary                                             | Acceptance Slice IDs | Implementation Task IDs                               | Verification Task IDs                       | Acceptance Proof                                                                                                                    |
 | ---------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- | -------------------- | ----------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| <!-- SI-001；每行只能有一个 ID，不使用 SI-001-SI-010 这类 ranges。 --> | <!-- spec / guard / design / proof / context --> | <!-- 概述行为、preserve 或 stable negative boundary。 --> | <!-- AC-001 -->      | <!-- AC-001.1, AC-001.2；必须是实际 checkbox ID。 --> | <!-- AC-001.3；必须是实际 checkbox ID。 --> | <!-- user interaction、API test、data assertion、worker/realtime path、security check、rendered layout check 等 proof summary。 --> |
+| <!-- SI-001；每行只能有一个 ID，不使用 SI-001-SI-010 这类 ranges。 --> | <!-- spec / guard / design / proof / context --> | <!-- 概述行为、preserve 或 stable negative boundary。 --> | <!-- AC-001；若 scope/artifact owner 与 runtime proof owner 不同，列出相关 AC 并在 proof 写 handoff。 -->      | <!-- AC-001.1, AC-001.2；必须是实际 checkbox ID，通常属于 scope/artifact owner。 --> | <!-- AC-003.5；必须是实际 checkbox ID，必须属于 runtime/Test Evidence owner。 --> | <!-- user interaction、API test、data assertion、worker/realtime path、security check、rendered layout check 等 proof summary；跨 AC 时说明 handoff。 --> |
 
 ### Requirement / Scenario Coverage
 
 | Capability               | Requirement                     | Scenario                     | Scope Item IDs                                               | Artifact Handling                       | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof                                   |
 | ------------------------ | ------------------------------- | ---------------------------- | ------------------------------------------------------------ | --------------------------------------- | -------------------- | ----------------------- | --------------------- | -------------------------------------------------- |
-| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- SI-001, SI-002；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- spec scenario / guard handling --> | <!-- AC-001 -->      | <!-- AC-001.1 -->       | <!-- AC-001.3 -->     | <!-- scenario-level observable proof summary。 --> |
+| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- SI-001, SI-002；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- spec scenario / guard handling --> | <!-- AC-001；跨 AC proof 时列出 scope/artifact owner 与 runtime owner。 -->      | <!-- AC-001.1 -->       | <!-- AC-003.5；verification task 必须属于 Test Evidence owner。 -->     | <!-- scenario-level observable proof summary；跨 AC 时说明 handoff。 --> |
 
 ### Design Decision Coverage
 
 | Design Section                                       | Design Decision                                                           | Scope Item IDs                                                                  | Artifact Handling                      | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof                         |
 | ---------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- | -------------------- | ----------------------- | --------------------- | ---------------------------------------- |
-| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification decision。 --> | <!-- SI-001, SI-002, 或 Not applicable；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- design / proof / guard / spec --> | <!-- AC-001 -->      | <!-- AC-001.1 -->       | <!-- AC-001.3 -->     | <!-- design decision proof summary。 --> |
+| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification decision。 --> | <!-- SI-001, SI-002, 或 Not applicable；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- design / proof / guard / spec --> | <!-- AC-001；跨 AC proof 时列出 scope/artifact owner 与 runtime owner。 -->      | <!-- AC-001.1 -->       | <!-- AC-003.5；verification task 必须属于 Test Evidence owner。 -->     | <!-- design decision proof summary；跨 AC 时说明 handoff。 --> |
 
 ## Runtime Acceptance Index
 
@@ -31,6 +32,7 @@
 它只把 AC 路由到 Appendix 中的 row IDs、Test IDs 和 AC dependency graph；不要在这里重复 fixed commands、证据目录、ledger、fixture 或 row 详情。
 如果 change 不触及 web/runtime behavior，写明 Not applicable 和理由。
 Test IDs 必须使用 exact `T-###`，不得带 AC 编号、测试名称、slug 或字母后缀。
+Runtime/Test Evidence ownership 以本节和 Test Evidence Matrix 为准；coverage table 的跨 AC 引用不能把 Test ID 重新分配给 scope/artifact owner AC。
 -->
 
 ### AC Runtime Ownership Index
@@ -68,6 +70,7 @@ Runtime Rows Owned:
 Test IDs:
 
 - <!-- T-001, T-002；只列本 AC 拥有的 Test IDs，必须匹配 exact T-###。 -->
+- <!-- 如果本 AC 只是 scope/artifact owner，而 runtime proof 由其他 AC 拥有，不要列其他 AC 的 Test ID；在 Required Evidence / coverage row 写 handoff summary。 -->
 
 Prerequisites:
 
@@ -111,7 +114,7 @@ Mock Policy:
 - [ ] AC-001.1 <!-- 用中文描述此 acceptance slice 下的具体实现或验证任务。 -->
       Trace: <!-- 默认写 inherits AC-001；只有当本 task 的 scope/spec/design/no-scope/mock 边界比 AC 更窄或有例外时才展开 override。 -->
       Runtime Rows: <!-- 本 task 负责或最终验证覆盖的 RS-/OP-/ST-/CH- row IDs；无 runtime 行为时写 Not applicable 并给出理由。 -->
-      Test IDs: <!-- 本 task 建立、维护或由 final verification 执行的 T-### row IDs；不得带名称后缀。 -->
+      Test IDs: <!-- 本 task 建立、维护或由 final verification 执行的 T-### row IDs；只能列 Test Evidence Matrix 中 AC ID 等于本 AC 的 Test IDs，不得带名称后缀。 -->
       Acceptance: <!-- 此任务贡献证明的具体可验收行为。 -->
       Proof: <!-- proof 摘要。用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback；static markup / data-testid / screenshot 只能补充。 -->
       Overrides: <!-- 若不继承 AC-level source/no-scope/mock boundary，在此列 exact override；否则写 None。 -->

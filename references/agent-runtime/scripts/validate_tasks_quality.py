@@ -17,6 +17,9 @@ from pathlib import Path
 
 TEST_ID_RE = re.compile(r"\bT-[0-9]{3}\b")
 AC_ID_RE = re.compile(r"^AC-[0-9]{3}$")
+AC_HEADING_RE = re.compile(r"^##\s+(AC-[0-9]{3})\b")
+TASK_CHECKBOX_RE = re.compile(r"^-\s+\[[ xX]\]\s+(AC-[0-9]{3}\.[0-9]+)\b")
+FIELD_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z /-]*:\s*(?:$|<!--)")
 EVIDENCE_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/?$")
 LEDGER_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/ledger\.json$")
 BAD_TEST_ID_RE = re.compile(r"\bT-(?:AC[0-9]|[0-9]{3}[A-Za-z-])")
@@ -687,6 +690,7 @@ def validate_test_evidence(
     allow_template: bool,
     final: bool,
     strict_evidence: bool,
+    scope_ac: str | None,
     change_slug: str,
     reported_ownership: set[str],
     ledger_contract: LedgerContract,
@@ -797,23 +801,112 @@ def validate_test_evidence(
                 )
         scope_role = row.get("Scope Role", "").lower()
         tdd_status = row.get("TDD Status", "")
+        strict_this_row = strict_evidence and (
+            final or scope_ac is None or strip_cell_markup(ac_id) == scope_ac
+        )
         if tdd_status and tdd_status not in ledger_contract.tdd_statuses:
             findings.append(Finding("error", f"{test_id or '<unknown>'} TDD Status 不合法：{tdd_status}"))
         if "required behavior" in scope_role:
-            if strict_evidence and tdd_status == "red-required":
+            if strict_this_row and tdd_status == "red-required":
                 findings.append(Finding("error", f"{test_id} evidence/final audit 时 required behavior 不能停留在 red-required"))
             if final and tdd_status not in FINAL_TDD_STATUSES:
                 findings.append(Finding("error", f"{test_id} final audit 时 required behavior TDD Status 必须是 green-passed / not-applicable / blocked"))
             tdd_cols = ["Red Command", "Expected Red Failure", "Green Command", "TDD Status"]
-            if strict_evidence and tdd_status not in {"not-applicable", "blocked"}:
+            if strict_this_row and tdd_status not in {"not-applicable", "blocked"}:
                 tdd_cols.append("Observed Red Failure")
             for col in tdd_cols:
                 if not row.get(col, "").strip():
                     findings.append(Finding("error", f"{test_id} required behavior 缺少 TDD 字段：{col}"))
             observed_red = row.get("Observed Red Failure", "")
-            if strict_evidence and tdd_status not in {"not-applicable", "blocked"} and mentions_pending_apply(observed_red):
+            if strict_this_row and tdd_status not in {"not-applicable", "blocked"} and mentions_pending_apply(observed_red):
                 findings.append(Finding("error", f"{test_id} evidence/final audit 时 Observed Red Failure 不能仍是 apply-pending"))
     return seen, effective_rows
+
+
+def validate_ac_local_test_id_ownership(
+    markdown: str,
+    evidence_rows: list[dict[str, str]],
+    findings: list[Finding],
+    allow_template: bool,
+) -> None:
+    evidence_owner_by_id = {
+        strip_cell_markup(row.get("Test ID", "")): strip_cell_markup(row.get("AC ID", ""))
+        for row in evidence_rows
+        if strip_cell_markup(row.get("Test ID", ""))
+    }
+    if not evidence_owner_by_id:
+        return
+
+    def check_ids(owner_ac: str, label: str, text: str) -> None:
+        if allow_template and "<!--" in text:
+            return
+        for test_id in TEST_ID_RE.findall(text):
+            evidence_owner = evidence_owner_by_id.get(test_id)
+            if evidence_owner is None:
+                findings.append(Finding("error", f"{label} 引用了未登记的 Test ID：{test_id}"))
+            elif evidence_owner != owner_ac:
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{label} 引用了非 owning AC Test ID：{test_id} 属于 {evidence_owner}，不能出现在 {owner_ac}",
+                    )
+                )
+
+    current_ac: str | None = None
+    current_task: tuple[str, str] | None = None
+    collecting_ac_test_ids = False
+
+    for raw_line in markdown.splitlines():
+        line = raw_line.rstrip()
+        ac_heading = AC_HEADING_RE.match(line)
+        if ac_heading:
+            current_ac = ac_heading.group(1)
+            current_task = None
+            collecting_ac_test_ids = False
+            continue
+        if line.startswith("## "):
+            current_ac = None
+            current_task = None
+            collecting_ac_test_ids = False
+            continue
+        if current_ac is None:
+            continue
+
+        checkbox = TASK_CHECKBOX_RE.match(line)
+        if checkbox:
+            task_id = checkbox.group(1)
+            task_ac = task_id.split(".", 1)[0]
+            if task_ac != current_ac:
+                findings.append(Finding("error", f"{task_id} 不在 matching AC section 中：当前 section 是 {current_ac}"))
+            current_task = (task_id, task_ac)
+            collecting_ac_test_ids = False
+            continue
+
+        if current_task is not None:
+            if not line.strip():
+                current_task = None
+                continue
+            field = re.match(r"^\s*Test IDs:\s*(.*)$", line)
+            if field:
+                task_id, task_ac = current_task
+                check_ids(task_ac, f"{task_id} checkbox Test IDs", field.group(1))
+            continue
+
+        field = re.match(r"^Test IDs:\s*(.*)$", line)
+        if field:
+            collecting_ac_test_ids = True
+            check_ids(current_ac, f"{current_ac} section Test IDs", field.group(1))
+            continue
+        if collecting_ac_test_ids:
+            if not line.strip():
+                continue
+            if FIELD_HEADING_RE.match(line):
+                collecting_ac_test_ids = False
+                continue
+            if line.lstrip().startswith("-"):
+                check_ids(current_ac, f"{current_ac} section Test IDs", line)
+                continue
+            collecting_ac_test_ids = False
 
 
 def validate_regression_deposit(
@@ -1330,10 +1423,12 @@ def validate(
         allow_template,
         final,
         strict_evidence,
+        ac_id,
         change_slug,
         reported_ownership,
         ledger_contract,
     )
+    validate_ac_local_test_id_ownership(markdown, evidence_rows, findings, allow_template)
     validate_default_path_contracts(evidence_rows, findings)
     deposit_by_id = validate_regression_deposit(
         markdown,
