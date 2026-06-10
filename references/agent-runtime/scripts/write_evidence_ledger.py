@@ -68,6 +68,14 @@ def strip_cell_markup(value: str) -> str:
     return value.strip().strip("`").strip()
 
 
+def row_value(row: dict[str, str], *names: str) -> str:
+    for name in names:
+        value = row.get(name)
+        if value is not None:
+            return value
+    return ""
+
+
 def extract_change_slug(markdown: str) -> str:
     title = re.search(r"^#\s+Implementation Tasks:\s*([A-Za-z0-9_.-]+)\s*$", markdown, re.MULTILINE)
     if title:
@@ -215,7 +223,8 @@ def main() -> int:
                     ],
                 ],
             ),
-            "defaultPathFacts": existing.get("defaultPathFacts") or {"defaultPath": evidence_row.get("Default Path?", "")},
+            "defaultPathFacts": existing.get("defaultPathFacts")
+            or {"defaultPathLevel": row_value(evidence_row, "Default Path Level", "Default Path?")},
             "fixtureBoundary": evidence_row.get("Fixture Boundary", "") or deposit_row.get("Fixture Boundary", ""),
             "tddStatus": evidence_row.get("TDD Status", ""),
             "notApplicableReason": existing.get("notApplicableReason"),

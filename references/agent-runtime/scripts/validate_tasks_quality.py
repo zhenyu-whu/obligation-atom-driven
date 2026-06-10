@@ -85,6 +85,103 @@ BROWSER_E2E_MARKERS = [
     "getByRole(",
     "locator(",
 ]
+COMPONENT_HARNESS_MARKERS = [
+    "@testing-library/react",
+    "render(",
+    "mount(",
+    "hydrateRoot(",
+    "screen.getByRole",
+    "screen.findByRole",
+    "screen.getByLabelText",
+    "userEvent.",
+    "fireEvent.",
+]
+ACCESSIBLE_ORACLE_MARKERS = [
+    "getByRole",
+    "findByRole",
+    "queryByRole",
+    "getByLabelText",
+    "findByLabelText",
+    "getByText",
+    "findByText",
+    "toHaveTextContent",
+    "toHaveAccessibleName",
+    "toHaveURL",
+]
+IMPLEMENTATION_DETAIL_ASSERTION_MARKERS = [
+    "getByTestId",
+    "queryByTestId",
+    "findByTestId",
+    "data-testid",
+    "toHaveClass",
+    "className",
+    "classList",
+    "toMatchSnapshot",
+]
+DB_INTEGRATION_MARKERS = [
+    "prisma",
+    "db.",
+    "database",
+    "repository",
+    "transaction",
+    "$transaction",
+    "sql",
+    "postgres",
+    "redis",
+    "testcontainer",
+]
+SECURITY_NEGATIVE_MARKERS = [
+    "unauthorized",
+    "forbidden",
+    "permission",
+    "capability",
+    "tenant",
+    "redact",
+    "privacy",
+    "sensitive",
+    "audit",
+    "401",
+    "403",
+]
+DEFAULT_PATH_LEVELS = {
+    "http-app",
+    "route-handler-real-service",
+    "component-user-flow",
+    "db-integration",
+    "service-contract",
+    "controller-contract",
+    "browser-e2e",
+    "static-analysis",
+}
+DEFAULT_PRODUCTION_PATH_LEVELS = {
+    "http-app",
+    "route-handler-real-service",
+    "component-user-flow",
+    "db-integration",
+    "browser-e2e",
+}
+ROUTE_DEFAULT_REQUIRED_TERMS = [
+    "route",
+    "api",
+    "auth",
+    "authorization",
+    "permission",
+    "session",
+    "query",
+    "tenant",
+    "di",
+    "dependency",
+    "request",
+    "dto",
+]
+APPLY_PENDING_TERMS = [
+    "pending apply",
+    "apply 阶段",
+    "待 apply",
+    "tbd",
+    "not run yet",
+    "未执行",
+]
 IMPLEMENTATION_DETAIL_TERMS = [
     "private helper",
     "mock call",
@@ -131,7 +228,7 @@ LOWER_LAYER_TERMS = [
 TEST_FILE_PATH_RE = re.compile(
     r"(?:^|[\s`])"
     r"((?:apps|packages|tests|openspec/changes|test-results)/[^\s`|,;，。]+?\."
-    r"(?:test|spec)\.(?:ts|tsx|js|jsx|mjs|cjs))"
+    r"(?:test|spec)\.(?:tsx|ts|jsx|js|mjs|cjs))"
 )
 OWNER_LOCAL_LAYERS = {
     "unit",
@@ -269,6 +366,77 @@ def strip_cell_markup(value: str) -> str:
     return value.strip().strip("`").strip()
 
 
+def row_value(row: dict[str, str], *names: str) -> str:
+    for name in names:
+        value = row.get(name)
+        if value is not None:
+            return value
+    return ""
+
+
+def mentions_pending_apply(value: str) -> bool:
+    lowered = value.lower()
+    return any(term in lowered for term in APPLY_PENDING_TERMS)
+
+
+def row_text(row: dict[str, str]) -> str:
+    return " ".join(row.values())
+
+
+def default_path_level(row: dict[str, str]) -> str:
+    raw = strip_cell_markup(row_value(row, "Default Path Level", "Default Path?"))
+    if not raw:
+        return ""
+    first = re.split(r"[\s,，;；:：]+", raw.lower(), maxsplit=1)[0]
+    if first in DEFAULT_PATH_LEVELS:
+        return first
+    if raw.lower().startswith("yes"):
+        return "legacy-yes"
+    if raw.lower().startswith("no"):
+        return "legacy-no"
+    return first
+
+
+def has_default_path_level_header(header: list[str]) -> bool:
+    return "Default Path Level" in header
+
+
+def route_default_path_required(row: dict[str, str]) -> bool:
+    text = row_text(row).lower()
+    return any(term in text for term in ROUTE_DEFAULT_REQUIRED_TERMS)
+
+
+def text_has_default_path_pairing(value: str) -> bool:
+    lowered = value.lower()
+    return (
+        "paired" in lowered
+        or "default-path" in lowered
+        or "default path" in lowered
+        or "production path" in lowered
+        or "http-app" in lowered
+        or "route-handler-real-service" in lowered
+    ) and bool(TEST_ID_RE.search(value))
+
+
+def test_file_sources(test_file_field: str) -> list[tuple[str, str]]:
+    sources: list[tuple[str, str]] = []
+    for path_text in extract_test_file_paths(test_file_field):
+        path = Path(path_text)
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            sources.append((path_text, path.read_text(encoding="utf-8")))
+        except OSError:
+            continue
+    return sources
+
+
+def source_has_implementation_detail_primary_oracle(source: str) -> bool:
+    if not any(marker in source for marker in IMPLEMENTATION_DETAIL_ASSERTION_MARKERS):
+        return False
+    return not any(marker in source for marker in ACCESSIBLE_ORACLE_MARKERS)
+
+
 def validate_fixed_command_shape(
     *, test_id: str, field_name: str, command: str, findings: list[Finding]
 ) -> None:
@@ -300,14 +468,7 @@ def validate_browser_e2e_file(
     if not paths:
         findings.append(Finding("error", f"{test_id} browser E2E 缺少可检查的 Test File path"))
         return
-    for path_text in paths:
-        path = Path(path_text)
-        if not path.exists():
-            continue
-        try:
-            source = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
+    for path_text, source in test_file_sources(test_file_field):
         if not any(marker in source for marker in BROWSER_E2E_MARKERS):
             findings.append(
                 Finding(
@@ -316,6 +477,71 @@ def validate_browser_e2e_file(
                     "直接调用 route handler、repository 或状态机只能登记为 integration/component/unit 层，不能登记为 browser E2E。",
                 )
             )
+        if source_has_implementation_detail_primary_oracle(source):
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} browser E2E 的 {path_text} 主要使用 data-testid/className/snapshot 等实现细节断言，"
+                    "必须改用用户可见 role/label/text/readback/URL 等行为 oracle。",
+                )
+            )
+
+
+def validate_component_file(
+    *, test_id: str, test_file_field: str, findings: list[Finding]
+) -> None:
+    paths = extract_test_file_paths(test_file_field)
+    if not paths:
+        findings.append(Finding("error", f"{test_id} component 测试缺少可检查的 Test File path"))
+        return
+    for path_text, source in test_file_sources(test_file_field):
+        if not any(marker in source for marker in COMPONENT_HARNESS_MARKERS):
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} Layer 标为 component，但 {path_text} 未发现交互式 component harness markers；"
+                    "静态 markup、状态机或 snapshot 只能登记为 unit/static supplemental proof。",
+                )
+            )
+        if source_has_implementation_detail_primary_oracle(source):
+            findings.append(
+                Finding(
+                    "error",
+                    f"{test_id} component 测试的 {path_text} 主要使用 data-testid/className/snapshot 等实现细节断言，"
+                    "必须改用 role/label/text/user event 后的可观察行为 oracle。",
+                )
+            )
+
+
+def validate_layer_specific_test_file(
+    *, test_id: str, layer: str, test_file_field: str, findings: list[Finding]
+) -> None:
+    normalized = layer.strip().lower()
+    if normalized == "browser e2e":
+        validate_browser_e2e_file(test_id=test_id, test_file_field=test_file_field, findings=findings)
+        return
+    if normalized == "component":
+        validate_component_file(test_id=test_id, test_file_field=test_file_field, findings=findings)
+        return
+
+    for path_text, source in test_file_sources(test_file_field):
+        lowered = source.lower()
+        if normalized in {"db integration", "db/integration"}:
+            if "mock" in lowered and not any(marker in lowered for marker in DB_INTEGRATION_MARKERS):
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id} DB integration 的 {path_text} 只呈现 mock/fixture 路径，缺少 DB/repository/transaction/readback marker。",
+                    )
+                )
+        if normalized == "security/negative":
+            if not any(marker in lowered for marker in SECURITY_NEGATIVE_MARKERS):
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id} security/negative 的 {path_text} 缺少 unauthorized/tenant/redaction/audit 等安全负向 marker。",
+                    )
+                )
 
 
 def validate_test_file_ownership(
@@ -460,6 +686,7 @@ def validate_test_evidence(
     findings: list[Finding],
     allow_template: bool,
     final: bool,
+    strict_evidence: bool,
     change_slug: str,
     reported_ownership: set[str],
     ledger_contract: LedgerContract,
@@ -472,7 +699,6 @@ def validate_test_evidence(
         "Test File / Name",
         "Layer",
         "Covers Rows",
-        "Default Path?",
         "Fixture Boundary",
         "Red Command",
         "Expected Red Failure",
@@ -493,6 +719,8 @@ def validate_test_evidence(
     missing = sorted(required_cols - set(header))
     if missing:
         findings.append(Finding("error", f"Test Evidence Matrix 缺少列：{', '.join(missing)}"))
+    if "Default Path Level" not in header and "Default Path?" not in header:
+        findings.append(Finding("error", "Test Evidence Matrix 缺少列：Default Path Level（旧表可兼容 Default Path?）"))
 
     seen: set[str] = set()
     effective_rows: list[dict[str, str]] = []
@@ -544,28 +772,47 @@ def validate_test_evidence(
             if not ledger_file.startswith(expected_prefix):
                 findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 不在 Evidence Directory 下"))
         evidence_produced = row.get("Evidence Produced", "")
-        if evidence_produced and not text_mentions_execution_evidence(evidence_produced):
+        if (
+            evidence_produced
+            and not mentions_pending_apply(evidence_produced)
+            and not text_mentions_execution_evidence(evidence_produced)
+        ):
             findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Produced 必须包含 command.log 或等价 CI/runner 执行日志"))
         if not row.get("CI Runnable?", "").strip():
             findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 CI Runnable? 说明"))
-        if layer.strip().lower() == "browser e2e":
-            validate_browser_e2e_file(
-                test_id=test_id or "<unknown>",
-                test_file_field=row.get("Test File / Name", ""),
-                findings=findings,
-            )
+        validate_layer_specific_test_file(
+            test_id=test_id or "<unknown>",
+            layer=layer,
+            test_file_field=row.get("Test File / Name", ""),
+            findings=findings,
+        )
+        if has_default_path_level_header(header):
+            level = default_path_level(row)
+            if level and level not in DEFAULT_PATH_LEVELS:
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{test_id or '<unknown>'} Default Path Level 不合法：{row.get('Default Path Level', '')}",
+                    )
+                )
         scope_role = row.get("Scope Role", "").lower()
         tdd_status = row.get("TDD Status", "")
         if tdd_status and tdd_status not in ledger_contract.tdd_statuses:
             findings.append(Finding("error", f"{test_id or '<unknown>'} TDD Status 不合法：{tdd_status}"))
         if "required behavior" in scope_role:
-            if tdd_status == "red-required":
-                findings.append(Finding("error", f"{test_id} required behavior 不能停留在 red-required"))
+            if strict_evidence and tdd_status == "red-required":
+                findings.append(Finding("error", f"{test_id} evidence/final audit 时 required behavior 不能停留在 red-required"))
             if final and tdd_status not in FINAL_TDD_STATUSES:
                 findings.append(Finding("error", f"{test_id} final audit 时 required behavior TDD Status 必须是 green-passed / not-applicable / blocked"))
-            for col in ["Red Command", "Expected Red Failure", "Observed Red Failure", "Green Command", "TDD Status"]:
+            tdd_cols = ["Red Command", "Expected Red Failure", "Green Command", "TDD Status"]
+            if strict_evidence and tdd_status not in {"not-applicable", "blocked"}:
+                tdd_cols.append("Observed Red Failure")
+            for col in tdd_cols:
                 if not row.get(col, "").strip():
                     findings.append(Finding("error", f"{test_id} required behavior 缺少 TDD 字段：{col}"))
+            observed_red = row.get("Observed Red Failure", "")
+            if strict_evidence and tdd_status not in {"not-applicable", "blocked"} and mentions_pending_apply(observed_red):
+                findings.append(Finding("error", f"{test_id} evidence/final audit 时 Observed Red Failure 不能仍是 apply-pending"))
     return seen, effective_rows
 
 
@@ -703,6 +950,42 @@ def validate_evidence_deposit_consistency(
             )
 
 
+def validate_default_path_contracts(
+    evidence_rows: list[dict[str, str]],
+    findings: list[Finding],
+) -> None:
+    route_default_path_ids_by_ac: dict[str, set[str]] = {}
+    for row in evidence_rows:
+        level = default_path_level(row)
+        if level in {"http-app", "route-handler-real-service"} or level == "legacy-yes":
+            route_default_path_ids_by_ac.setdefault(strip_cell_markup(row.get("AC ID", "")), set()).add(
+                strip_cell_markup(row.get("Test ID", ""))
+            )
+
+    for row in evidence_rows:
+        test_id = strip_cell_markup(row.get("Test ID", ""))
+        ac_id = strip_cell_markup(row.get("AC ID", ""))
+        layer = row.get("Layer", "").strip().lower()
+        level = default_path_level(row)
+        if layer != "route/api contract":
+            continue
+        if not route_default_path_required(row):
+            continue
+        if level in {"http-app", "route-handler-real-service", "legacy-yes"}:
+            continue
+        paired_ids = route_default_path_ids_by_ac.get(ac_id, set()) - {test_id}
+        fixture = row.get("Fixture Boundary", "")
+        if level == "controller-contract" and (paired_ids or text_has_default_path_pairing(fixture)):
+            continue
+        findings.append(
+            Finding(
+                "error",
+                f"{test_id} route/API contract 涉及 route/auth/query/tenant/DI 等默认路径语义，"
+                "不能只用 controller-contract；必须配对 http-app 或 route-handler-real-service Test ID。",
+            )
+        )
+
+
 def read_json(path: Path) -> dict[str, object] | None:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -802,6 +1085,7 @@ def validate_ledgers(
     ledger_contract: LedgerContract,
     scope_ac: str | None = None,
     check_orphans: bool = False,
+    strict_declared_ledgers: bool = False,
 ) -> None:
     declared_ids = {row.get("Test ID", "") for row in evidence_rows}
     scoped_rows = [
@@ -849,7 +1133,8 @@ def validate_ledgers(
             except ValueError as exc:
                 findings.append(Finding("error", str(exc)))
             if ledger is None and ledger_field:
-                findings.append(Finding("warning", f"{test_id} 声明了可选 audit ledger，但文件不存在：{ledger_field}"))
+                severity = "error" if strict_declared_ledgers else "warning"
+                findings.append(Finding(severity, f"{test_id} 声明了可选 audit ledger，但文件不存在：{ledger_field}"))
 
         if ledger is not None:
             missing = sorted(field for field in ledger_contract.required_fields if field not in ledger)
@@ -953,8 +1238,22 @@ def validate_runtime_not_applicable(markdown: str, findings: list[Finding], allo
                 findings.append(Finding("error", f"{heading} 的 Not applicable 行缺少 source/scope-backed 理由"))
 
 
-def validate_high_risk_layers(markdown: str, findings: list[Finding], allow_template: bool) -> None:
-    runtime_text_parts: list[str] = []
+def validate_high_risk_layers(
+    markdown: str,
+    findings: list[Finding],
+    allow_template: bool,
+    evidence_rows: list[dict[str, str]],
+) -> None:
+    evidence_by_id = {
+        strip_cell_markup(row.get("Test ID", "")): row
+        for row in evidence_rows
+        if strip_cell_markup(row.get("Test ID", ""))
+    }
+    any_high_risk_runtime = False
+    any_lower_layer = any(
+        any(term in row.get("Layer", "").lower() for term in LOWER_LAYER_TERMS)
+        for row in evidence_rows
+    )
     for heading in [
         "Runtime Surface Inventory",
         "Operation Coverage Matrix",
@@ -966,20 +1265,37 @@ def validate_high_risk_layers(markdown: str, findings: list[Finding], allow_temp
             if allow_template and is_template_row(list(row.values())):
                 continue
             row_text = " ".join(row.values())
-            if "Not applicable" not in row_text:
-                runtime_text_parts.append(row_text)
+            if "Not applicable" in row_text:
+                continue
+            if "proof-only" in row.get("Scope Role", "").lower():
+                continue
+            lowered = row_text.lower()
+            if not any(term in lowered for term in HIGH_RISK_RUNTIME_TERMS):
+                continue
+            any_high_risk_runtime = True
+            test_ids = TEST_ID_RE.findall(row.get("Test IDs", ""))
+            if not test_ids:
+                continue
+            matching_rows = [evidence_by_id[test_id] for test_id in test_ids if test_id in evidence_by_id]
+            if not matching_rows:
+                continue
+            if not any(any(term in evidence.get("Layer", "").lower() for term in LOWER_LAYER_TERMS) for evidence in matching_rows):
+                row_id = (
+                    row.get("Surface ID")
+                    or row.get("Operation ID")
+                    or row.get("State ID")
+                    or row.get("Chain ID")
+                    or heading
+                )
+                findings.append(
+                    Finding(
+                        "error",
+                        f"{row_id} 检测到 API/DB/auth/security/worker/storage 等高风险 runtime 语义，"
+                        "但其 Test IDs 未包含可低层稳定断言的 unit/component/API/DB/security/config 测试层。",
+                    )
+                )
 
-    runtime_text = " ".join(runtime_text_parts).lower()
-    if not any(term in runtime_text for term in HIGH_RISK_RUNTIME_TERMS):
-        return
-
-    _header, rows = extract_table(markdown, "Test Evidence Matrix")
-    layer_text = " ".join(
-        row.get("Layer", "").lower()
-        for row in rows
-        if not (allow_template and is_template_row(list(row.values())))
-    )
-    if not any(term in layer_text for term in LOWER_LAYER_TERMS):
+    if any_high_risk_runtime and not any_lower_layer:
         findings.append(
             Finding(
                 "error",
@@ -1006,16 +1322,19 @@ def validate(
     bad_id_source = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL) if allow_template else markdown
     if BAD_TEST_ID_RE.search(bad_id_source):
         findings.append(Finding("error", "发现带名称、AC 编号、slug 或字母后缀的非法 Test ID"))
+    strict_evidence = final or evidence or ac_id is not None
     validate_test_layer_plan(markdown, findings, allow_template)
     evidence_ids, evidence_rows = validate_test_evidence(
         markdown,
         findings,
         allow_template,
         final,
+        strict_evidence,
         change_slug,
         reported_ownership,
         ledger_contract,
     )
+    validate_default_path_contracts(evidence_rows, findings)
     deposit_by_id = validate_regression_deposit(
         markdown,
         evidence_ids,
@@ -1045,8 +1364,9 @@ def validate(
             change_slug=change_slug,
             findings=findings,
             ledger_contract=ledger_contract,
+            strict_declared_ledgers=False,
         )
-    if (final or evidence or ac_id) and not allow_template:
+    if strict_evidence and not allow_template:
         scoped_rows = (
             [row for row in evidence_rows if strip_cell_markup(row.get("AC ID", "")) == ac_id]
             if ac_id
@@ -1060,9 +1380,10 @@ def validate(
             ledger_contract=ledger_contract,
             scope_ac=ac_id,
             check_orphans=True,
+            strict_declared_ledgers=True,
         )
     validate_runtime_not_applicable(markdown, findings, allow_template)
-    validate_high_risk_layers(markdown, findings, allow_template)
+    validate_high_risk_layers(markdown, findings, allow_template, evidence_rows)
     return findings
 
 
@@ -1073,14 +1394,30 @@ def main() -> int:
     parser.add_argument("--final", action="store_true", help="treat required regression deposits as errors")
     parser.add_argument("--evidence", action="store_true", help="validate execution evidence and optional audit ledgers for the selected scope")
     parser.add_argument("--ac", help="validate evidence only for one AC-### scope")
+    parser.add_argument(
+        "--gate",
+        choices=["plan", "evidence", "final"],
+        help="explicit validation gate; defaults to plan unless --evidence, --ac, or --final is used",
+    )
     args = parser.parse_args()
+
+    final = args.final
+    evidence = args.evidence
+    if args.gate == "final":
+        final = True
+        evidence = True
+    elif args.gate == "evidence":
+        evidence = True
+    elif args.gate == "plan":
+        final = False
+        evidence = False
 
     markdown = args.tasks_md.read_text(encoding="utf-8")
     findings = validate(
         markdown,
         allow_template=args.allow_template,
-        final=args.final,
-        evidence=args.evidence,
+        final=final,
+        evidence=evidence,
         ac_id=args.ac,
     )
     for finding in findings:

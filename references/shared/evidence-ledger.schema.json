@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openspec.local/schemas/shared/evidence-ledger.schema.json",
   "title": "OpenSpec Optional Apply Audit Ledger",
-  "description": "Optional apply/reviewer/archive audit receipt contract shared by production OpenSpec schemas, validators, and ledger generation tools. Ordinary test commands are not required to generate this file; current worktree execution evidence remains the source of truth.",
+  "description": "Optional apply/reviewer/archive audit receipt contract shared by production OpenSpec schemas, validators, and ledger generation tools. Ordinary test commands are not required to generate this file; current worktree execution evidence remains the source of truth. Test Evidence Matrix may leave Ledger File empty; if it declares a ledger path, evidence/final validation requires this file to exist and match the matrix.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -102,7 +102,8 @@
       "minItems": 1
     },
     "defaultPathFacts": {
-      "type": ["object", "string", "array"]
+      "type": ["object", "string", "array"],
+      "description": "Default-path audit facts, preferably including defaultPathLevel from Test Evidence Matrix. Allowed levels are http-app, route-handler-real-service, component-user-flow, db-integration, service-contract, controller-contract, browser-e2e, and static-analysis."
     },
     "fixtureBoundary": {
       "type": "string",

@@ -58,6 +58,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `openspec/schemas/shared/tdd-regression-gates.md` exists.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
    - `openspec/agent-runtime/scripts/validate_tasks_quality.py` and `openspec/agent-runtime/scripts/write_evidence_ledger.py` exist when bundled.
+   - `openspec/agent-runtime/scripts/test_validate_tasks_quality.py` exists when bundled.
    - `openspec/schemas/shared/evidence-ledger.schema.json` exists.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
@@ -72,6 +73,7 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
 - `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker` and `reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades.
 - `references/agent-runtime/scripts/validate_tasks_quality.py`: required production helper for checking generated `tasks.md` testing-quality gates, Test IDs, evidence matrix shape, execution evidence, optional ledger consistency, TDD final status, and regression deposit status.
+- `references/agent-runtime/scripts/test_validate_tasks_quality.py`: optional regression tests for the bundled validator phase gates, copied with runtime scripts when present.
 - `references/agent-runtime/scripts/write_evidence_ledger.py`: optional production helper for generating `test-results/<change>/<AC>/<T>/ledger.json` audit receipts from `tasks.md` evidence and regression deposit rows.
 - `references/shared/tdd-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/tdd-regression-gates.md`.
 - `references/shared/evidence-ledger.schema.json`: shared machine-readable optional audit ledger contract used by both production schemas. It is synced to `openspec/schemas/shared/evidence-ledger.schema.json`.
