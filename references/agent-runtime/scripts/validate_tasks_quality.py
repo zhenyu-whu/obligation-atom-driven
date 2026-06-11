@@ -20,8 +20,7 @@ AC_ID_RE = re.compile(r"^AC-[0-9]{3}$")
 AC_HEADING_RE = re.compile(r"^##\s+(AC-[0-9]{3})\b")
 TASK_CHECKBOX_RE = re.compile(r"^-\s+\[[ xX]\]\s+(AC-[0-9]{3}\.[0-9]+)\b")
 FIELD_HEADING_RE = re.compile(r"^[A-Za-z][A-Za-z /-]*:\s*(?:$|<!--)")
-EVIDENCE_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/?$")
-LEDGER_RE = re.compile(r"test-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/ledger\.json$")
+EVIDENCE_RE = re.compile(r"openspec-results/[^/]+/AC-[0-9]{3}/T-[0-9]{3}/?$")
 BAD_TEST_ID_RE = re.compile(r"\bT-(?:AC[0-9]|[0-9]{3}[A-Za-z-])")
 PNPM_TEST_FORWARDED_ARGS_RE = re.compile(
     r"\bpnpm\b[^\n|`]*\b(?:run\s+)?test(?::[A-Za-z0-9:_-]+)?\b[^\n|`]*\s--\s+"
@@ -29,44 +28,11 @@ PNPM_TEST_FORWARDED_ARGS_RE = re.compile(
 PNPM_BROAD_TEST_RE = re.compile(
     r"^\s*`?pnpm(?:\s+--filter\s+\S+)?\s+(?:run\s+)?test(?::[A-Za-z0-9:_-]+)?\s*`?\s*$"
 )
-TDD_STATUSES = {
-    "red-required",
-    "red-observed",
-    "green-passed",
-    "not-applicable",
-    "blocked",
-}
-FINAL_TDD_STATUSES = {"green-passed", "not-applicable", "blocked"}
+EVIDENCE_STATUSES = {"planned", "passed", "not-applicable", "blocked"}
+FINAL_EVIDENCE_STATUSES = {"passed", "not-applicable", "blocked"}
 DEPOSIT_STATUSES = {"required", "deposited", "not-applicable", "blocked"}
-FALLBACK_LEDGER_REQUIRED_FIELDS = {
-    "testId",
-    "acId",
-    "behaviorContract",
-    "assertionOracle",
-    "fixedCommand",
-    "redCommand",
-    "expectedRedFailure",
-    "observedRedFailure",
-    "redResult",
-    "greenCommand",
-    "greenResult",
-    "regressionCommand",
-    "regressionResult",
-    "cwd",
-    "exitCode",
-    "startedAt",
-    "finishedAt",
-    "artifacts",
-    "defaultPathFacts",
-    "fixtureBoundary",
-    "tddStatus",
-    "notApplicableReason",
-}
-CANONICAL_LEDGER_ARTIFACTS = {"command.log"}
 EXECUTION_EVIDENCE_FILES = {
     "command.log",
-    "green-result.json",
-    "regression-result.json",
     "junit.xml",
     "results.xml",
     "report.json",
@@ -74,7 +40,7 @@ EXECUTION_EVIDENCE_FILES = {
     "results.json",
 }
 EXECUTION_EVIDENCE_NAME_RE = re.compile(
-    r"(?:command|green|regression|result|report|junit|vitest|playwright).*\.(?:log|json|xml)$",
+    r"(?:command|result|report|junit|vitest|playwright).*\.(?:log|json|xml)$",
     re.IGNORECASE,
 )
 BROWSER_E2E_MARKERS = [
@@ -230,7 +196,7 @@ LOWER_LAYER_TERMS = [
 ]
 TEST_FILE_PATH_RE = re.compile(
     r"(?:^|[\s`])"
-    r"((?:apps|packages|tests|openspec/changes|test-results)/[^\s`|,;，。]+?\."
+    r"((?:apps|packages|tests|openspec/changes|openspec-results|test-results)/[^\s`|,;，。]+?\."
     r"(?:test|spec)\.(?:tsx|ts|jsx|js|mjs|cjs))"
 )
 OWNER_LOCAL_LAYERS = {
@@ -255,81 +221,6 @@ class Finding:
     message: str
 
 
-@dataclass(frozen=True)
-class LedgerContract:
-    required_fields: set[str]
-    tdd_statuses: set[str]
-    canonical_artifacts: set[str]
-
-
-def find_ledger_schema_path() -> Path | None:
-    candidates = [
-        Path("openspec/schemas/shared/evidence-ledger.schema.json"),
-        Path(__file__).resolve().parents[2] / "schemas" / "shared" / "evidence-ledger.schema.json",
-        Path(__file__).resolve().parents[2] / "shared" / "evidence-ledger.schema.json",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def load_ledger_contract(findings: list[Finding]) -> LedgerContract:
-    path = find_ledger_schema_path()
-    if path is None:
-        findings.append(
-            Finding(
-                "error",
-                "缺少共享 ledger schema：openspec/schemas/shared/evidence-ledger.schema.json",
-            )
-        )
-        return LedgerContract(
-            required_fields=set(FALLBACK_LEDGER_REQUIRED_FIELDS),
-            tdd_statuses=set(TDD_STATUSES),
-            canonical_artifacts=set(CANONICAL_LEDGER_ARTIFACTS),
-        )
-    try:
-        schema = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        findings.append(Finding("error", f"{path} 无法读取或解析：{exc}"))
-        return LedgerContract(
-            required_fields=set(FALLBACK_LEDGER_REQUIRED_FIELDS),
-            tdd_statuses=set(TDD_STATUSES),
-            canonical_artifacts=set(CANONICAL_LEDGER_ARTIFACTS),
-        )
-
-    required = schema.get("required", [])
-    if not isinstance(required, list) or not all(isinstance(field, str) for field in required):
-        findings.append(Finding("error", f"{path} 缺少合法的 required 字段数组"))
-        required_fields = set(FALLBACK_LEDGER_REQUIRED_FIELDS)
-    else:
-        required_fields = set(required)
-
-    properties = schema.get("properties", {})
-    tdd_enum = {}
-    if isinstance(properties, dict):
-        tdd_enum = properties.get("tddStatus", {})
-    statuses = tdd_enum.get("enum", []) if isinstance(tdd_enum, dict) else []
-    if not isinstance(statuses, list) or not all(isinstance(status, str) for status in statuses):
-        findings.append(Finding("error", f"{path} 缺少合法的 tddStatus enum"))
-        tdd_statuses = set(TDD_STATUSES)
-    else:
-        tdd_statuses = set(statuses)
-
-    canonical = schema.get("x-canonicalArtifacts", list(CANONICAL_LEDGER_ARTIFACTS))
-    if not isinstance(canonical, list) or not all(isinstance(item, str) for item in canonical):
-        findings.append(Finding("error", f"{path} 缺少合法的 x-canonicalArtifacts"))
-        canonical_artifacts = set(CANONICAL_LEDGER_ARTIFACTS)
-    else:
-        canonical_artifacts = set(canonical)
-
-    return LedgerContract(
-        required_fields=required_fields,
-        tdd_statuses=tdd_statuses,
-        canonical_artifacts=canonical_artifacts,
-    )
-
-
 def split_row(line: str) -> list[str]:
     stripped = line.strip()
     if not stripped.startswith("|"):
@@ -349,7 +240,7 @@ def extract_change_slug(markdown: str) -> str:
     title = re.search(r"^#\s+Implementation Tasks:\s*([A-Za-z0-9_.-]+)\s*$", markdown, re.MULTILINE)
     if title:
         return title.group(1)
-    evidence_path = re.search(r"\btest-results/([^/]+)/AC-[0-9]{3}/T-[0-9]{3}/", markdown)
+    evidence_path = re.search(r"\bopenspec-results/([^/]+)/AC-[0-9]{3}/T-[0-9]{3}/", markdown)
     return evidence_path.group(1) if evidence_path else ""
 
 
@@ -566,8 +457,8 @@ def validate_test_file_ownership(
                 findings.append(Finding("error", f"{test_id} {field_name} 不能把永久测试代码放在 openspec/changes：{path}"))
                 reported.add(key)
             continue
-        if path.startswith("test-results/"):
-            key = f"{test_id}|{path}|test-results"
+        if path.startswith(("openspec-results/", "test-results/")):
+            key = f"{test_id}|{path}|result-evidence"
             if key not in reported:
                 findings.append(Finding("error", f"{test_id} {field_name} 不能把 evidence 目录当作永久测试文件：{path}"))
                 reported.add(key)
@@ -693,7 +584,6 @@ def validate_test_evidence(
     scope_ac: str | None,
     change_slug: str,
     reported_ownership: set[str],
-    ledger_contract: LedgerContract,
 ) -> tuple[set[str], list[dict[str, str]]]:
     header, rows = extract_table(markdown, "Test Evidence Matrix")
     required_cols = {
@@ -704,11 +594,8 @@ def validate_test_evidence(
         "Layer",
         "Covers Rows",
         "Fixture Boundary",
-        "Red Command",
-        "Expected Red Failure",
-        "Observed Red Failure",
-        "Green Command",
-        "TDD Status",
+        "Verification Expectation",
+        "Evidence Status",
         "Requires Tests Passed",
         "Evidence Directory",
         "Evidence Produced",
@@ -748,14 +635,15 @@ def validate_test_evidence(
             findings.append(Finding("error", f"{test_id or '<unknown>'} 的 Layer 必须是单一层级"))
         if not row.get("Fixed Command", "").strip():
             findings.append(Finding("error", f"{test_id or '<unknown>'} 缺少 Fixed Command"))
-        for col in ["Fixed Command", "Red Command", "Green Command"]:
+        command_cols = ["Fixed Command"]
+        for col in command_cols:
             validate_fixed_command_shape(
                 test_id=test_id or "<unknown>",
                 field_name=col,
                 command=row.get(col, ""),
                 findings=findings,
             )
-        for col in ["Test File / Name", "Fixed Command", "Red Command", "Green Command"]:
+        for col in ["Test File / Name", *command_cols]:
             validate_test_file_ownership(
                 test_id=test_id or "<unknown>",
                 layer=layer,
@@ -768,13 +656,6 @@ def validate_test_evidence(
         evidence_dir = row.get("Evidence Directory", "").strip("` ")
         if evidence_dir and not EVIDENCE_RE.search(evidence_dir):
             findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Directory 不符合 canonical 路径：{evidence_dir}"))
-        ledger_file = row.get("Ledger File", "").strip("` ")
-        if ledger_file and not LEDGER_RE.search(ledger_file):
-            findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 若填写，必须是 canonical ledger.json 路径：{ledger_file}"))
-        if evidence_dir and ledger_file:
-            expected_prefix = evidence_dir.rstrip("/") + "/"
-            if not ledger_file.startswith(expected_prefix):
-                findings.append(Finding("error", f"{test_id or '<unknown>'} Ledger File 不在 Evidence Directory 下"))
         evidence_produced = row.get("Evidence Produced", "")
         if (
             evidence_produced
@@ -800,26 +681,21 @@ def validate_test_evidence(
                     )
                 )
         scope_role = row.get("Scope Role", "").lower()
-        tdd_status = row.get("TDD Status", "")
+        evidence_status = row.get("Evidence Status", "")
         strict_this_row = strict_evidence and (
             final or scope_ac is None or strip_cell_markup(ac_id) == scope_ac
         )
-        if tdd_status and tdd_status not in ledger_contract.tdd_statuses:
-            findings.append(Finding("error", f"{test_id or '<unknown>'} TDD Status 不合法：{tdd_status}"))
+        if evidence_status and evidence_status not in EVIDENCE_STATUSES:
+            findings.append(Finding("error", f"{test_id or '<unknown>'} Evidence Status 不合法：{evidence_status}"))
         if "required behavior" in scope_role:
-            if strict_this_row and tdd_status == "red-required":
-                findings.append(Finding("error", f"{test_id} evidence/final audit 时 required behavior 不能停留在 red-required"))
-            if final and tdd_status not in FINAL_TDD_STATUSES:
-                findings.append(Finding("error", f"{test_id} final audit 时 required behavior TDD Status 必须是 green-passed / not-applicable / blocked"))
-            tdd_cols = ["Red Command", "Expected Red Failure", "Green Command", "TDD Status"]
-            if strict_this_row and tdd_status not in {"not-applicable", "blocked"}:
-                tdd_cols.append("Observed Red Failure")
-            for col in tdd_cols:
+            if strict_this_row and evidence_status == "planned":
+                findings.append(Finding("error", f"{test_id} evidence/final audit 时 required behavior 不能停留在 planned"))
+            if final and evidence_status not in FINAL_EVIDENCE_STATUSES:
+                findings.append(Finding("error", f"{test_id} final audit 时 required behavior Evidence Status 必须是 passed / not-applicable / blocked"))
+            evidence_cols = ["Verification Expectation", "Evidence Status"]
+            for col in evidence_cols:
                 if not row.get(col, "").strip():
-                    findings.append(Finding("error", f"{test_id} required behavior 缺少 TDD 字段：{col}"))
-            observed_red = row.get("Observed Red Failure", "")
-            if strict_this_row and tdd_status not in {"not-applicable", "blocked"} and mentions_pending_apply(observed_red):
-                findings.append(Finding("error", f"{test_id} evidence/final audit 时 Observed Red Failure 不能仍是 apply-pending"))
+                    findings.append(Finding("error", f"{test_id} required behavior 缺少 verification 字段：{col}"))
     return seen, effective_rows
 
 
@@ -966,8 +842,8 @@ def validate_regression_deposit(
                 if not row.get(col, "").strip():
                     findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Regression Deposit 缺少 {col}"))
             permanent = row.get("Permanent Test File", "")
-            if "test-results/" in permanent or "ledger" in permanent.lower():
-                findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Permanent Test File 不能指向一次性 evidence 或 ledger"))
+            if "openspec-results/" in permanent or "test-results/" in permanent:
+                findings.append(Finding("error", f"{row.get('AC ID', '<unknown>')} Permanent Test File 不能指向一次性 evidence"))
             validate_test_file_ownership(
                 test_id=", ".join(ids) if ids else row.get("AC ID", "<unknown>"),
                 layer="",
@@ -1012,26 +888,26 @@ def validate_evidence_deposit_consistency(
         deposit = deposit_by_id.get(test_id)
         if not deposit:
             continue
-        evidence_status = row.get("TDD Status", "")
+        evidence_status = row.get("Evidence Status", "")
         deposit_status = deposit.get("Deposit Status", "")
         scope_role = row.get("Scope Role", "").lower()
         if deposit_status == "deposited" and evidence_status == "blocked":
             findings.append(
                 Finding(
                     "error",
-                    f"{test_id} Regression Deposit 为 deposited，但 Test Evidence TDD Status 仍是 blocked",
+                    f"{test_id} Regression Deposit 为 deposited，但 Test Evidence Evidence Status 仍是 blocked",
                 )
             )
         if (
             test_id in strict_ids
             and "required behavior" in scope_role
             and deposit_status == "deposited"
-            and evidence_status != "green-passed"
+            and evidence_status != "passed"
         ):
             findings.append(
                 Finding(
                     "error",
-                    f"{test_id} final audit 中 deposited required behavior 必须是 green-passed，当前为 {evidence_status or '<empty>'}",
+                    f"{test_id} final audit 中 deposited required behavior 必须是 passed，当前为 {evidence_status or '<empty>'}",
                 )
             )
         if test_id in strict_ids and "required behavior" in scope_role and deposit_status == "required":
@@ -1101,7 +977,7 @@ def result_indicates_pass(value: object) -> bool:
             return True
     if isinstance(value, str):
         lowered = value.lower()
-        return any(token in lowered for token in ["passed", "green", "exit 0", "exitcode 0"])
+        return any(token in lowered for token in ["passed", "pass", "ok", "success", "exit 0", "exitcode 0"])
     return False
 
 
@@ -1111,8 +987,6 @@ def text_mentions_execution_evidence(value: str) -> bool:
         token in lowered
         for token in [
             "command.log",
-            "green-result.json",
-            "regression-result.json",
             "runner",
             "ci",
             "junit",
@@ -1169,18 +1043,17 @@ def read_execution_result_artifact(evidence_dir: Path | None, test_id: str, find
     return None
 
 
-def validate_ledgers(
+def effective_fixed_command(row: dict[str, str]) -> str:
+    return strip_cell_markup(row.get("Fixed Command", ""))
+
+
+def validate_execution_evidence(
     *,
     evidence_rows: list[dict[str, str]],
     deposit_by_id: dict[str, dict[str, str]],
-    change_slug: str,
     findings: list[Finding],
-    ledger_contract: LedgerContract,
     scope_ac: str | None = None,
-    check_orphans: bool = False,
-    strict_declared_ledgers: bool = False,
 ) -> None:
-    declared_ids = {row.get("Test ID", "") for row in evidence_rows}
     scoped_rows = [
         row
         for row in evidence_rows
@@ -1202,112 +1075,28 @@ def validate_ledgers(
                         f"{test_id} 缺少当前 worktree 执行证据：{evidence_dir.as_posix()} 下需要 command.log 或 runner/CI result/report",
                     )
                 )
-        green_result = (
-            read_optional_result(evidence_dir / "green-result.json", test_id, findings)
-            if evidence_dir is not None
-            else None
-        )
-        regression_result = (
-            read_optional_result(evidence_dir / "regression-result.json", test_id, findings)
-            if evidence_dir is not None
-            else None
-        )
         execution_result = read_execution_result_artifact(evidence_dir, test_id, findings)
-        ledger_field = strip_cell_markup(row.get("Ledger File", ""))
-        ledger_path = Path(ledger_field) if ledger_field else None
-        if ledger_path is None and evidence_dir is not None:
-            default_ledger = evidence_dir / "ledger.json"
-            if default_ledger.exists():
-                ledger_path = default_ledger
-        ledger: dict[str, object] | None = None
-        if ledger_path is not None:
-            try:
-                ledger = read_json(ledger_path)
-            except ValueError as exc:
-                findings.append(Finding("error", str(exc)))
-            if ledger is None and ledger_field:
-                severity = "error" if strict_declared_ledgers else "warning"
-                findings.append(Finding(severity, f"{test_id} 声明了可选 audit ledger，但文件不存在：{ledger_field}"))
-
-        if ledger is not None:
-            missing = sorted(field for field in ledger_contract.required_fields if field not in ledger)
-            if missing:
-                findings.append(Finding("error", f"{test_id} ledger 缺少必需字段：{', '.join(missing)}"))
-            if ledger.get("testId") != test_id:
-                findings.append(Finding("error", f"{test_id} ledger.testId 不匹配：{ledger.get('testId')!r}"))
-            if ledger.get("acId") != ac_id:
-                findings.append(Finding("error", f"{test_id} ledger.acId 不匹配：{ledger.get('acId')!r}"))
-            if "ac" in ledger and "acId" not in ledger:
-                findings.append(Finding("error", f"{test_id} ledger 使用 ac 而不是 acId"))
-            for field, matrix_col in [
-                ("fixedCommand", "Fixed Command"),
-                ("redCommand", "Red Command"),
-                ("greenCommand", "Green Command"),
-                ("tddStatus", "TDD Status"),
-            ]:
-                expected = strip_cell_markup(row.get(matrix_col, ""))
-                actual = ledger.get(field)
-                if expected and actual != expected:
-                    findings.append(
-                        Finding(
-                            "error",
-                            f"{test_id} ledger.{field} 与 Test Evidence Matrix 不一致",
-                        )
-                    )
-            artifacts = ledger.get("artifacts")
-            artifact_names = set(map(str, artifacts)) if isinstance(artifacts, list) else set()
-            if not isinstance(artifacts, list) or not ledger_contract.canonical_artifacts.issubset(artifact_names):
-                required = ", ".join(sorted(ledger_contract.canonical_artifacts))
-                findings.append(Finding("error", f"{test_id} ledger.artifacts 必须是包含 {required} 的数组"))
-
         deposit = deposit_by_id.get(test_id)
         if deposit:
             expected_regression = strip_cell_markup(deposit.get("Regression Command", ""))
-            if ledger is not None and expected_regression and ledger.get("regressionCommand") != expected_regression:
-                findings.append(
-                    Finding(
-                        "error",
-                        f"{test_id} ledger.regressionCommand 与 Regression Deposit 不一致",
-                    )
-                )
             if deposit.get("Deposit Status", "") == "deposited":
-                ledger_green = ledger.get("greenResult") if ledger is not None else None
-                ledger_regression = ledger.get("regressionResult") if ledger is not None else None
-                green_passed = (
-                    result_indicates_pass(green_result)
-                    or result_indicates_pass(ledger_green)
-                    or result_indicates_pass(execution_result)
-                )
-                regression_passed = result_indicates_pass(regression_result) or result_indicates_pass(ledger_regression)
-                green_command = strip_cell_markup(row.get("Green Command", ""))
-                if expected_regression and green_command and expected_regression == green_command and green_passed:
+                command_passed = result_indicates_pass(execution_result)
+                regression_passed = command_passed
+                fixed_command = effective_fixed_command(row)
+                if expected_regression and fixed_command and expected_regression == fixed_command and command_passed:
                     regression_passed = True
-                if not green_passed:
+                if not command_passed:
                     findings.append(
                         Finding(
                             "error",
-                            f"{test_id} Regression Deposit 为 deposited，但 green-result.json 或 optional ledger.greenResult 未证明通过",
+                            f"{test_id} Regression Deposit 为 deposited，但 command.log 或 runner/CI result/report 未证明通过",
                         )
                     )
                 if not regression_passed:
                     findings.append(
                         Finding(
                             "error",
-                            f"{test_id} Regression Deposit 为 deposited，但 regression-result.json、等价 Green Command 或 optional ledger.regressionResult 未证明通过",
-                        )
-                    )
-
-    if check_orphans and change_slug:
-        evidence_root = Path("test-results") / change_slug
-        if evidence_root.exists():
-            glob_pattern = f"{scope_ac}/T-*/ledger.json" if scope_ac else "AC-*/T-*/ledger.json"
-            for ledger_path in evidence_root.glob(glob_pattern):
-                test_id = ledger_path.parent.name
-                if test_id not in declared_ids:
-                    findings.append(
-                        Finding(
-                            "error",
-                            f"发现未在 Test Evidence Matrix 登记的 orphan ledger：{ledger_path.as_posix()}",
+                            f"{test_id} Regression Deposit 为 deposited，但 Fixed Command 或等价 runner/CI result/report 未证明 regression 通过",
                         )
                     )
 
@@ -1410,7 +1199,6 @@ def validate(
         return findings
     change_slug = extract_change_slug(markdown)
     reported_ownership: set[str] = set()
-    ledger_contract = load_ledger_contract(findings)
     add_missing_headings(markdown, findings)
     bad_id_source = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL) if allow_template else markdown
     if BAD_TEST_ID_RE.search(bad_id_source):
@@ -1426,7 +1214,6 @@ def validate(
         ac_id,
         change_slug,
         reported_ownership,
-        ledger_contract,
     )
     validate_ac_local_test_id_ownership(markdown, evidence_rows, findings, allow_template)
     validate_default_path_contracts(evidence_rows, findings)
@@ -1453,13 +1240,10 @@ def validate(
         if deposit_by_id.get(row.get("Test ID", ""), {}).get("Deposit Status", "") == "deposited"
     ]
     if deposited_rows and not allow_template and not (final or evidence or ac_id):
-        validate_ledgers(
+        validate_execution_evidence(
             evidence_rows=deposited_rows,
             deposit_by_id=deposit_by_id,
-            change_slug=change_slug,
             findings=findings,
-            ledger_contract=ledger_contract,
-            strict_declared_ledgers=False,
         )
     if strict_evidence and not allow_template:
         scoped_rows = (
@@ -1467,15 +1251,11 @@ def validate(
             if ac_id
             else evidence_rows
         )
-        validate_ledgers(
+        validate_execution_evidence(
             evidence_rows=scoped_rows,
             deposit_by_id=deposit_by_id,
-            change_slug=change_slug,
             findings=findings,
-            ledger_contract=ledger_contract,
             scope_ac=ac_id,
-            check_orphans=True,
-            strict_declared_ledgers=True,
         )
     validate_runtime_not_applicable(markdown, findings, allow_template)
     validate_high_risk_layers(markdown, findings, allow_template, evidence_rows)
@@ -1487,7 +1267,7 @@ def main() -> int:
     parser.add_argument("tasks_md", type=Path)
     parser.add_argument("--allow-template", action="store_true", help="ignore placeholder rows containing HTML comments")
     parser.add_argument("--final", action="store_true", help="treat required regression deposits as errors")
-    parser.add_argument("--evidence", action="store_true", help="validate execution evidence and optional audit ledgers for the selected scope")
+    parser.add_argument("--evidence", action="store_true", help="validate execution evidence for the selected scope")
     parser.add_argument("--ac", help="validate evidence only for one AC-### scope")
     parser.add_argument(
         "--gate",

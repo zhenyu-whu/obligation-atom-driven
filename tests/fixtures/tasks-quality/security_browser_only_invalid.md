@@ -28,9 +28,9 @@
 | AC-001 | required behavior: admin item creation and security boundary | GA-0001 GA-0002 | browser E2E | browser E2E=T-001 | API/DB/security omitted without valid source-backed reason | browser E2E | T-001 | no scope expansion |
 
 ### Test Evidence Matrix
-| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path Level | Fixture Boundary | Must Fail Before Implementation | Red Command | Expected Red Failure | Observed Red Failure | Green Command | TDD Status | Requires Tests Passed | Evidence Directory | Evidence Produced | Ledger File | CI Runnable? | Source Basis | Scope Role | No-Scope-Expansion Check |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-001 | AC-001 | npx playwright test tests/e2e/admin-items.spec.ts | tests/e2e/admin-items.spec.ts::admin creates item | browser E2E smoke | RSI-001 OCM-001 SBM-001 | browser-e2e | local app server | yes | npx playwright test tests/e2e/admin-items.spec.ts | item not visible before implementation | observed missing item | npx playwright test tests/e2e/admin-items.spec.ts | green-passed | none | test-results/security-browser-only-invalid/AC-001/T-001/ | command.log, ledger.json, browser screenshot only | test-results/security-browser-only-invalid/AC-001/T-001/ledger.json | yes | GA-0001 GA-0002 | required behavior | no scope expansion |
+| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path Level | Fixture Boundary | Verification Expectation | Evidence Status | Requires Tests Passed | Evidence Directory | Evidence Produced | CI Runnable? | Source Basis | Scope Role | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T-001 | AC-001 | npx playwright test tests/e2e/admin-items.spec.ts | tests/e2e/admin-items.spec.ts::admin creates item | browser E2E smoke | RSI-001 OCM-001 SBM-001 | browser-e2e | local app server | rendered item appears in browser | passed | none | openspec-results/security-browser-only-invalid/AC-001/T-001/ | command.log, browser screenshot only | yes | GA-0001 GA-0002 | required behavior | no scope expansion |
 
 ### Regression Test Deposit
 | AC ID | Test IDs | Permanent Test File | Regression Command | Behavior Contract | Assertion Oracle | Fixture Boundary | CI Tier | Not Testing | Deposit Status |

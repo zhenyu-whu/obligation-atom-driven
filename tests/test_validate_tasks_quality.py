@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 import tempfile
@@ -52,34 +51,7 @@ def extract_table(markdown: str, heading: str) -> list[dict[str, str]]:
     return rows
 
 
-def clear_declared_ledgers(markdown: str) -> str:
-    lines: list[str] = []
-    in_matrix = False
-    header: list[str] | None = None
-    ledger_idx: int | None = None
-    for line in markdown.splitlines():
-        stripped = line.strip()
-        if stripped == "### Test Evidence Matrix":
-            in_matrix = True
-            header = None
-            ledger_idx = None
-            lines.append(line)
-            continue
-        if in_matrix and (stripped.startswith("### ") or stripped.startswith("## ")):
-            in_matrix = False
-        if in_matrix and stripped.startswith("|"):
-            cells = split_row(line)
-            if header is None:
-                header = cells
-                ledger_idx = header.index("Ledger File") if "Ledger File" in header else None
-            elif ledger_idx is not None and cells and not is_separator(cells):
-                cells[ledger_idx] = ""
-                line = "| " + " | ".join(cells) + " |"
-        lines.append(line)
-    return "\n".join(lines) + "\n"
-
-
-def materialize_evidence(fixture: Path, cwd: Path, *, with_ledgers: bool = True) -> None:
+def materialize_evidence(fixture: Path, cwd: Path) -> None:
     markdown = fixture.read_text(encoding="utf-8")
     deposits = {}
     for row in extract_table(markdown, "Regression Test Deposit"):
@@ -90,57 +62,17 @@ def materialize_evidence(fixture: Path, cwd: Path, *, with_ledgers: bool = True)
         deposit = deposits[test_id]
         evidence_dir = cwd / row["Evidence Directory"].strip("` ")
         evidence_dir.mkdir(parents=True, exist_ok=True)
-        ledger_field = row["Ledger File"].strip("` ")
-        ledger_path = cwd / ledger_field if ledger_field else evidence_dir / "ledger.json"
         (evidence_dir / "command.log").write_text("fixture command passed\n", encoding="utf-8")
-        (evidence_dir / "green-result.json").write_text(
-            json.dumps({"status": "passed", "exitCode": 0}),
-            encoding="utf-8",
-        )
-        (evidence_dir / "regression-result.json").write_text(
-            json.dumps({"status": "passed", "exitCode": 0}),
-            encoding="utf-8",
-        )
-        if not with_ledgers:
-            continue
-        ledger = {
-            "testId": test_id,
-            "acId": row["AC ID"],
-            "behaviorContract": deposit["Behavior Contract"],
-            "assertionOracle": deposit["Assertion Oracle"],
-            "fixedCommand": row["Fixed Command"],
-            "redCommand": row["Red Command"],
-            "expectedRedFailure": row["Expected Red Failure"],
-            "observedRedFailure": row["Observed Red Failure"],
-            "redResult": {"status": "failed-as-expected", "exitCode": 1},
-            "greenCommand": row["Green Command"],
-            "greenResult": {"status": "passed", "exitCode": 0},
-            "regressionCommand": deposit["Regression Command"],
-            "regressionResult": {"status": "passed", "exitCode": 0},
-            "cwd": str(cwd),
-            "exitCode": 0,
-            "startedAt": "2026-01-01T00:00:00Z",
-            "finishedAt": "2026-01-01T00:00:01Z",
-            "artifacts": ["command.log"],
-            "defaultPathFacts": {"fixture": True},
-            "fixtureBoundary": row["Fixture Boundary"],
-            "tddStatus": row["TDD Status"],
-            "notApplicableReason": None,
-        }
-        ledger_path.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
+        assert deposit
 
 
-def run_fixture(name: str, *, with_ledgers: bool = True) -> subprocess.CompletedProcess[str]:
+def run_fixture(name: str) -> subprocess.CompletedProcess[str]:
     fixture = FIXTURES / name
     with tempfile.TemporaryDirectory() as tmp:
         cwd = Path(tmp)
-        fixture_for_run = fixture
-        if not with_ledgers:
-            fixture_for_run = cwd / fixture.name
-            fixture_for_run.write_text(clear_declared_ledgers(fixture.read_text(encoding="utf-8")), encoding="utf-8")
-        materialize_evidence(fixture_for_run, cwd, with_ledgers=with_ledgers)
+        materialize_evidence(fixture, cwd)
         return subprocess.run(
-            [sys.executable, str(VALIDATOR), "--final", str(fixture_for_run)],
+            [sys.executable, str(VALIDATOR), "--final", str(fixture)],
             capture_output=True,
             text=True,
             check=False,
@@ -158,13 +90,6 @@ def main() -> int:
         result = run_fixture(fixture)
         if result.returncode != 0:
             failures.append(f"{fixture} should pass:\n{result.stderr}")
-
-    optional_ledger = run_fixture("ui_api_behavior.md", with_ledgers=False)
-    if optional_ledger.returncode != 0:
-        failures.append(
-            "ui_api_behavior.md should pass with execution evidence and no ledger:\n"
-            f"{optional_ledger.stderr}"
-        )
 
     invalid = run_fixture("security_browser_only_invalid.md")
     expected = "不能只用 browser/smoke proof"

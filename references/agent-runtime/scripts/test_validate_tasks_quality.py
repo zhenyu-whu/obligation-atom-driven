@@ -23,10 +23,8 @@ def minimal_tasks(
     *,
     layer: str = "unit",
     default_path_level: str = "service-contract",
-    tdd_status: str = "red-required",
-    observed_red: str = "Pending apply red run",
+    evidence_status: str = "planned",
     evidence_produced: str = "Pending apply execution evidence: command.log",
-    ledger_file: str = "",
     deposit_status: str = "required",
     operation_row: str | None = None,
     test_file: str = "apps/example/example.test.ts",
@@ -68,9 +66,9 @@ def minimal_tasks(
 
 ### Test Evidence Matrix
 
-| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path Level | Fixture Boundary | Red Command | Expected Red Failure | Observed Red Failure | Green Command | TDD Status | Requires Tests Passed | Evidence Directory | Evidence Produced | Ledger File | CI Runnable? | Scope Role | No-Scope-Expansion Check |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-001 | AC-001 | `pnpm exec vitest run {test_file} -t "T-001 sample"` | `{test_file}` / `T-001 sample` | {layer} | RS-001, OP-001, ST-001 | {default_path_level} | no mocks | `pnpm exec vitest run {test_file} -t "T-001 sample"` | behavior gap | {observed_red} | `pnpm exec vitest run {test_file} -t "T-001 sample"` | {tdd_status} | None | `test-results/schema-test/AC-001/T-001/` | {evidence_produced} | {ledger_file} | yes, root command | required behavior | no expansion |
+| Test ID | AC ID | Fixed Command | Test File / Name | Layer | Covers Rows | Default Path Level | Fixture Boundary | Verification Expectation | Evidence Status | Requires Tests Passed | Evidence Directory | Evidence Produced | CI Runnable? | Scope Role | No-Scope-Expansion Check |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T-001 | AC-001 | `pnpm exec vitest run {test_file} -t "T-001 sample"` | `{test_file}` / `T-001 sample` | {layer} | RS-001, OP-001, ST-001 | {default_path_level} | no mocks | behavior contract evidence | {evidence_status} | None | `openspec-results/schema-test/AC-001/T-001/` | {evidence_produced} | yes, root command | required behavior | no expansion |
 
 ### Regression Test Deposit
 
@@ -103,11 +101,9 @@ def with_pending_second_ac_evidence(markdown: str) -> str:
     row = (
         '| T-002 | AC-002 | `pnpm exec vitest run apps/example/example.test.ts -t "T-002 sample"` '
         '| `apps/example/example.test.ts` / `T-002 sample` | unit | RS-001, OP-001, ST-001 '
-        '| service-contract | no mocks | `pnpm exec vitest run apps/example/example.test.ts -t "T-002 sample"` '
-        '| behavior gap | Pending apply red run '
-        '| `pnpm exec vitest run apps/example/example.test.ts -t "T-002 sample"` '
-        '| red-required | None | `test-results/schema-test/AC-002/T-002/` '
-        '| Pending apply execution evidence: command.log |  | yes, root command | required behavior | no expansion |'
+        '| service-contract | no mocks | behavior contract evidence '
+        '| planned | None | `openspec-results/schema-test/AC-002/T-002/` '
+        '| Pending apply execution evidence: command.log | yes, root command | required behavior | no expansion |'
     )
     return markdown.replace("\n### Regression Test Deposit", f"\n{row}\n\n### Regression Test Deposit")
 
@@ -125,9 +121,25 @@ class ValidateTasksQualityTests(unittest.TestCase):
     def messages(self, findings) -> str:
         return "\n".join(f"{finding.severity}: {finding.message}" for finding in findings)
 
-    def test_plan_gate_allows_red_required_pending_apply(self) -> None:
+    def test_plan_gate_allows_planned_pending_apply(self) -> None:
         findings = validator.validate(minimal_tasks(), allow_template=False, final=False)
         self.assertEqual([], [f for f in findings if f.severity == "error"], self.messages(findings))
+
+    def test_plan_gate_rejects_legacy_test_results_evidence_directory(self) -> None:
+        markdown = minimal_tasks().replace(
+            "openspec-results/schema-test/AC-001/T-001/",
+            "test-results/schema-test/AC-001/T-001/",
+        )
+        findings = validator.validate(markdown, allow_template=False, final=False)
+        self.assertIn("Evidence Directory 不符合 canonical 路径", self.messages(findings))
+
+    def test_plan_gate_rejects_result_directories_as_permanent_tests(self) -> None:
+        markdown = minimal_tasks().replace(
+            "`apps/example/example.test.ts` | `pnpm exec vitest",
+            "`test-results/schema-test/AC-001/T-001/example.test.ts` | `pnpm exec vitest",
+        )
+        findings = validator.validate(markdown, allow_template=False, final=False)
+        self.assertIn("Permanent Test File 不能指向一次性 evidence", self.messages(findings))
 
     def test_plan_gate_rejects_checkbox_test_id_owned_by_other_ac(self) -> None:
         findings = validator.validate(
@@ -140,18 +152,17 @@ class ValidateTasksQualityTests(unittest.TestCase):
         self.assertIn("AC-001", text)
         self.assertIn("AC-002", text)
 
-    def test_final_gate_rejects_pending_apply_tdd(self) -> None:
+    def test_final_gate_rejects_planned_status(self) -> None:
         findings = validator.validate(minimal_tasks(), allow_template=False, final=True, evidence=True)
         text = self.messages(findings)
-        self.assertIn("red-required", text)
-        self.assertIn("Observed Red Failure", text)
+        self.assertIn("planned", text)
+        self.assertIn("Evidence Status", text)
 
     def test_scoped_evidence_gate_ignores_pending_rows_from_other_ac(self) -> None:
         findings = []
         markdown = with_pending_second_ac_evidence(
             minimal_tasks(
-                tdd_status="green-passed",
-                observed_red="red failed as expected: behavior gap",
+                evidence_status="passed",
                 evidence_produced="command.log",
                 deposit_status="deposited",
             )
@@ -165,7 +176,6 @@ class ValidateTasksQualityTests(unittest.TestCase):
             "AC-001",
             "schema-test",
             set(),
-            validator.LedgerContract(set(), set(validator.TDD_STATUSES), set()),
         )
         self.assertNotIn("T-002 evidence/final audit", self.messages(findings))
 
@@ -173,8 +183,7 @@ class ValidateTasksQualityTests(unittest.TestCase):
         findings = []
         markdown = with_pending_second_ac_evidence(
             minimal_tasks(
-                tdd_status="green-passed",
-                observed_red="red failed as expected: behavior gap",
+                evidence_status="passed",
                 evidence_produced="command.log",
                 deposit_status="deposited",
             )
@@ -188,24 +197,20 @@ class ValidateTasksQualityTests(unittest.TestCase):
             "AC-001",
             "schema-test",
             set(),
-            validator.LedgerContract(set(), set(validator.TDD_STATUSES), set()),
         )
         text = self.messages(findings)
         self.assertIn("T-002 evidence/final audit", text)
         self.assertIn("T-002 final audit", text)
 
-    def test_final_gate_allows_empty_optional_ledger(self) -> None:
+    def test_final_gate_accepts_command_logs(self) -> None:
         def scenario(root: Path) -> None:
-            evidence = root / "test-results/schema-test/AC-001/T-001"
+            evidence = root / "openspec-results/schema-test/AC-001/T-001"
             evidence.mkdir(parents=True)
             (evidence / "command.log").write_text("passed\n", encoding="utf-8")
-            (evidence / "green-result.json").write_text('{"status":"passed","exitCode":0}\n', encoding="utf-8")
-            (evidence / "regression-result.json").write_text('{"status":"passed","exitCode":0}\n', encoding="utf-8")
             findings = validator.validate(
                 minimal_tasks(
-                    tdd_status="green-passed",
-                    observed_red="red failed as expected: behavior gap",
-                    evidence_produced="command.log, green-result.json, regression-result.json",
+                    evidence_status="passed",
+                    evidence_produced="command.log",
                     deposit_status="deposited",
                 ),
                 allow_template=False,
@@ -216,26 +221,21 @@ class ValidateTasksQualityTests(unittest.TestCase):
 
         self.run_in_temp(scenario)
 
-    def test_final_gate_rejects_declared_missing_ledger(self) -> None:
+    def test_final_gate_rejects_missing_command_log(self) -> None:
         def scenario(root: Path) -> None:
-            evidence = root / "test-results/schema-test/AC-001/T-001"
+            evidence = root / "openspec-results/schema-test/AC-001/T-001"
             evidence.mkdir(parents=True)
-            (evidence / "command.log").write_text("passed\n", encoding="utf-8")
-            (evidence / "green-result.json").write_text('{"status":"passed","exitCode":0}\n', encoding="utf-8")
-            (evidence / "regression-result.json").write_text('{"status":"passed","exitCode":0}\n', encoding="utf-8")
             findings = validator.validate(
                 minimal_tasks(
-                    tdd_status="green-passed",
-                    observed_red="red failed as expected: behavior gap",
-                    evidence_produced="command.log, green-result.json, regression-result.json",
-                    ledger_file="`test-results/schema-test/AC-001/T-001/ledger.json`",
+                    evidence_status="passed",
+                    evidence_produced="command.log",
                     deposit_status="deposited",
                 ),
                 allow_template=False,
                 final=True,
                 evidence=True,
             )
-            self.assertIn("文件不存在", self.messages(findings))
+            self.assertIn("command.log", self.messages(findings))
 
         self.run_in_temp(scenario)
 
