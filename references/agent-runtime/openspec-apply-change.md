@@ -81,15 +81,23 @@
    - 该 AC 的 dependency gate：前置 AC IDs、前置 Test IDs、已经由 baseline 或 earlier AC 提供的 runtime rows / contracts / facts。
    - 与该 AC 相关的 execution evidence targets、`Test Evidence Matrix` 定义的唯一 `Fixed Command`、canonical `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/` evidence storage contract，以及 final verification / acceptance checkbox ID。
    - 允许修改的代码范围或模块边界。
-   - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足、default path 未证明或存在 blocker 的任务不得勾选。
-8. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，必须停止猜测并标明 blocker。
+   - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足或 default path 未证明的任务不得勾选，这些状态默认表示 worker 仍需继续修复，不等同于流程级 blocker。
+8. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，且无法在当前 change 范围内通过修订 artifacts、实现或测试自主解除，才可标明流程级 blocker。
 9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
 10. 必须明确告知 worker：完成任务时要通过 evidence harness 执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的唯一 fixed command。harness 必须清理或隔离 canonical evidence directory，将该命令的 stdout/stderr 保存为 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/command.log`，在命令结束后写入 harness-owned `ledger.json`，或保存等价 runner/CI result/report 与 artifact index，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。测试代码的职责是行为断言与 runner artifact/attachment 产出；canonical ledger、command log 和 OpenSpec evidence path 由 harness 管理。`Evidence Status` 必须使用 `planned`、`passed`、`not-applicable`、`blocked` 等 schema 枚举；当前 AC final verification / acceptance checkbox 勾选前，worker 必须执行 AC evidence audit 并修复本 AC 所有 execution evidence / deposit 缺口。AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。`/tmp`、未复制的 runner 默认输出、未被 harness 索引的 agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、test layer code requirements、verification evidence fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
+
+## Worker Blocker 语义
+
+1. `Test Evidence Matrix.Evidence Status = blocked` 是证据行状态，不自动等同于 worker/apply 流程级 blocker。
+2. `Fixed Command` 失败、typecheck/lint/test 失败、缺失 `command.log` / `ledger.json` / runner artifact、测试 oracle 不足、Regression Deposit 未闭合或 final audit 发现当前 change 范围内的代码/测试/artifact 问题，默认都是 AC 未完成工作。worker 必须先自主修复实现、测试、artifacts 或 evidence harness，并重跑同一个 fixed command；不得仅因命令未通过就返回流程级 blocker。
+3. worker 只有在无法自主解除时才返回流程级 blocker，例如 source/proposal/spec/design 冲突无法判定、AC 依赖拓扑确实错误、必需工具/权限/凭证/外部状态不可用、用户/其他 agent 改动冲突且无法安全合并，或修复会超出当前 change scope。
+4. AC-007/final audit worker 拥有 current-change-scoped repair authority：final/root command 暴露当前 change 范围内的类型、lint、测试、evidence 或 artifact 收口失败时，worker 应修复并重跑，而不是把 final audit 当作只读哨兵。
+5. 若 worker 报告的所谓 blocker 只是上述可自主修复的命令失败或 evidence 缺口，主 agent 应把它视为未完成 AC：优先要求同一 worker 继续修复；若同一 worker 不可继续且当前用户请求仍是 apply/continue，主 agent 可以在同一 change scope 内自行修复、重跑 fixed command、更新 evidence/tasks，并继续后续 worker/reviewer。只有主 agent 也确认无法自主解除时，才向用户汇报流程级 blocker。
 
 ## Reviewer Subagent 复核
 
 1. 所有 implementation `worker` subagent 自然返回完成且没有明确 blocker 后，必须启动一个独立 `reviewer` subagent 执行最终复核检验。这是所有任务实现后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
-2. `reviewer` subagent 必须在所有 worker 结束后启动，且不得与 implementation worker 并行运行；若任一 worker 返回 blocker 或仍有未完成实现任务，先汇报 blocker，不得启动 reviewer。
+2. `reviewer` subagent 必须在所有 worker 结束后启动，且不得与 implementation worker 并行运行；若任一 worker 返回流程级 blocker 或仍有未完成实现任务，先处理未完成工作或汇报真实 blocker，不得启动 reviewer。
 3. 创建或启动 apply-stage `reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`，并且不得降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` reviewer，必须暂停 apply 并向用户报告 blocker，不得由主 agent 替代复核。
 4. 主 agent 启动 reviewer 时必须传入：change 名称、schema 名称、`contextFiles`、proposal/specs/design/tasks 路径、所有 worker 最终报告、worker 报告的改动范围、所有 AC/Test ID/execution evidence 路径、fixed commands、Regression Test Deposit 状态，以及 reviewer 需要复核的 coverage/runtime/test 矩阵路径。主 agent 不得为了准备 reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker 结果是否可信。
 5. reviewer 负责独立复核：检查代码 diff、artifacts、tasks checkbox、coverage/runtime/test 矩阵、execution evidence、Regression Test Deposit、固定验证命令结果、跨 AC 集成冲突、默认路径/no-mock 约束、verification evidence，并执行必要复核，包括每个已完成 AC 的 AC evidence audit 和全量 Testing Quality Core final audit；必要时可重跑 fixed commands。
@@ -98,12 +106,12 @@
 
 ## 主 Agent 职责
 
-1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、按 AC section 串行分派 worker、逐个等待 worker 自然返回结果，在所有 worker 完成后启动 reviewer，并汇总 worker 与 reviewer 返回的完成状态、证据路径、验证命令结果和 blocker。
+1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、按 AC section 串行分派 worker、逐个等待 worker 自然返回结果，在所有 worker 完成后启动 reviewer，并汇总 worker 与 reviewer 返回的完成状态、证据路径、验证命令结果和流程级 blocker。
 2. 主 agent 必须等待所有已分派 worker 的任务全部完成或明确 blocker；若全部 worker 完成且无 blocker，必须等待 reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。worker 已声明完成的 AC section、checkbox、proof、evidence 和 fixed command 结果视为 worker 输出，reviewer 的 pass/blocker 视为最终复核输出；主 agent 不得再次复核、重测、审查 diff、重新跑验证命令、重新检查 execution evidence、重新执行 coverage/proof audit，或以主 agent 判断覆盖 worker/reviewer 的结论。
 3. 任一 worker 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查未完成 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手实现。
 4. 任一 reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手复核。
 5. 主 agent 不得打断、停止、关闭或要求正在运行的 worker/reviewer 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 worker 自然返回最终完成或明确 blocker，并等待 reviewer 自然返回 pass 或明确 blocker。
-6. worker 或 reviewer 返回明确 blocker 时，主 agent 只记录 blocker 并向用户汇报；不得自行接手修复、替 worker 补 proof、替 worker 勾选或取消 checkbox、替 reviewer 复验，除非用户在 blocker 汇报后明确要求主 agent 继续处理。
+6. worker 或 reviewer 返回明确流程级 blocker 时，主 agent 只记录 blocker 并向用户汇报；不得自行接手修复、替 worker 补 proof、替 worker 勾选或取消 checkbox、替 reviewer 复验，除非用户在 blocker 汇报后明确要求主 agent 继续处理。若 worker 报告的是可自主修复的 fixed-command/evidence 失败而非流程级 blocker，按 `Worker Blocker 语义` 继续处理，不进入用户等待。
 7. worker 或 reviewer 返回完成但摘要缺少路径、命令结果或 blocker 状态等汇总必需信息时，主 agent 可以要求同一个 subagent 补充说明；这不构成主 agent 复核，主 agent 不得自行打开文件或运行命令来补齐。
 
 ## 状态更新
