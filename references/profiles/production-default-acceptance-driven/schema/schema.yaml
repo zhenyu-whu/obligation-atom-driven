@@ -252,7 +252,7 @@ artifacts:
       - 确认每个永久回归命令计划能从仓库根目录稳定执行，并且可通过 root/package script、CI job、稳定 test file/filter 或登记的 smoke/e2e/ops script 触达；未接入常规回归入口的测试只能计划为临时 evidence，不能计划为 deposited。
       - 确认没有 implementation-detail tests 被登记为 primary proof 或永久回归沉淀。
       - 确认每个 coverage table task ID 解析到 checkbox task，且每个 AC 有 final verification/acceptance checkbox。
-      - 本生产 schema 的 runtime 必须提供 `openspec/agent-runtime/scripts/validate_tasks_quality.py`。finalizing `tasks.md` 后必须运行 plan gate：`python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md` 并修复所有 error；若 validator 缺失，先同步 bundled schema/runtime，validator 缺失本身是 schema sync blocker。该 helper 是 Testing Quality Core 的结构自查，不替代人工 proposal/spec/design 审查，也不替代 apply 阶段的验证执行。
+      - finalizing `tasks.md` 后必须执行 Testing Quality Core plan audit，并修复所有测试计划、默认路径、Test ID ownership、fixed command、verification evidence fields 和 Regression Test Deposit 缺口。该 audit 是 Testing Quality Core 的结构自查，不替代人工 proposal/spec/design 审查，也不替代 apply 阶段的验证执行。
     requires:
       - proposal
       - specs
@@ -302,6 +302,6 @@ apply:
     - 执行 proof strength：browser E2E 必须来自真实浏览器交互；component 必须来自可交互 component harness；API、DB、worker、SSE、visual、security 和 config/ops proof 必须分别来自对应 runtime/boundary 的命令结果、readback、artifact 或日志事实。静态 DOM、截图、`data-testid`、enabled/disabled、API-only proof、mock response 或 broad command 只能作为补充，不能单独支撑 required behavior completion。
     - 测试相关 evidence 必须由固定命令自动生成或由 final verification task 复制到 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/`，其中 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。
     - 工作时维护 AC/Test-local execution evidence：没有当前 worktree 的命令输出、exit code、`command.log` 或 runner/CI result/report，不得勾选依赖该 Test ID 的 task。
-    - 当前 AC final verification / acceptance checkbox 勾选前，必须运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md --ac <AC-###> --evidence` 并修复本 AC 所有 execution evidence / deposit error；AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。
-    - 本生产 schema 的 runtime 必须提供 `openspec/agent-runtime/scripts/validate_tasks_quality.py`。实现前必须运行 plan gate：`python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md`；该 gate 不要求 apply-owned evidence 已存在。当前 AC 完成前必须运行 `--ac <AC-###> --evidence`。最终 audit 前必须运行 `python3 openspec/agent-runtime/scripts/validate_tasks_quality.py openspec/changes/<change-slug>/tasks.md --final`，使 `Regression Test Deposit` 停留 `required`、evidence final 状态不完整或 execution evidence 缺失等问题成为 blocker。若脚本缺失，先同步 bundled schema/runtime，不得跳过。
+    - 当前 AC final verification / acceptance checkbox 勾选前，必须执行 AC evidence audit 并修复本 AC 所有 execution evidence / deposit 缺口；AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。
+    - 实现前必须执行 Testing Quality Core plan audit；该 gate 不要求 apply-owned evidence 已存在。当前 AC 完成前必须执行 AC evidence audit。最终 audit 前必须执行全量 Testing Quality Core final audit，使 `Regression Test Deposit` 停留 `required`、evidence final 状态不完整或 execution evidence 缺失等问题成为 blocker。
     - 所有 tasks 勾选后，对三张 `Acceptance-Driven Coverage` 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张矩阵、`Regression Test Deposit` 和 `openspec/schemas/shared/verification-regression-gates.md` 的 verification/regression/anti-pattern gates 做最终 audit。只有 audit 通过后，change 才 ready for archive。

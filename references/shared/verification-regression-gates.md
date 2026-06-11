@@ -8,7 +8,7 @@
 
 `openspec-apply-change` 阶段负责落地测试、实现、命令执行和 evidence 更新：根据 `Test Evidence Matrix` 建立或补齐适用测试，完成实现后运行同一个 `Fixed Command`，把 `command.log` 或 runner/CI result/report 保存到 canonical evidence directory，并更新 `Evidence Status`、`Evidence Produced` 和 `Regression Test Deposit` 状态。
 
-`validate_tasks_quality.py` 分为三个 gate：默认 plan gate 只检查验证计划结构和默认路径契约；`--evidence` / `--ac <AC-###> --evidence` 检查 apply 阶段产物；`--final` 要求 required behavior 不停留在 `planned`，且 execution evidence 与 regression deposit 已闭合。
+Testing Quality Core 分为三个人工审阅 gate：plan gate 检查验证计划结构和默认路径契约；AC evidence gate 检查 apply 阶段当前 AC 的 execution evidence、evidence status 和 regression deposit；final gate 要求 required behavior 不停留在 `planned`，且 execution evidence 与 regression deposit 已闭合。
 
 ## Fixed Command
 

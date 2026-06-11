@@ -54,7 +54,7 @@
 
 ## Impact
 
-<!-- 说明受影响的 apps、packages、database migrations、APIs、workers、queues、SSE/outbox events、frontend routes、components、assets、auth/security/privacy boundaries、observability、deployment、verification scripts 与 dependencies。 -->
+<!-- 说明受影响的 apps、packages、database migrations、APIs、workers、queues、SSE/outbox events、frontend routes、components、assets、auth/security/privacy boundaries、observability、deployment、verification commands 与 dependencies。 -->
 
 ## Rollout / Readiness
 

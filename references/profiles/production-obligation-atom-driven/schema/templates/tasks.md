@@ -134,7 +134,7 @@ Test Layer Plan 是分层测试体系的唯一事实来源；不要只用一个 
 Verification gate 依据 `openspec/schemas/shared/verification-regression-gates.md`；tasks 阶段只定义 `Verification Expectation`、唯一固定命令和计划态 `Evidence Status`。apply 阶段执行同一个 `Fixed Command`，保存 `command.log` 或 runner/CI result/report；实际 `Evidence Produced` / `Evidence Status=passed` 由 apply 阶段填写。
 Testing Quality Core 不可选：Test Layer Plan、Test Evidence Matrix、verification evidence fields 和 Regression Test Deposit 必须始终存在。
 runtime detail matrices 可按需最小化；只有在 source/spec/design/tasks 均不触及对应 runtime 行为时，Runtime Surface / Operation / State / Async 矩阵才可保留最小 Not applicable 行并说明 source-backed 理由。
-最终完成不是表格声明：每个完成的 Test ID 必须有当前 worktree 的 execution evidence、canonical `command.log` 或 runner/CI result/report、AC evidence gate `validate_tasks_quality.py --ac <AC-###> --evidence` 通过，以及 final `validate_tasks_quality.py --final` 通过或明确 blocker。
+最终完成不是表格声明：每个完成的 Test ID 必须有当前 worktree 的 execution evidence、canonical `command.log` 或 runner/CI result/report、AC evidence audit 通过，以及全量 Testing Quality Core final audit 通过或明确 blocker。
 worker 的主要输入应是对应 AC section 加上它引用的 Appendix rows，而不是完整全局矩阵。
 -->
 
