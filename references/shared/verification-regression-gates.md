@@ -57,6 +57,8 @@ required behavior 在 evidence/final gate 中不得停留在 `planned`。`Regres
 - 测试 oracle 必须来自外部行为契约，例如用户可观察结果、API/DTO contract、DB invariant、audit/log/redaction fact、auth/security/privacy boundary、错误/恢复分支、spec scenario、design obligation 或 source/scope basis。
 - 不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle。
 - Mock 只能隔离慢、外部或非确定性边界，不能成为被测试对象。
+- Fixture 只能提供输入数据、认证凭据或 claims、外部服务返回、确定性时间/随机源等测试条件，不能替代被验证 runtime boundary 的默认实现。
+- 凡 Test ID 涉及 Route Handler、auth、session、tenant/query context、provider、storage、queue、worker、env/config 等 default path，Fixture Boundary 必须写清：fixture 提供什么输入；production-compatible default export/dependency/config 由哪个 proof 验证；被测代码不得只在 `NODE_ENV=test` 或测试专用 resolver 下成立。
 - mock 前必须说明真实依赖有哪些 side effects、测试是否依赖这些 side effects、被 mock 掉的 production path 由哪个 default-path proof 覆盖。
 
 ## Completion Rule

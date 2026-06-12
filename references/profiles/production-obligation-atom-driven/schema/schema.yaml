@@ -252,6 +252,7 @@ artifacts:
       - 如果某个 baseline/preserve/proof-only Test ID 不需要执行验证，tasks 阶段必须把该 Test ID 明确登记为 preserve/baseline/not-applicable proof 并记录 source-backed reason；新增或变更行为默认保持 `planned`，直到 apply 阶段产出 execution evidence。
       - `Fixed Command` 是计划态固定命令；tasks 阶段不得声称 Verification 阶段已通过，也不得把 planned oracle 改成匹配当前实现输出。
       - Mock 只能隔离外部、慢速或非确定性边界；不得断言 mock 行为本身，不得为了测试向 production code 增加 test-only API。每个 mock/fixture 必须说明被替代的真实 side effects 以及由哪个 default-path proof 覆盖。
+      - Fixture 只能提供输入、凭证/claims、外部返回或确定性环境，不能替代被测 runtime boundary 的默认实现。若 Test ID 涉及 route/auth/session/provider/storage/queue/worker/env/config default path，`Fixture Boundary` 必须区分 fixture data 与 production-compatible default export/dependency/config proof，且不得只在 test-only resolver 或 `NODE_ENV=test` 下成立。
       - 每个永久回归测试必须写明 assertion oracle：断言依据来自 GA/source、spec scenario、design obligation、API/DB invariant、security/privacy boundary 或用户可观察结果；不得写“匹配当前实现输出”这类循环证明。
       - 每个 required behavior 的测试应满足重构稳定性：只要外部契约不变，重命名私有函数、重排内部组件、拆分 service 或替换实现算法时测试不应失败。
       - 每个 required behavior Test ID 在 tasks 阶段必须有 fixed command、canonical evidence directory、预期执行证据类型和 `Regression Test Deposit` 计划行；执行证据由 apply/evidence/final gate 产出和检查。
