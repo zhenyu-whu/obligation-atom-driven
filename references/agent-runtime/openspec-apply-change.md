@@ -53,7 +53,7 @@
 8. **Gate 8 / 任务级验证与 proof 检查**：worker 应优先按当前 AC-local `Test IDs`、任务 `Test IDs`、`Proof:`、test layer code requirements 和 regression deposit（若适用）建立或补齐对应验证。完成实现与验证后必须运行同一 Test ID 的唯一 `Fixed Command`，在 canonical evidence directory 产出 `command.log` 或 runner/CI result/report，并收集对应 runner artifacts、截图、trace、DOM/API/DB/job/log facts 或 default-path proof，再把 `Evidence Status`、`Evidence Produced` 和 deposit 状态更新回 `tasks.md`。当前 AC final verification / acceptance checkbox 勾选前必须执行 AC evidence audit：对照当前 AC 的 Test Evidence rows、Regression Test Deposit、canonical evidence directory、required artifacts/facts 和 fixed command 结果，修复本 AC 所有 execution evidence / deposit 缺口。用户可见操作必须执行当前 schema 中定义的 runtime interaction / operation matrix proof；presence-only、static-only、API-only、implementation-detail 或 broad command proof 不得单独支撑勾选。
 9. **Gate 9 / 默认路径与 no-mock 检查**：凡 task 涉及 Route Handler、auth、session、DB、AI/provider、storage、queue、SSE、worker、external service adapter、env/config 或 deployment wiring，proof 必须覆盖真实导出、default dependency 或 default config。mock、stub、dependency injection、Playwright route intercept、fixture-only、手工注入 EventSource、直接 DB seed 或 isolated unit test 只能作为补充，除非 runtime matrix 明确说明该 row 是 source-compatible deterministic path 且另有测试覆盖被替换的 production boundary。
    - Fixture 只能驱动默认边界，不能成为默认边界本身。auth/session/provider/storage/queue/env/config 等 fixture 可以提供凭证、claims、fixture response 或确定性环境，但 proof 仍须证明 production-compatible default resolver/adapter/export/config 在非测试专用路径存在并被覆盖。
-10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、verification evidence、execution evidence、每个已完成 AC 的 AC evidence audit、`Regression Test Deposit`、全量 Testing Quality Core final audit、以及独立 `reviewer` subagent 复核结论都能回链到已完成任务和 proof，且 reviewer 返回 pass，才可称为 ready for archive。final audit 下不得存在 `planned`、缺失 execution evidence 或未闭合 deposit 的 required behavior。
+10. **Gate 10 / 完成判定**：只有当 `tasks.md` 全部 checkbox 完成、三张 coverage 表、`Runtime Acceptance Index`、每个 AC-local contract、`Verification Appendix` 六张 runtime/test 矩阵、required evidence、canonical evidence directories、verification evidence、execution evidence、每个已完成 AC 的 AC evidence audit、`Regression Test Deposit`、一次性独立 `change-stabilizer` subagent 全局收敛结果、全量 Testing Quality Core final audit、以及独立只读 `final-reviewer` subagent 复核结论都能回链到已完成任务和 proof，且 final-reviewer 返回 pass，才可称为 ready for archive。final audit 下不得存在 `planned`、缺失 execution evidence 或未闭合 deposit 的 required behavior。若 final-reviewer 在 change-stabilizer 完成后仍返回 blocker，apply 流程必须停止并进入人工查验状态，不得自动启动第二轮 stabilizer，也不得声称 ready for archive。
 
 ## 任务章节拆分
 
@@ -65,8 +65,8 @@
 
 ## Subagent 分派
 
-1. 用户明确要求执行或继续执行 `openspec-apply-change` 技能时，该请求即代表用户显式授权并要求按本节使用 `worker` subagent 和 delegation，除非用户在同一请求中明确禁止 subagent。
-2. 创建或启动任何 apply-stage `worker` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级为其他模型或推理档位；若当前运行环境无法创建 `GPT-5.5` / `xhigh` worker，必须暂停 apply 并向用户报告 blocker，不得以降级 worker 继续。
+1. 用户明确要求执行或继续执行 `openspec-apply-change` 技能时，该请求即代表用户显式授权并要求按本节使用 `worker`、`change-stabilizer` 和 `final-reviewer` subagent / delegation，除非用户在同一请求中明确禁止 subagent。
+2. 创建或启动任何 apply-stage `worker`、`change-stabilizer` 或 `final-reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级为其他模型或推理档位；若当前运行环境无法创建 `GPT-5.5` / `xhigh` apply-stage subagent，必须暂停 apply 并向用户报告 blocker，不得以降级 subagent 继续。
 3. `worker` subagent 必须串行执行。禁止一次性启动多个 worker；任一时刻最多只能有一个 worker 处于运行中。
 4. 对每个包含未完成任务的 AC section，必须按顺序分别创建一个 `worker` subagent 进行开发，除非用户明确禁止 subagent 或运行环境不可用。前一个 worker 自然返回最终完成或明确 blocker 前，不得启动下一个 worker。
 5. 每个 worker 只负责自己 AC section 内的任务和该 section 的验收 proof。
@@ -85,7 +85,7 @@
    - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足或 default path 未证明的任务不得勾选，这些状态默认表示 worker 仍需继续修复，不等同于流程级 blocker。
 8. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，只有命中 `Worker Blocker 语义` 中的流程级 blocker 分类时，才可标明流程级 blocker。
 9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
-10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的唯一 fixed command。worker、final audit 或 CI collector 必须清理或隔离 canonical evidence directory，将该命令的 stdout/stderr 保存为 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/command.log`，或保存等价 runner/CI result/report，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。测试代码的职责是行为断言与 runner artifact/attachment 产出；canonical command log、runner/CI result/report 和 OpenSpec evidence path 由 worker/automation 管理。`Evidence Status` 必须使用 `planned`、`passed`、`not-applicable`、`blocked` 等 schema 枚举；当前 AC final verification / acceptance checkbox 勾选前，worker 必须执行 AC evidence audit 并修复本 AC 所有 execution evidence / deposit 缺口。AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。`/tmp`、未复制的 runner 默认输出、未复制到 canonical directory 的 agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、test layer code requirements、verification evidence fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
+10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的唯一 fixed command。worker、change-stabilizer 或 CI collector 必须清理或隔离 canonical evidence directory，将该命令的 stdout/stderr 保存为 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/command.log`，或保存等价 runner/CI result/report，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。测试代码的职责是行为断言与 runner artifact/attachment 产出；canonical command log、runner/CI result/report 和 OpenSpec evidence path 由 worker、change-stabilizer 或 automation 管理。`Evidence Status` 必须使用 `planned`、`passed`、`not-applicable`、`blocked` 等 schema 枚举；当前 AC final verification / acceptance checkbox 勾选前，worker 必须执行 AC evidence audit 并修复本 AC 所有 execution evidence / deposit 缺口。AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。`/tmp`、未复制的 runner 默认输出、未复制到 canonical directory 的 agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、test layer code requirements、verification evidence fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
 
 ## Worker Blocker 语义
 
@@ -93,32 +93,42 @@
 2. worker 是当前 AC 的唯一执行者，拥有 current-change-scoped repair authority。只要修复仍在当前 change scope 内，worker 可以修改实现、测试、tasks artifact、`Test Evidence Matrix`、`Regression Test Deposit`、evidence 收集方式，并重跑同一个 fixed command。
 3. 流程级 blocker 仅限：source / proposal / spec / design 存在无法自主判定的冲突；必需工具、权限、凭证或外部状态不可用；用户或其他 agent 的改动冲突无法安全适配；必要修复会超出当前 change scope。
 
-## Reviewer Subagent 复核
+## Change Stabilizer 全局收敛
 
-1. 所有 implementation `worker` subagent 自然返回完成且没有明确 blocker 后，必须启动一个独立 `reviewer` subagent 执行最终复核检验。这是所有任务实现后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
-2. `reviewer` subagent 必须在所有 worker 结束后启动，且不得与 implementation worker 并行运行；若任一 worker 返回流程级 blocker 或仍有未完成实现任务，先要求对应 worker 继续处理未完成工作或汇报真实 blocker，不得启动 reviewer。
-3. 创建或启动 apply-stage `reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`，并且不得降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` reviewer，必须暂停 apply 并向用户报告 blocker，不得由主 agent 替代复核。
-4. 主 agent 启动 reviewer 时必须传入：change 名称、schema 名称、`contextFiles`、proposal/specs/design/tasks 路径、所有 worker 最终报告、worker 报告的改动范围、所有 AC/Test ID/execution evidence 路径、fixed commands、Regression Test Deposit 状态，以及 reviewer 需要复核的 coverage/runtime/test 矩阵路径。主 agent 不得为了准备 reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker 结果是否可信。
-5. reviewer 负责独立复核：检查代码 diff、artifacts、tasks checkbox、coverage/runtime/test 矩阵、execution evidence、Regression Test Deposit、固定验证命令结果、跨 AC 集成冲突、默认路径/no-mock 约束、verification evidence，并执行必要复核，包括每个已完成 AC 的 AC evidence audit 和全量 Testing Quality Core final audit；必要时可重跑 fixed commands。
-6. reviewer 只输出复核报告和 pass/blocker 结论，不得直接修改代码、artifacts、checkbox、execution evidence 或测试文件。若发现 blocker，主 agent 只汇报 reviewer blocker；不得自行接手修复、替 worker 补 proof、替 reviewer 复验，除非用户在 blocker 汇报后明确要求继续处理。
-7. 只有 reviewer 返回 pass，才可在最终汇报中声称复核通过或 ready to archive。reviewer 未运行、运行失败、无法满足模型/推理配置、或返回 blocker 时，不得声称 ready to archive。
+1. 所有 implementation `worker` subagent 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立 `change-stabilizer` subagent 执行一次全 change 复核、修复、补 evidence 和 regression deposit 收敛。这是 final-reviewer 之前的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
+2. `change-stabilizer` 必须在所有 worker 结束后启动，且不得与 implementation worker 或 final-reviewer 并行运行；若任一 worker 返回流程级 blocker 或仍有未完成实现任务，先要求对应 worker 继续处理未完成工作或汇报真实 blocker，不得启动 change-stabilizer。
+3. `change-stabilizer` 是 read/write 的 current-change-scoped repair agent。它可以检查代码 diff、artifacts、tasks checkbox、coverage/runtime/test 矩阵、execution evidence、Regression Test Deposit、固定验证命令结果、跨 AC 集成冲突、默认路径/no-mock 约束和 verification evidence；只要修复仍在当前 change scope 内，它可以修改实现、测试、tasks artifact、`Test Evidence Matrix`、`Regression Test Deposit`、ledger/evidence 收集方式，并重跑受影响 fixed commands。
+4. `change-stabilizer` 必须对发现的问题给出 root cause，优先在当前 change scope 内直接修复并补齐 canonical evidence。完成前必须执行受影响 AC 的 AC evidence audit 和全量 Testing Quality Core final audit，确保 fixed commands、`command.log` 或 runner/CI result/report、required artifacts/facts、default-path proof 和 regression deposit 都闭合。
+5. `change-stabilizer` 不得扩大当前 change scope，不得削弱 source/spec/design/test oracle，不得把无法证明的行为改写为 `passed` 或 `deposited`。如果必要修复超出当前 change scope、工具/权限/凭证不可用、source/proposal/spec/design 存在无法自主判定的冲突，或用户/其他 agent 改动冲突无法安全适配，必须返回流程级 blocker。
+6. 每个 apply completion cycle 最多自动运行一轮 `change-stabilizer`。如果 change-stabilizer 返回流程级 blocker，主 agent 只汇报 blocker 并停止，不得启动 final-reviewer。change-stabilizer 完成后若后续 final-reviewer 仍返回 blocker，主 agent 必须停止 apply 流程并交人工查验；不得自动启动第二轮 change-stabilizer，除非用户在 blocker 汇报后显式要求继续处理。
+7. `change-stabilizer` 不得声明 ready to archive。只有后续只读 final-reviewer 返回 pass，才可声称复核通过或 ready to archive。
+
+## Final Reviewer Subagent 复核
+
+1. `change-stabilizer` 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立只读 `final-reviewer` subagent 执行最终复核检验。这是所有自动实现和全局收敛后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
+2. `final-reviewer` subagent 必须在 change-stabilizer 结束后启动，且不得与 worker 或 change-stabilizer 并行运行；若 change-stabilizer 返回流程级 blocker 或仍有未完成修复/证据收敛工作，不得启动 final-reviewer。
+3. 创建或启动 apply-stage `final-reviewer` subagent 时必须满足 apply-stage 模型/推理配置要求，不得降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` final-reviewer，必须暂停 apply 并向用户报告 blocker，不得由主 agent 替代复核。
+4. 主 agent 启动 final-reviewer 时必须传入：change 名称、schema 名称、`contextFiles`、proposal/specs/design/tasks 路径、所有 worker 最终报告、worker 报告的改动范围、change-stabilizer 最终报告、stabilizer 改动范围、所有 AC/Test ID/execution evidence 路径、fixed commands、Regression Test Deposit 状态，以及 final-reviewer 需要复核的 coverage/runtime/test 矩阵路径。主 agent 不得为了准备 final-reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker/stabilizer 结果是否可信。
+5. final-reviewer 负责独立只读复核：检查代码 diff、artifacts、tasks checkbox、coverage/runtime/test 矩阵、execution evidence、Regression Test Deposit、固定验证命令结果、跨 AC 集成冲突、默认路径/no-mock 约束、verification evidence，并执行必要复核，包括每个已完成 AC 的 AC evidence audit 和全量 Testing Quality Core final audit；必要时可重跑 fixed commands。
+6. final-reviewer 只输出复核报告和 pass/blocker 结论，不得直接修改代码、artifacts、checkbox、execution evidence 或测试文件。若 final-reviewer 在 change-stabilizer 完成后仍发现 blocker，主 agent 必须汇报 final-reviewer blocker 并停止 apply 流程，状态为 blocked for human review；不得自行接手修复、替 worker/stabilizer 补 proof、替 final-reviewer 复验或自动启动第二轮 stabilizer，除非用户在 blocker 汇报后明确要求继续处理。
+7. 只有 final-reviewer 返回 pass，才可在最终汇报中声称复核通过或 ready to archive。final-reviewer 未运行、运行失败、无法满足模型/推理配置、或返回 blocker 时，不得声称 ready to archive。
 
 ## 主 Agent 职责
 
-1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、按 AC section 串行分派 worker、逐个等待 worker 自然返回结果，在所有 worker 完成后启动 reviewer，并汇总 worker 与 reviewer 返回的完成状态、证据路径、验证命令结果和流程级 blocker。
-2. 主 agent 必须等待所有已分派 worker 的任务全部完成或明确 blocker；若全部 worker 完成且无 blocker，必须等待 reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。worker 已声明完成的 AC section、checkbox、proof、evidence 和 fixed command 结果视为 worker 输出，reviewer 的 pass/blocker 视为最终复核输出；主 agent 不得再次复核、重测、审查 diff、重新跑验证命令、重新检查 execution evidence、重新执行 coverage/proof audit，或以主 agent 判断覆盖 worker/reviewer 的结论。
+1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、按 AC section 串行分派 worker、逐个等待 worker 自然返回结果，在所有 worker 完成后启动一次 change-stabilizer，在 change-stabilizer 完成后启动 final-reviewer，并汇总 worker、change-stabilizer 与 final-reviewer 返回的完成状态、证据路径、验证命令结果和流程级 blocker。
+2. 主 agent 必须等待所有已分派 worker 的任务全部完成或明确 blocker；若全部 worker 完成且无 blocker，必须等待 change-stabilizer 自然返回完成或 blocker；若 change-stabilizer 完成且无 blocker，必须等待 final-reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。worker 已声明完成的 AC section、checkbox、proof、evidence 和 fixed command 结果视为 worker 输出，change-stabilizer 的修复/证据收敛视为 stabilizer 输出，final-reviewer 的 pass/blocker 视为最终复核输出；主 agent 不得再次复核、重测、审查 diff、重新跑验证命令、重新检查 execution evidence、重新执行 coverage/proof audit，或以主 agent 判断覆盖 worker/stabilizer/final-reviewer 的结论。
 3. 任一 worker 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查未完成 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手实现。
-4. 任一 reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手复核。
-5. 主 agent 不得打断、停止、关闭或要求正在运行的 worker/reviewer 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 worker 自然返回最终完成或明确 blocker，并等待 reviewer 自然返回 pass 或明确 blocker。
-6. worker 返回 blocker 时，主 agent 只判断报告是否命中 `Worker Blocker 语义` 中的流程级 blocker 分类。若未命中，要求同一 worker 继续；主 agent 不接手实现、不更新 checkbox、不替 worker 补 proof。worker 或 reviewer 返回明确流程级 blocker 时，主 agent 只记录 blocker 并向用户汇报；不得自行接手修复、替 worker 补 proof、替 worker 勾选或取消 checkbox、替 reviewer 复验，除非用户在 blocker 汇报后明确要求主 agent 继续处理。
-7. worker 或 reviewer 返回完成但摘要缺少路径、命令结果或 blocker 状态等汇总必需信息时，主 agent 可以要求同一个 subagent 补充说明；这不构成主 agent 复核，主 agent 不得自行打开文件或运行命令来补齐。
+4. 任一 change-stabilizer 或 final-reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手修复/复核。
+5. 主 agent 不得打断、停止、关闭或要求正在运行的 worker/change-stabilizer/final-reviewer 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 worker 自然返回最终完成或明确 blocker，等待 change-stabilizer 自然返回完成或明确 blocker，并等待 final-reviewer 自然返回 pass 或明确 blocker。
+6. worker 返回 blocker 时，主 agent 只判断报告是否命中 `Worker Blocker 语义` 中的流程级 blocker 分类。若未命中，要求同一 worker 继续；主 agent 不接手实现、不更新 checkbox、不替 worker 补 proof。worker 或 change-stabilizer 返回明确流程级 blocker 时，主 agent 只记录 blocker 并向用户汇报；不得自行接手修复、替 worker/stabilizer 补 proof、替 worker 勾选或取消 checkbox。final-reviewer 在 change-stabilizer 后返回 blocker 时，主 agent 必须汇报并停止，交人工查验；不得自动启动第二轮 stabilizer、替 final-reviewer 复验或声称 ready to archive，除非用户在 blocker 汇报后明确要求继续处理。
+7. worker、change-stabilizer 或 final-reviewer 返回完成但摘要缺少路径、命令结果或 blocker 状态等汇总必需信息时，主 agent 可以要求同一个 subagent 补充说明；这不构成主 agent 复核，主 agent 不得自行打开文件或运行命令来补齐。
 
 ## 状态更新
 
-1. task checkbox 由负责对应 AC section 的 worker 执行。
-2. worker 只能勾选自己 section 内已经完成且满足 AC-level source/scope、projection/handling、No-Scope Boundary、Mock Policy、task `Proof`、linked spec scenario、linked design obligation/decision、default runtime path verification 和 AC/task override 约束的任务。
-3. 主 agent 不核对 worker 已勾选任务是否可信，不复验 proof 是否充分，也不纠偏 worker 的勾选结果；worker 的 checkbox 更新和完成声明是该 AC section 的状态来源。
-4. 不需要更新独立 acceptance status；AC 的通过状态由负责该 section 的 worker 完成声明、checkbox 更新、required evidence 产出和 worker 报告的 coverage 状态共同表示。
+1. task checkbox 主要由负责对应 AC section 的 worker 执行；change-stabilizer 只能在全局收敛中为 current-change-scoped 修复同步更新相关 tasks/evidence/deposit 状态，不得把未证明的任务标成完成。
+2. worker 只能勾选自己 section 内已经完成且满足 AC-level source/scope、projection/handling、No-Scope Boundary、Mock Policy、task `Proof`、linked spec scenario、linked design obligation/decision、default runtime path verification 和 AC/task override 约束的任务。change-stabilizer 若更新 checkbox 或 evidence status，也必须满足同等约束并保留对应 fixed command、canonical evidence 和 repair summary。
+3. 主 agent 不核对 worker/stabilizer 已勾选任务是否可信，不复验 proof 是否充分，也不纠偏 worker/stabilizer 的勾选结果；worker 的 AC section 输出和 change-stabilizer 的修复输出共同构成 final-reviewer 的输入。
+4. 不需要更新独立 acceptance status；AC 的通过状态由负责该 section 的 worker 完成声明、checkbox 更新、required evidence 产出、worker 报告的 coverage 状态、change-stabilizer 收敛结果和 final-reviewer pass 共同表示。
 
 ## 最终汇报
 
@@ -130,8 +140,9 @@
 - worker 报告的每个 AC 的 primary proof、required evidence、canonical evidence directories、execution evidence、截图/DOM/API/DB/job/log/audit 等证据。
 - worker 报告的 execution evidence 输出，包括每个 Test ID 的 `command.log` 或等价 runner/CI result/report、required artifacts/facts。
 - worker 执行的验证命令及结果。
-- reviewer 的复核结论、复核命令及 pass/blocker 报告。
+- change-stabilizer 的全局收敛报告、修复范围、重跑命令、补齐 evidence 和 blocker 状态。
+- final-reviewer 的只读复核结论、复核命令及 pass/blocker 报告。
 - 两个生产 schema 的永久回归测试沉淀：新增或更新的 test/spec 文件、最小回归命令、CI tier，以及明确不测试的实现细节边界。
 - 未完成、被阻塞、未验证或需要用户决策的事项。
 
-不得在所有 AC section proof 均由对应 worker 报告完成且 reviewer 返回 pass 前声称 ready to archive。
+不得在所有 AC section proof 均由对应 worker 报告完成、change-stabilizer 完成全局收敛且 final-reviewer 返回 pass 前声称 ready to archive。
