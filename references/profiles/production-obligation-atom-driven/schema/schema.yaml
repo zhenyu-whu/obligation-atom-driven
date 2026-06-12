@@ -341,6 +341,10 @@ artifacts:
       - `Regression Test Deposit = deposited` 是 apply/final 完成状态。tasks 阶段新增/变更 required behavior 不得写成 `deposited`；若登记 baseline/preserve `deposited`，只允许引用已有测试入口并写明 evidence reason。新增/变更 behavior 的具体写入条件由 apply-stage evidence gates 负责。
       - `Regression Test Deposit` 的 `Permanent Test File` 不得只指向 `openspec-results/`、`test-results/`、agent 临时脚本、`openspec/changes/**`，或只为当前 change 存在的 evidence-only / change-scoped feature bucket。除 `not-applicable` 外，必须指向按 production owner 放置的可持续维护 test/spec 文件，或稳定 smoke/e2e/ops 测试入口；禁止用 `tests/<change-slug>/` 或 `tests/<change-slug-prefix>/` 承载 unit、domain、DB、API、component 等 owner-local 测试。
       - `Regression Command` 不得只写 broad workspace command；必须是最小可重跑命令，例如 package-level unit/component/integration 命令、稳定 test file/filter，或 source-backed 的 smoke/e2e command。Broad workspace command 可额外列为 CI tier，但不能替代 behavior-specific regression command。
+      - `Fixed Command`、`Regression Command` 和 `CI Runnable?` 必须计划为由真实 runner 或 root/package/CI entry 触达该 Test ID。browser E2E Test ID 必须计划由 Playwright/WebDriver/Cypress 等 browser runner 或调用该 runner 的专用 script 触达；若该 entry 需要 apply 阶段新增或修正，必须在 task / deposit / `CI Runnable?` 中写明，且不得把该 Test ID 写成 `deposited`。用 Vitest wrapper、错误 runner、只跑其他 smoke 文件或只做 discovery/listing 的命令不得登记为 deposited regression。
+      - `Test File / Name` 必须计划可稳定定位的 test name/filter；互相独立的 operation、state、failure/retry、auth/security、layout 或 observability branches 不得为了减少 Test ID 被计划进同一个超长 `it` / `test`。单个 browser E2E 可以覆盖一个真实用户旅程，但独立负向和失败分支必须拆成独立 Test ID/filter 或低层测试计划。
+      - DB/integration Test ID 必须在 `Fixture Boundary` 或 `CI Tier` 中计划隔离策略。除非计划使用独立 database/schema/transaction namespace 或统一串行入口，否则不得计划在共享 `public` schema 上 `drop table ... cascade`、重跑 migration 并依赖全表计数；这类测试不能标记为 PR-fast/parallel deposited regression。
+      - Source/text scan 只能计划作为 config/ops/check、proof-only guard 或 static drift guard；不得作为 route/API、component、DB、worker、log emission、redaction、auth/security 或用户可见行为的 primary proof。
       - `Behavior Contract` 必须用 source/spec/design 语言描述外部行为；`Assertion Oracle` 必须说明断言依据；`Not Testing` 必须列出刻意不测的实现细节，例如私有函数名、调用次数、DOM 层级、样式类名或快照全文。
 
       Proof strength planning：
@@ -432,6 +436,8 @@ apply:
     - `component` 行必须有真实 component harness marker（mount/render 到交互 DOM、screen/getByRole/label/text、userEvent/fireEvent 或 framework interaction helper）。只用 `renderToStaticMarkup`、snapshot、字符串 DOM、reducer/state-machine 调用时，不得勾选 component primary proof。
     - `unit` 行不得触发真实 HTTP、浏览器 DOM、数据库事务、queue/worker 或 storage side effect；若实际测试跨越这些边界，必须改登记为对应 integration/component/API/browser 层，或补充正确层级 Test ID。
     - route/API 行必须调用实际 route handler、server action、API entry、RPC resolver 或 service contract boundary，并构造 Request/session/auth/context；DB/integration 行必须执行真实 database/repository/transaction/migration/readback/invariant path；worker/job、realtime/SSE、visual/responsive、security/negative 和 config/ops/check 行必须分别证明对应 production-compatible boundary。只证明 mock、fixture、私有 helper、静态文件存在或 broad command 通过时，必须先补测试或修 artifacts。
+    - apply 阶段必须检查测试代码质量和隔离性：一个 `it` / `test` 不得串联多个独立 branches 来伪装覆盖；DB/integration 测试不得在 PR-fast/parallel tier 破坏共享 public schema 或依赖全局表计数；修改 `process.env`、global fetch、时间、随机源、log sink、cookie/session 或文件系统输出必须恢复；source/text scanning 不得替代运行时 behavior proof。
+    - 新增测试 runner、测试目录或 browser E2E specs 时，必须同步检查 root/package/CI entry 是否真实执行这些测试。若脚本调用了错误 runner、过滤条件遗漏该文件、或只执行 discovery/listing，`Regression Test Deposit` 不得写成 `deposited`，`CI Runnable?` 必须写 `no + blocker reason` 或补齐脚本/CI wiring。
 
     Implementation 和 acceptance 在本 schema 中是同一个 workflow：
     - 按依赖顺序处理 AC sections。
