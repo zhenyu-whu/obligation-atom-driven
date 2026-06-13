@@ -74,7 +74,9 @@
 7. 启动 worker 时必须传入：
    - runtime 配置：`model=GPT-5.5`、`reasoningEffort=xhigh`、不得降级；若无法满足该配置，worker 不得启动。
    - change 名称和 schema 名称。
+   - `openspec instructions apply --change "<name>" --json` 返回的完整动态 `instruction` 原文。不得只传 instruction 摘要、runtime 文档路径或主 agent 自己改写后的简化版；任务包可以额外附 task-specific 摘要，但摘要不能替代完整动态 instruction。
    - `contextFiles` 路径清单。
+   - apply runtime 和 shared verification gate 的强制输入：`openspec/agent-runtime/openspec-apply-change.md`、`openspec/schemas/shared/verification-regression-gates.md` 路径，以及下列 Testing Quality Core worker guard 的原文约束。
    - schema-specific coverage rows：GA schema 传当前 AC 相关 `GA-####` proposal register rows；default schema 传当前 AC 相关 `SI-###` scope coverage rows。
    - 对应 AC section 的完整 AC-local execution contract，包括 acceptance、source atoms 或 scope items、projection 或 artifact handling、runtime rows owned、Test IDs、Prerequisites、Provides、Consumes、Start Gate、no-scope boundary、required evidence、mock/fixture boundary、mock policy 和每个 task trace inheritance/overrides。
    - 相关 specs/design 片段路径。
@@ -83,9 +85,16 @@
    - 与该 AC 相关的 execution evidence targets、`Test Evidence Matrix` 定义的唯一 `Fixed Command`、canonical `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/` evidence storage contract，以及 final verification / acceptance checkbox ID。
    - 允许修改的代码范围或模块边界。
    - 任务状态更新要求：worker 完成并验证自己 AC section 内任务后，必须把对应 checkbox 从 `- [ ]` 更新为 `- [x]`；未完成、未验证、proof 不足或 default path 未证明的任务不得勾选，这些状态默认表示 worker 仍需继续修复，不等同于流程级 blocker。
-8. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，只有命中 `Worker Blocker 语义` 中的流程级 blocker 分类时，才可标明流程级 blocker。
-9. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
-10. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的唯一 fixed command。worker、change-stabilizer 或 CI collector 必须清理或隔离 canonical evidence directory，将该命令的 stdout/stderr 保存为 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/command.log`，或保存等价 runner/CI result/report，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。测试代码的职责是行为断言与 runner artifact/attachment 产出；canonical command log、runner/CI result/report 和 OpenSpec evidence path 由 worker、change-stabilizer 或 automation 管理。`Evidence Status` 必须使用 `planned`、`passed`、`not-applicable`、`blocked` 等 schema 枚举；当前 AC final verification / acceptance checkbox 勾选前，worker 必须执行 AC evidence audit 并修复本 AC 所有 execution evidence / deposit 缺口。AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。`/tmp`、未复制的 runner 默认输出、未复制到 canonical directory 的 agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、test layer code requirements、verification evidence fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
+8. 任务包必须包含一个显式的 `Testing Quality Core worker guard` 小节，至少逐字包含以下约束，不得只以“遵守 shared gates”代替：
+   - 测试代码只负责行为断言与 runner artifact/attachment 产出；canonical `command.log`、runner/CI result/report、OpenSpec change/AC/Test routing 和 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/` evidence path 由 worker、change-stabilizer、automation 或 CI collector 在固定命令执行后管理。
+   - 测试代码不得硬编码 change slug、AC ID、Test ID 或 canonical OpenSpec evidence path；若测试框架无 attachment/report 机制，只能通过共享 fixture 消费输出目录配置写临时 machine-readable artifact，再由 apply 执行方或 automation 复制到 canonical directory。
+   - 一个 `it` / `test` 必须围绕一个外部可理解的 behavior、branch 或 lifecycle segment；不得把独立的 auth、validation、idempotency、edit、retry、layout、observability、security、failure 或 recovery branches 串成一个超长用例。
+   - DB/integration 测试必须声明并落实隔离策略，readback oracle 应限定到 test-owned tenant/user/entity/schema/transaction 范围；除非整个 database/schema 已隔离，否则不得用全局 `count(*)` 证明无副作用。
+   - 完成当前 AC 前，worker 必须检查新增或修改的测试文件是否违反上述四条；若违反，属于当前 AC 未完成修复工作，不得勾选 final verification / acceptance task。
+9. 必须明确告知 worker：实现前按 schema 分支读取必要原始依据。GA schema 通过 linked `GA-####` 定点读取 registered source docs；default schema 通过 `SI-###` 对应的 proposal/spec/design baseline/input/code/spec trace 定点读取。若发现 context 冲突、任务边界不清、trace 缺失、proof 不可执行、task 弱于 proposal/spec/design/source 或 baseline，只有命中 `Worker Blocker 语义` 中的流程级 blocker 分类时，才可标明流程级 blocker。
+10. 必须明确告知 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户的改动；遇到重叠文件或冲突风险必须适配现有改动并在最终回复中说明。
+11. 必须明确告知 worker：完成任务时要执行 AC-owned Test IDs 在 `Test Evidence Matrix` 中定义的唯一 fixed command。worker、change-stabilizer 或 CI collector 必须清理或隔离 canonical evidence directory，将该命令的 stdout/stderr 保存为 `openspec-results/<change-slug>/<AC-ID>/<Test-ID>/command.log`，或保存等价 runner/CI result/report，且 `<Test-ID>` 必须匹配 `T-[0-9]{3}`。测试代码的职责是行为断言与 runner artifact/attachment 产出；canonical command log、runner/CI result/report 和 OpenSpec evidence path 由 worker、change-stabilizer 或 automation 管理。`Evidence Status` 必须使用 `planned`、`passed`、`not-applicable`、`blocked` 等 schema 枚举；当前 AC final verification / acceptance checkbox 勾选前，worker 必须执行 AC evidence audit 并修复本 AC 所有 execution evidence / deposit 缺口。AC-005/final proof 只能消费已经通过各自 AC evidence gate 的前置 evidence，不得把 final gate 作为前置 AC 执行证据的首次 canonicalization 检查。`/tmp`、未复制的 runner 默认输出、未复制到 canonical directory 的 agent 当场手工截图或口述路径不得作为最终 evidence。两个生产 schema worker 都必须按 `Test Layer Plan`、test layer code requirements、verification evidence fields 和 `Regression Test Deposit` 落实分层测试与永久回归测试；若 deposit 标记 `not-applicable` 或 `blocked`，必须给出 source/scope-backed 理由。
+12. worker 最终报告必须单独列出 `Testing Quality Core self-audit`，逐项回答：是否已接收并遵守完整动态 apply instruction；新增/修改的测试是否没有硬编码 canonical OpenSpec evidence path；是否没有用单个 `it` / `test` 聚合独立分支；测试 artifact/facts 如何经 runner attachment/report、输出目录配置或 apply 执行方收集；DB/integration 隔离策略如何落实；每个 Test ID 的 fixed command、canonical evidence directory、`command.log` 或等价 runner/CI result/report、Evidence Status 和 Regression Deposit 状态是什么。
 
 ## Worker Blocker 语义
 
