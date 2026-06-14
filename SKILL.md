@@ -1,6 +1,6 @@
 ---
 name: obligation-atom-driven
-description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their proposal/spec/design/tasks templates and matching OpenSpec agent-runtime constraint documents.
+description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their proposal/spec/design/verification/tasks templates and matching OpenSpec agent-runtime constraint documents.
 ---
 
 # Obligation Atom Driven
@@ -9,8 +9,8 @@ Use this skill to configure a repository so OpenSpec changes use one of the bund
 
 ## Profiles
 
-- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes canonical change packets and `obligation-atom-index.md` from `openspec/orchestrate`, preserves `GA-####` IDs, and uses projection-aware proposal/spec/design/tasks artifacts.
-- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> tasks model, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and adds lightweight `SI-###` change-local scope coverage, AC acceptance slices, fixed `T-###` tests, execution evidence, and regression test deposits.
+- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes canonical change packets and `obligation-atom-index.md` from `openspec/orchestrate`, preserves `GA-####` IDs, and uses projection-aware proposal/spec/design/verification/tasks artifacts. `verification.md` owns independent test intent and oracle; `tasks.md` owns production implementation and runtime acceptance coverage.
+- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design model, adds independent `verification.md`, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and uses lightweight `SI-###` change-local scope coverage plus AC acceptance slices in `tasks.md`.
 
 The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification for that profile must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
 
@@ -38,9 +38,8 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `schema_dir` defaults to `schema` when omitted.
 5. Sync bundled OpenSpec files into the target repository:
    - Copy every bundled production profile schema directory from `<skill-root>/references/profiles/<profile>/schema/` to `<repo-root>/openspec/schemas/<profile>/`, including both `production-obligation-atom-driven` and `production-default-acceptance-driven`.
-   - Copy `<skill-root>/references/shared/*` to `<repo-root>/openspec/schemas/shared/`, including the bundled `verification-regression-gates.md` used by both production schemas.
    - Copy `<skill-root>/references/agent-runtime/*.md` to `<repo-root>/openspec/agent-runtime/`.
-   - Preserve the bundled apply runtime requirement that any apply-stage `worker`, `change-stabilizer`, or `final-reviewer` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
+   - Preserve the bundled apply runtime requirement that any apply-stage `implementation-worker`, `test-worker`, `fix-worker`, `change-stabilizer`, or `final-reviewer` subagent must run on `GPT-5.5` with `xhigh` reasoning and must not be downgraded.
    - Create or update `<repo-root>/openspec/config.yaml` so the top-level `schema:` value is `<schema_name>`.
    - Preserve unrelated project-specific config entries when updating an existing `openspec/config.yaml`.
    - If target schema or runtime files already exist and differ, inspect the differences and update them intentionally.
@@ -54,7 +53,6 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
    - `openspec/schemas/production-obligation-atom-driven/templates/` contains the bundled templates.
    - `openspec/schemas/production-default-acceptance-driven/schema.yaml` exists.
    - `openspec/schemas/production-default-acceptance-driven/templates/` contains the bundled templates.
-   - `openspec/schemas/shared/verification-regression-gates.md` exists.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
@@ -62,13 +60,12 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 ## Bundled Resources
 
 - `references/profiles/production-obligation-atom-driven/`: profile metadata and schema files for the production obligation atom driven OpenSpec workflow.
-- `references/profiles/production-obligation-atom-driven/schema/schema.yaml`: projection-aware schema that consumes canonical final change packets and `obligation-atom-index.md` directly from `openspec/orchestrate`, creates proposal, specs, design, and acceptance-driven tasks, distinguishes `spec-requirement`, `spec-guard`, `design-obligation`, `verification-obligation`, and `contextual-only` atoms, and does not use `source-truth.md`, separate `acceptance.md`, legacy source coverage artifacts, `change-source-map.md`, or pre-proposal source artifacts.
+- `references/profiles/production-obligation-atom-driven/schema/schema.yaml`: projection-aware schema that consumes canonical final change packets and `obligation-atom-index.md` directly from `openspec/orchestrate`, creates proposal, specs, design, verification, and acceptance-driven tasks, distinguishes `spec-requirement`, `spec-guard`, `design-obligation`, `verification-obligation`, and `contextual-only` atoms, and does not use `source-truth.md`, separate `acceptance.md`, legacy source coverage artifacts, `change-source-map.md`, or pre-proposal source artifacts.
 - `references/profiles/production-obligation-atom-driven/schema/templates/`: templates paired with the schema artifacts.
 - `references/profiles/production-default-acceptance-driven/`: profile metadata and schema files for post-greenfield production evolution.
-- `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
+- `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that uses proposal, specs, design, verification, and acceptance-driven tasks; it does not consume orchestrate packets or global indexes, and instead uses change-local `SI-###` scope items only for lightweight cross-artifact coverage.
 - `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
-- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `worker`, `change-stabilizer`, and `final-reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades. It also requires at most one automatic post-worker `change-stabilizer` repair pass before the read-only `final-reviewer`; any final-reviewer blocker after stabilization stops the apply flow for human review.
-- `references/shared/verification-regression-gates.md`: shared testing gate required by both production schemas. It is synced to `openspec/schemas/shared/verification-regression-gates.md`.
+- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows and the `AGENTS.md` runtime section reference. The apply runtime hard-requires apply-stage `implementation-worker`, `test-worker`, `fix-worker`, `change-stabilizer`, and `final-reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades. It also requires at most one automatic post-worker `change-stabilizer` repair pass before the read-only `final-reviewer`; any final-reviewer blocker after stabilization stops the apply flow for human review.
 
 ## Profile Contract
 

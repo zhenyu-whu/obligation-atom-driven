@@ -2,7 +2,7 @@
 
 当执行或触发 `openspec-propose`、`openspec-new-change`、`openspec-continue-change`、`openspec-ff-change` 或任何会创建/继续生成 OpenSpec change artifacts 的技能时，必须遵守以下约束。
 
-本文档覆盖两个生产 schema：`production-obligation-atom-driven` 和 `production-default-acceptance-driven`。历史 change 如果在 `.openspec.yaml` 中显式声明其他旧 schema，可继续按该 change 自身 schema instructions 读取旧 artifacts；使用这两个生产 schema 的新 change 不得创建或依赖 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 source artifact。
+本文档覆盖两个生产 schema：`production-obligation-atom-driven` 和 `production-default-acceptance-driven`。使用这两个生产 schema 的新 change 必须生成 `verification.md`。
 
 ## Artifact 中文约束
 
@@ -11,7 +11,7 @@
 3. 上一条只豁免“固定字段或标识本身”，不豁免 agent 填写的解释性内容。凡是 agent 自己写入的句子、短语说明、表格单元格说明、trace block 字段值、proof、preserve、risk、verification、acceptance、design rationale、task description、Requirement 正文、Scenario 的 WHEN/THEN 条件与结果正文，都必须使用简体中文。
 4. 技术英文术语可以作为标识或名词短语保留，但承载语义的句子必须中文化。允许写 `fixture loader`、`GET /api/health`、`pnpm -w check` 这类标识；不允许写 `Runtime checks prove default wiring` 这类英文解释句，应改为“运行时检查证明默认 wiring 可用”。
 5. 表格判定规则：表头可以按 template 保持英文；表格中由 agent 填写的每个说明类单元格都按正文处理，必须中文。只有单元格内容完全由 ID、路径、代码标识、任务编号、capability 名称或源文档精确术语组成时，才可以保持英文或原文。
-6. `tasks.md` 的 AC-level 字段 `Source Atoms:`、`Scope Items:`、`Projection:`、`Artifact Handling:`、`Spec:`、`Design:`、`Acceptance:`、`No-Scope Boundary:`、`Primary Proof:`、`Mock Policy:` 以及 task-level 字段 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:`、`Overrides:` 可以保持英文；字段值必须中文，除非字段值只是固定 trace marker（例如 `inherits AC-###`）、ID、路径、代码标识、命令、projection/handling enum 或精确 requirement/scenario 名称。checkbox 后的任务标题属于 task description，必须中文。
+6. `tasks.md` 的 AC-level 字段 `Source Atoms:`、`Scope Items:`、`Projection:`、`Artifact Handling:`、`Spec:`、`Design:`、`Acceptance:`、`No-Scope Boundary:`、`Primary Proof:`、`External Boundary / Default Path Policy:`、`Mock Policy:` 以及 task-level 字段 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` 可以保持英文；字段值必须中文，除非字段值只是固定 trace marker（例如 `inherits AC-###`）、ID、路径、代码标识、命令、projection/handling enum 或精确 requirement/scenario 名称。checkbox 后的任务标题属于 task description，必须中文。
 7. specs artifact 中 OpenSpec 固定关键词和 heading 可保持 template 要求；Requirement 正文、Scenario 的 WHEN/THEN 条件与结果说明必须中文。Requirement / Scenario 名称若由 agent 新拟定，优先中文；只有需要精确引用已有英文规范名或源文档原文术语时才保留英文。
 8. proposal / design / tasks artifact 的固定章节标题可保持 template 形式；Why、What、Impact、Design decisions、Risks、Open Questions、Alignment Gate、AC 说明、Proof、Mock Policy 等解释性正文必须中文。
 9. 语言自查最低标准：把反引号中的代码/路径/命令/ID 暂时忽略后，每个由 agent 填写的自然语言句子仍应主要是简体中文；若剩余内容是一句英文或英文主导的说明，即判定为不合格。
@@ -29,7 +29,7 @@
    - 无输入自动推断分支：`openspec new change "<change-slug>" --schema production-obligation-atom-driven`
    - 有输入 default-style 分支：`openspec new change "<derived-or-provided-slug>" --schema production-default-acceptance-driven`
 5. 创建或继续 change 后必须运行 `openspec status --change "<name>" --json`，确认 `schemaName` 与选择结果或既有 change schema 一致；若不一致，先修正 schema/config/change metadata，不得继续生成 artifacts。
-6. 两个生产 schema 的 `applyRequires` 都只应包含 `tasks`，artifact 顺序都是 `proposal.md`、`specs/**/*.md`、`design.md`、`tasks.md`。如果新 change 的 status 仍要求 `source-truth`、`acceptance`、旧版 source coverage、`change-source-map` 或任何 proposal 前置 source artifact，说明 schema 未切换成功，必须先修复。
+6. 两个生产 schema 的 `applyRequires` 都必须包含 `tasks` 和 `verification`，artifact 顺序都是 `proposal.md`、`specs/**/*.md`、`design.md`、`verification.md`、`tasks.md`。
 7. `context` 与 `rules` 是 agent 必须遵守的约束，不得复制进 artifact 正文。
 
 ## 无显式 Change 名时的自动推断
@@ -84,8 +84,9 @@
    - `proposal.md`
    - `specs/**/*.md`
    - `design.md`
+   - `verification.md`
    - `tasks.md`
-4. `applyRequires` 只应包含 `tasks`。如果新 change 的 status 仍要求 `source-truth`、`acceptance`、旧版 source coverage、`change-source-map` 或任何 proposal 前置 source artifact，说明 schema 未切换成功，必须先修复 schema/config，而不是继续生成旧 artifacts。
+4. `applyRequires` 必须包含 `tasks` 和 `verification`。
 5. `context` 与 `rules` 是 agent 必须遵守的约束，不得复制进 artifact 正文。
 
 ## Production Default Acceptance Driven 入口
@@ -99,16 +100,17 @@
    - `proposal.md`
    - `specs/**/*.md`
    - `design.md`
+   - `verification.md`
    - `tasks.md`
 5. 本分支不消费 `openspec/orchestrate`、`change-plan.md`、final change packet、`obligation-atom-index.md` 或 capability anchor packet；不得创建 `GA-####` register，也不得把 `SI-###` 当作全局 source ID。
 6. proposal 的主要输入是用户请求、现有 `openspec/specs/`、现有代码、当前产品行为，以及用户显式提供的 issue、设计稿、外部文档或调研结论。不得要求 proposal 前置 artifact。
-7. `applyRequires` 只应包含 `tasks`。如果 status 仍要求 `source-truth`、`acceptance`、旧版 source coverage、`change-source-map` 或任何 proposal 前置 source artifact，说明 schema 未切换成功，必须先修复 schema/config/change metadata。
+7. `applyRequires` 必须包含 `tasks` 和 `verification`。
 8. `context` 与 `rules` 是 agent 必须遵守的约束，不得复制进 artifact 正文。
 
 ## Obligation Atom 输入契约
 
 1. 不创建、不读取、不要求任何 proposal 前置 source artifact。`proposal.md` 是第一个标准 artifact，并且只能通过最小权威读集消费当前已存在的 canonical change packet 与 global atom index。
-2. Canonical change contract：当前 Phase 4 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 是 proposal 的唯一内容权威。它独占定义本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers。
+2. Canonical change contract：当前 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 是 proposal 的唯一内容权威。它独占定义本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers。
 3. Lookup table：`openspec/orchestrate/change-capability-anchors/obligation-atom-index.md` 只用于校验 `GA-####` 存在，并按 atom id 补齐 source trace 字段、artifact projection 和 focused source-window read 所需的 `Source Document` + `Lines`。它不得覆盖 final change packet 的 direct scope、artifact projection 或 capability 归属。
 4. Discovery gates：
    - 读取 `openspec/orchestrate/change-capability-anchors/index.md`，确认目标 change 存在、packet path 存在。
@@ -127,7 +129,7 @@
 2. proposal 必须保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use` 和 `Evidence Need`。
 3. proposal 必须将 `direct`、`contextual`、`contextual-preserve`、`explicit-non-goal`、`prototype-only-not-production`、`non-production`、`blocked` 等 atom 状态分别处理，不能把上下文、排除项或 prototype-only atom 误转成实现 scope。
 4. proposal 的 `Capabilities` 必须匹配 final change packet 中的 capability atom views；除非 packet 明确记录非阻塞 gap 或 blocker。
-5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 tasks/proof；`contextual-only` 只允许作为非 direct context/guard。final packet 的 direct row 不得使用 `contextual-only`；若出现，必须改入 context/non-direct handling 或记录 blocker。不能留下 orphan direct atom。
+5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 `verification.md` 的 oracle/proof intent，并在需要生产实现或 runtime proof 时进入 `tasks.md` coverage；`contextual-only` 只允许作为非 direct context/guard。final packet 的 direct row 不得使用 `contextual-only`；若出现，必须改入 context/non-direct handling 或记录 blocker。不能留下 orphan direct atom。
 6. proposal 不得因为 atom 是 direct 就自动要求 specs 生成 requirement/scenario。旧 packet 缺少 projection 时，必须按 schema 的 legacy inference 保守推断并记录 `Projection Source: inferred-from-legacy-packet`；无法推断则 blocker。
 7. proposal alignment gate 必须声明 proposal input mode、change slug、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
 
@@ -136,63 +138,50 @@
 1. specs 必须从 proposal register 和 per-change capability atom view file 生成；每个 requirement/scenario 必须列出 exact `GA-####` 和 concrete `Source Trace`。
 2. specs 不得使用 `GA-0001-GA-0010`、`GA-0001..GA-0010`、`GA-0001 through GA-0010` 等范围。
 3. specs 的 Requirement / Scenario 名称若非源文档固定术语，优先使用中文。
-4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 不得伪造成 scenario，也不得为了 handoff 单独创建空 spec。只有当同一 capability 已经因为 `spec-requirement` 或 `spec-guard` 生成有效 delta spec 时，才可在该 spec 的 `Artifact Projection Notes` 或 gate 中点名 handoff；纯 design/verification-only capability 的 closure 必须在 design/tasks coverage 中完成。
+4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 不得伪造成 scenario，也不得为了 handoff 单独创建空 spec。只有当同一 capability 已经因为 `spec-requirement` 或 `spec-guard` 生成有效 delta spec 时，才可在该 spec 的 `Artifact Projection Notes` 或 gate 中点名 handoff；纯 design/verification-only capability 的 closure 必须在 design、verification 和 tasks coverage 中完成。
 5. 每个 spec 的 Production Alignment Gate 必须列出 `Artifact Projection coverage` 和 `Orphan direct atoms: none`，或列出 blocker。
 6. design 必须把 proposal/spec 中需要设计消费的 `GA-####` 落到可执行实现义务，包括 module、data/API、auth/security、worker/realtime、frontend/UX、ops/deployment 和 verification。
 7. design 生成前必须建立 design atom matrix。每个 `design-obligation` direct `GA-####`、需要 design placement 的 `spec-requirement`、`spec-guard` 和每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker。
 8. 如果 obligation atom 只定义行为、不定义实现形态，design 可以选择最小 source-compatible 技术形态，但必须标注为 source-backed implementation decision，记录 source gap、选择的最小技术形态、对应 `GA-####`、以及拒绝的 scope-expanding alternatives。
 
-## Obligation Acceptance-Driven Tasks 门禁
+## Obligation Tasks / Verification 门禁
 
-1. 不生成独立 `acceptance.md`。`tasks.md` 是实现计划和验收合同。
-2. tasks 必须按 `## AC-### <name>` 分组。每个 AC section 必须有 `Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:`、`Mock Policy:`。
-3. tasks 生成 AC 前必须建立 runtime provision graph，区分 baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only 和 forbidden-boundary；AC sections 必须按该 graph 拓扑排序生成。
-4. 如果某个 AC 的 Primary Proof、Required Evidence 或 fixed command 需要 current-change 内尚未由 baseline 或 earlier AC 提供的 API、DB、repository、auth、route、worker、queue、provider、storage、config 或 runtime state，必须在生成阶段重排、合并 AC、把 provider work 内联到该 AC，或生成更早的 provider AC；不得把后置依赖留到 apply 阶段。
-5. 每个 AC section 必须额外包含 `Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`。`Prerequisites` 只能引用 baseline 或 earlier AC/Test IDs；`Provides` 说明本 AC 完成后提供给后续 AC 的 runtime rows/contracts/facts；`Consumes` 说明本 AC proof 消费的 baseline 或 earlier AC rows/contracts/facts；`Start Gate` 用中文写明进入该 AC 的执行门禁。
-6. AC heading 的 `<name>` 和 checkbox task description 必须使用中文，除非它们完全是固定 ID、路径、命令或源文档精确术语。
-7. 每个 checkbox task 必须只包含 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段；默认通过 `Trace: inherits AC-###` 继承 owning AC 的 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`No-Scope Boundary:` 和 `Mock Policy:`。只有 task 相对 owning AC 有更窄 scope 或例外时，才在 `Trace:` 或 `Overrides:` 中写明 exact override，不要机械重复 AC-level 字段。
-8. `tasks.md` 必须包含 `## Acceptance-Driven Coverage`，并按顺序包含三张非 checkbox 表：
-   - `### Obligation Atom Coverage`
-   - `### Requirement / Scenario Coverage`
-   - `### Design Obligation Coverage`
-9. 每个 direct atom 必须按 artifact projection 有 implementation task、design handoff、guard handling 或 verification/acceptance proof，除非该 atom 在 proposal 中被 source-backed 改判为 blocker、deferred、non-goal 或 guard。
-10. `Obligation Atom Coverage` 必须包含 `Artifact Projection` 列；`Requirement / Scenario Coverage` 和 `Design Obligation Coverage` 必须体现 projection handling，且不得为纯 `design-obligation` 或 `verification-obligation` atom 伪造 scenario。
-11. `Obligation Atom Coverage` 每行只能包含一个 `GA-####`，不得使用 aggregate row、range 或多 ID 单元格。
-12. 三张 coverage 表中的每个 `Implementation Task IDs` 和 `Verification Task IDs` 必须解析到实际 checkbox task ID。只引用 AC heading 不足以作为 executable proof；需要显式 final verification / acceptance checkbox。
-13. 每个 AC section 必须至少有一个 final verification / acceptance checkbox，并在 `Primary Proof`、`Required Evidence` 和相关 coverage rows 中被引用。
-14. 每个 Test ID 必须使用 exact `T-###`（三位数字，例如 `T-001`，可用 `T-000` 表示 repository/runtime support），在整个 change 内唯一且只归属一个 AC。禁止把 AC 编号、测试名称、slug、字母后缀或描述性文本写入 Test ID；语义应写入 `Test File / Name`、`Layer`、`Covers Rows` 或 `Evidence Produced`。
-15. Testing Quality Core 不可选：`Test Layer Plan`、`Test Evidence Matrix` 和 `Regression Test Deposit` 必须始终存在。tasks/propose 阶段只生成测试计划契约，不生成或宣称新 required behavior 的测试代码已经完成验证；新增/变更 behavior 默认应是 `planned`，`Evidence Produced` 可写 apply-pending 占位。每个 required behavior Test ID 必须有唯一 `Fixed Command`、`Verification Expectation` 和 `Evidence Status` 字段，除非写明 source-backed `not-applicable` 或 evidence-level `blocked` 理由；这里的 `blocked` 只表示该 evidence row 无法计划或执行验证，不代表 apply 阶段 worker 的流程级 blocker。不得把 smoke/browser proof 当作 unit/component/API/DB/security 等可低层稳定断言的替代品。固定命令必须是真正定位该 Test ID 的最小命令，不得用 `pnpm test* -- ...` 透传 file/filter 作为 selector。`Test Evidence Matrix` 必须写明 `Default Path Level` 和预期 layer-specific harness；具体测试代码是否满足 harness/runtime 由 apply/stabilizer/final-review gate 检查。
-16. runtime detail matrices 的展开深度只由 source/spec/design 是否出现对应 runtime 行为决定。无 route/control/API/data mutation/auth/DB/worker/SSE/storage/provider/state/branch 的 change，可在 `Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix` 中保留最小 `Not applicable` 行并说明 source-backed 理由；一旦出现对应 runtime 行为，必须展开对应矩阵行。
-17. tasks 必须定义每个 AC 的 execution evidence expectation，包括 commands、`command.log` 或 runner/CI result/report、browser/rendered artifacts、API/DB/job/storage/log/audit facts，以及 default-production-path proof；测试 artifact 通过 runner/CI result/report、框架 output directory 或记录的 artifact directory 暴露，由 worker、change-stabilizer 或 CI collector 收集到 canonical directory。
-18. Proof 必须达到验收强度：用户可见行为需要 browser/rendered evidence；后端/data/worker/storage/security 行为需要 API、DB、job、asset、log、audit 或 authorization facts；默认生产路径不能只用 mock 或 isolated unit test 证明。Fixture 可以提供输入、凭证/claims、外部返回或确定性环境，但不能替代 runtime boundary 的默认实现；Test Evidence / Regression Deposit 必须区分 fixture data 与 production-compatible default export/dependency/config proof。
-19. Final task 自查必须确认 AC section 输出顺序满足 runtime provision graph：没有 consumer AC 依赖后置 provider AC，没有循环依赖，没有 future-change-only prerequisite，也没有只藏在 proof/fixed command 中的隐式 runtime dependency。
+1. `tasks.md` 是 production implementation and runtime acceptance model；`verification.md` 是 independent test intent and oracle artifact。
+2. `verification.md` 必须在 `tasks.md` 之前生成，依赖 proposal/specs/design，不依赖 `tasks.md`。
+3. `verification.md` 必须包含 `Verification Intent`、`Behavior Oracle Matrix`、`Suggested Layer Matrix`、`Mock And Fixture Boundary`、`Regression Intent`、`Do Not Test`、`Oracle Consistency Checklist`。
+4. 每个 required VID 必须有 source basis、public/runtime observable surface、oracle、failure signal 和 priority。oracle 不能来自当前实现细节、`tasks.md`、测试文件结构或 evidence/deposit 结构。
+5. `verification.md` 不得包含具体测试文件、固定测试命令、evidence directory 或 deposit status。
+6. `tasks.md` 必须按 `## AC-### <name>` 分组，保留 `Acceptance-Driven Coverage`、`Runtime Acceptance Index`、AC sections 和 `Verification Appendix`。
+7. 每个 AC section 必须有 `Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
+8. 每个 checkbox task 只能包含 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段。
+9. `tasks.md` 的 `Acceptance-Driven Coverage` 必须包含 `Obligation Atom Coverage`、`Requirement / Scenario Coverage`、`Design Obligation Coverage`；`Obligation Atom Coverage` 每行只能包含一个 exact `GA-####`。
+10. coverage 表中的 `Verification Task IDs` 必须改为 `Acceptance Proof Task IDs`；引用的是 checkbox proof task，不是测试编号。
+11. `Runtime Acceptance Index` 必须建立 runtime provision graph，区分 baseline、current-change AC、future change 和 explicit negative boundary；AC sections 必须按拓扑顺序生成。
+12. `Verification Appendix` 只保留 runtime detail matrices：surface、operation、state/branch、async/realtime chain。无 runtime 行为时保留最小 `Not applicable` 行和 source-backed 理由。
+13. `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
+14. Proof 必须达到生产验收强度：用户可见行为需要 rendered/readback fact；后端/data/worker/storage/security 行为需要 API、DB、job、asset、log、audit 或 authorization facts；这些是 runtime proof category，不是测试执行记录。
+15. Final task 自查必须确认没有 orphan direct atom、GA range、后置 provider dependency、source 外行为或 runtime row orphan。
 
 ## Default Acceptance 输入契约与门禁
 
 以下规则仅适用于 `production-default-acceptance-driven`。
 
-1. proposal 必须包含 `Change Scope Coverage`，并为每个 material scope item 分配 change-local `SI-###`。`SI-###` 只在本 change 内有效，不得跨 change 复用，也不得当作 source document 的全局 ID。
-2. `Change Scope Coverage` 的每个 material row 必须包含 `Artifact Handling`，允许值为 `spec`、`guard`、`design`、`proof`、`context`。每个非 context scope item 必须有 downstream coverage expectation。
-3. proposal 必须记录 `Baseline / Input Read Set`，说明读取了哪些用户输入、existing specs、代码路径、测试、配置、路由/API 或外部输入；若没有外部来源，必须说明 scope 来自用户请求。
-4. proposal 不得读取或依赖 `openspec/orchestrate`、final packet、global atom index、capability anchor packet；不得生成 `Change Atom Coverage Register` 或 `Source Window Read Set`。
-5. specs 必须读取 proposal 的 `Change Scope Coverage`，并只为包含 `Artifact Handling: spec` 或 `Artifact Handling: guard` 的 capability 创建 delta spec。只有 `design`、`proof` 或 `context` scope item 时不得创建空 spec。
-6. 每个 requirement 必须包含 `Scope Items:` bullets，列出 exact `SI-###` 和简短 scope 摘要；每个 requirement 必须包含 `Baseline Trace:` bullets，列出用户输入、existing spec、代码路径、路由/API、数据表、配置、测试或外部输入来源。
-7. specs 不得使用 `SI-001-SI-010`、`SI-001..SI-010` 或类似 range；必须枚举 exact IDs。
-8. design 必须使用 proposal 的 `Change Scope Coverage`、spec `Scope Items` 和 `Baseline Trace` 作为 scope-reading interface。每个 spec scenario、每个 `Artifact Handling: design` item、每个 guard item 以及每个需要 implementation placement 的 material scope item，都必须映射到 design decision、guard handling 或 explicit blocker。
-9. tasks 必须按 `## AC-### <name>` 分组。每个 AC section 必须包含 `Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Test IDs:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`Mock / Fixture Boundary:`、`Mock Policy:`。
-10. `tasks.md` 必须包含 `## Acceptance-Driven Coverage`，并按顺序包含三张非 checkbox 表：
-   - `### Scope Item Coverage`
-   - `### Requirement / Scenario Coverage`
-   - `### Design Decision Coverage`
-11. `Scope Item Coverage` 每行只能包含一个 exact `SI-###`，不得使用 aggregate row、range 或多 ID 单元格。每个 material scope item 必须按 artifact handling 映射到 AC section、implementation task、verification task、guard/design handoff 或 proof。
-12. 三张 coverage 表中的每个 `Implementation Task IDs` 和 `Verification Task IDs` 必须解析到实际 checkbox task。只引用 AC heading 不足以作为 executable proof；需要显式 final verification / acceptance checkbox。
-13. 每个 checkbox task 必须只包含 `Trace:`、`Runtime Rows:`、`Test IDs:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段。`Trace: inherits AC-###` 表示继承 owning AC 的 `Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`No-Scope Boundary:` 和 `Mock Policy:`。
-14. 每个 Test ID 必须使用 exact `T-###`，在整个 change 内唯一且只归属一个 AC。禁止把 AC 编号、测试名称、slug、字母后缀或描述性文本写入 Test ID。
-15. `tasks.md` 必须包含 `## Runtime Acceptance Index`、所有 `AC-###` sections、后置 `## Verification Appendix` 六张 runtime/test 矩阵（包含 `Test Layer Plan` 和 `Test Evidence Matrix`），以及 `### Regression Test Deposit`。`Test Layer Plan` 是分层测试唯一事实来源；`Regression Test Deposit` 是永久回归测试文件、最小回归命令、behavior contract、assertion oracle、fixture boundary、CI tier、Not Testing 边界和 deposit status 的唯一事实来源。
-16. Testing Quality Core 不可选：每个 required behavior Test ID 必须在 `Test Layer Plan` 中有 layer decision，在 `Test Evidence Matrix` 中有唯一 `Fixed Command`、`Verification Expectation`、`Evidence Status`，并在 `Regression Test Deposit` 中有永久回归沉淀计划或 scope-backed `not-applicable` 理由。tasks/propose 阶段不得把新增/变更 required behavior 写成已 `passed` / `deposited`，除非引用已有 baseline/preserve evidence。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 enabled 或当前实现输出登记为 required behavior 的 primary proof 或永久回归 oracle；不得把 smoke/browser proof 当作 unit/component/API/DB/security 等可低层稳定断言的替代品。`Test Evidence Matrix` 必须写明 `Default Path Level` 和预期 layer-specific harness；具体测试代码是否满足 harness/runtime 由 apply/stabilizer/final-review gate 检查。
-17. runtime detail matrices 的展开深度只由 proposal/spec/design 是否出现对应 runtime 行为决定。无 route/control/API/data mutation/auth/DB/worker/SSE/storage/provider/state/branch 的 change，可在 `Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix` 中保留最小 `Not applicable` 行并说明 scope-backed 理由；一旦出现对应 runtime 行为，必须展开对应矩阵行。
-18. Proof 必须达到验收强度：用户可见行为需要 user-equivalent interaction 与 browser/rendered evidence；API/data/worker/storage/security 行为需要对应 contract、DB/job/asset/log/audit 或 authorization facts；默认生产路径不能只用 mock 或 isolated unit test 证明。Fixture 可以提供输入、凭证/claims、外部返回或确定性环境，但不能替代 runtime boundary 的默认实现；Test Evidence / Regression Deposit 必须区分 fixture data 与 production-compatible default export/dependency/config proof。
-19. Final task 自查必须确认 AC section 输出顺序满足 runtime provision graph：没有 consumer AC 依赖后置 provider AC，没有循环依赖，没有 future-change-only prerequisite，也没有只藏在 proof/fixed command 中的隐式 runtime dependency。
+1. proposal 必须包含 `Change Scope Coverage`，并为每个 material scope item 分配 change-local `SI-###`。`SI-###` 只在本 change 内有效。
+2. `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`proof` 表示进入 `verification.md` 的测试意图或 runtime proof，不表示写入 `tasks.md` 的测试矩阵。
+3. proposal 必须记录 `Baseline / Input Read Set`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
+4. specs 只为包含 `Artifact Handling: spec` 或 `guard` 的 capability 创建 delta spec；不得为 design/proof/context-only scope 创建空 spec。
+5. design 必须使用 proposal `Change Scope Coverage`、spec `Scope Items` 和 `Baseline Trace` 作为 scope-reading interface。
+6. `verification.md` 必须在 `tasks.md` 之前生成，依赖 proposal/specs/design，不依赖 `tasks.md`。
+7. `verification.md` 必须包含 VID、source basis、public/runtime observable oracle、suggested layer、mock/fixture boundary、regression intent 和 do-not-test boundary。
+8. `verification.md` 不得包含具体测试文件、固定测试命令、evidence directory 或 deposit status。
+9. `tasks.md` 必须按 `## AC-### <name>` 分组，保留 `Acceptance-Driven Coverage`、`Runtime Acceptance Index`、AC sections 和 `Verification Appendix`。
+10. 每个 AC section 必须包含 `Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
+11. `tasks.md` 的 `Acceptance-Driven Coverage` 必须包含 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage`；`Scope Item Coverage` 每行只能包含一个 exact `SI-###`。
+12. coverage 表中的 `Verification Task IDs` 必须改为 `Acceptance Proof Task IDs`；引用的是 checkbox proof task，不是测试编号。
+13. 每个 checkbox task 只能包含 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段。
+14. `Verification Appendix` 只保留 runtime detail matrices：surface、operation、state/branch、async/realtime chain。
+15. `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
+16. Final task 自查必须确认没有 orphan scope item、SI range、后置 provider dependency、scope 外行为或 runtime row orphan。
 
 ## Artifact 生成自查
 
@@ -200,16 +189,17 @@
 
 1. 全部 artifacts：按“Artifact 中文约束”做语言自查；忽略反引号中的标识后，不得存在英文主导的解释性句子；checkbox task description 必须中文。
 2. `production-obligation-atom-driven` / `proposal.md`：packet direct atom 数量 = proposal register row 数量；每行有 `Artifact Projection` 和 `Projection Source`；direct atoms 均已出现在 `Source Window Read Set`；无 orphan direct `GA-####`；无 GA ranges。
-3. `production-default-acceptance-driven` / `proposal.md`：`Change Scope Coverage` 覆盖每个 material scope item；每个非 context `SI-###` 有 `Artifact Handling` 和 downstream coverage expectation；`Baseline / Input Read Set` 已记录；无 `GA-####` register、无 orchestrate 依赖、无 SI ranges。
-4. `production-obligation-atom-driven` / specs：只为有 OpenSpec delta 的 capability 生成 `specs/<capability>/spec.md`；每个生成的 spec file 必须至少包含一个 `### Requirement:`，且不得只包含 `Artifact Projection Notes` 或“无”。proposal direct `GA-####` 按 artifact projection 映射到 requirement/scenario、guard、已有 delta spec 的 `Artifact Projection Notes` 或 design/tasks coverage；handoff 不能替代后续 design/tasks 的实际消费；每个 scenario 有 exact `Source Atoms` 和 concrete `Source Trace`；无 spec-level orphan direct `GA-####`；无 GA ranges。
-5. `production-default-acceptance-driven` / specs：只为有 `Artifact Handling: spec` 或 `guard` 的 capability 生成 delta spec；每个 generated spec 至少包含一个 `### Requirement:`；每个 requirement 有 exact `Scope Items:` 和 `Baseline Trace:`；无 spec-level orphan `SI-###`；无 SI ranges；不为 design/proof/context-only scope 创建空 spec。
-6. `production-obligation-atom-driven` / `design.md`：每个 in-scope scenario、`design-obligation` atom 和需要 design placement 的 direct `GA-####` 有 design obligation 或 guard handling；source-backed implementation decisions 记录 source gap、最小技术形态和 rejected expansion；无需要 implementer 猜测的行为。
-7. `production-default-acceptance-driven` / `design.md`：每个 in-scope scenario、`Artifact Handling: design` item、guard item 和需要 implementation placement 的 material `SI-###` 有 design decision、guard handling 或 explicit blocker；production-compatible implementation decisions 记录最小技术形态和避免 scope expansion 的理由；无需要 implementer 猜测的行为。
-8. `production-obligation-atom-driven` / `tasks.md`：三张 coverage 表完整且 projection-aware；`Obligation Atom Coverage` 单行单 GA；所有 task ID 引用都能解析到 checkbox；每个 Test ID 都匹配 exact `T-[0-9]{3}` 且 canonical evidence directory 使用同名最后一级目录；每个 AC 有 final verification checkbox；每个 AC 有 execution evidence expectation；每个 required behavior Test ID 都有 `Test Layer Plan` layer decision、verification evidence fields 和 `Regression Test Deposit` 永久回归沉淀或 source-backed 不适用理由；每个 AC 有 Prerequisites/Provides/Consumes/Start Gate；AC section 顺序满足 runtime provision graph；无 GA ranges、无 aggregate row、无 orphan direct atom、无 projection mismatch、无后置 provider dependency、无 implementation-detail tests 作为 required behavior oracle；测试计划将 `command.log` 或 runner/CI result/report、canonical evidence directory 和 required artifacts/facts 作为 mandatory evidence category。
-9. `production-default-acceptance-driven` / `tasks.md`：三张 coverage 表完整且 handling-aware；`Scope Item Coverage` 单行单 `SI-###`；所有 task ID 引用都能解析到 checkbox；每个 Test ID 都匹配 exact `T-[0-9]{3}` 且 canonical evidence directory 使用同名最后一级目录；每个 AC 有 final verification checkbox；每个 AC 有 execution evidence expectation；每个 required behavior Test ID 都有 `Test Layer Plan` layer decision、verification evidence fields 和 `Regression Test Deposit` 永久回归沉淀或 scope-backed 不适用理由；每个 AC 有 Prerequisites/Provides/Consumes/Start Gate；AC section 顺序满足 runtime provision graph；无 SI ranges、无 aggregate row、无 orphan scope item、无 handling mismatch、无后置 provider dependency、无 implementation-detail tests 作为 required behavior oracle；测试计划将 `command.log` 或 runner/CI result/report、canonical evidence directory 和 required artifacts/facts 作为 mandatory evidence category。
-10. 生成或修订 `tasks.md` 后必须执行 Testing Quality Core plan audit：人工检查测试计划、默认路径、Test ID ownership、fixed command、verification evidence fields 和 Regression Test Deposit 契约。若发现缺口，先修订 `tasks.md`；OpenSpec 结构校验通过不等同于 Testing Quality Core 通过。不要在 propose/tasks 阶段补造执行证据；这些属于 apply 阶段。
+3. `production-default-acceptance-driven` / `proposal.md`：`Change Scope Coverage` 覆盖每个 material scope item；每个非 context `SI-###` 有 `Artifact Handling` 和 downstream coverage expectation；无 `GA-####` register、无 orchestrate 依赖、无 SI ranges。
+4. specs：只为有 OpenSpec delta 的 capability 生成 spec file；每个 generated spec 至少包含一个 `### Requirement:`；无 spec-level orphan GA/SI；无 ranges。
+5. design：每个 in-scope scenario、design obligation/decision、guard item 和需要 implementation placement 的 material source/scope item 有 design decision、guard handling 或 explicit blocker；无需要 implementer 猜测的行为。
+6. `verification.md`：每个 required VID 有 source basis、observable surface、oracle、failure signal、priority、suggested layer、mock/fixture boundary 和 do-not-test boundary。
+7. `verification.md` 不得包含具体测试路径、固定命令、evidence directory、deposit status，且不得把 artifact/process 当作产品行为 oracle。
+8. `tasks.md`：三张 coverage 表完整；GA/SI 单行单 ID；所有 task ID 引用都能解析到 checkbox；每个 AC 有 final acceptance/proof checkbox；每个 AC 有 Prerequisites/Provides/Consumes/Start Gate；AC section 顺序满足 runtime provision graph；无 orphan rows、无 ranges、无后置 provider dependency。
+9. `tasks.md` 保留 `Runtime Acceptance Index` 和只含 runtime detail matrices 的 `Verification Appendix`；不得出现测试矩阵、测试执行证据或回归沉淀字段。
+10. propose 完成后必须确认 `tasks.md` 和 `verification.md` 都没有 source/scope 外新增行为，且两者没有互相作为新增需求来源。
 
-## Legacy Schema 兼容
+## No Backward Compatibility
 
-1. 如果打开的是历史 change，且 `openspec status --change "<name>" --json` 返回的 `schemaName` 不是 `production-obligation-atom-driven` 或 `production-default-acceptance-driven`，可继续按该 change 自身 schema 的 artifacts 和 instructions 处理。
-2. 不得把 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 source artifact 要求带入两个生产 schema 的新 change。
+1. 两个 production schema 的新格式必须生成 `verification.md`，且 `tasks.md` 不允许包含旧测试矩阵。
+2. 新 schema 不实现旧 change 兼容逻辑；已有旧 change 不在本流程内自动迁移。
+3. 如果需要处理旧 change，单独制定迁移流程：从旧 `tasks.md` 抽取测试意图到 `verification.md`，保留 runtime acceptance model，删除测试/evidence/deposit section。

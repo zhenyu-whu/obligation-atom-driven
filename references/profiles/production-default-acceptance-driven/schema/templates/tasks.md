@@ -1,47 +1,50 @@
 ## Acceptance-Driven Coverage
 
 <!--
-本节是 proposal/spec/design 到 AC/task 的覆盖索引，不是 executable work。
-每个 material scope item、requirement scenario 或 material design decision 使用一行。
-Implementation / Verification Task IDs 填写下方 checkbox task ID；跨 AC handoff 只写 proof summary，测试明细在 Verification Appendix。
+本节是 proposal/spec/design 到 AC/task/proof 的覆盖索引，不是 executable work。
+每个 scope item、requirement scenario 或 material design decision 使用一行。
+本节只回答“哪些 scope-backed obligation 由哪些 AC/task/proof 覆盖”；测试意图在 verification.md 中维护。
 -->
 
 ### Scope Item Coverage
 
-| Scope Item ID                                                          | Artifact Handling                                | Scope Summary                                             | Acceptance Slice IDs | Implementation Task IDs                               | Verification Task IDs                       | Acceptance Proof                                                                                                                    |
-| ---------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- | -------------------- | ----------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| <!-- SI-001；每行一个 scope item。 --> | <!-- spec / guard / design / proof / context --> | <!-- 概述行为、preserve 或 stable negative boundary。 --> | <!-- AC-001；跨 AC 时列相关 AC 并在 proof 写 handoff。 -->      | <!-- AC-001.1, AC-001.2。 --> | <!-- AC-003.5。 --> | <!-- user interaction、API/data assertion、worker/realtime path、security check、rendered layout check 等 proof summary。 --> |
+| Scope Item ID | Artifact Handling | Scope Summary | Acceptance Slice IDs | Implementation Task IDs | Acceptance Proof Task IDs | Acceptance Proof |
+| -------------- | ------------------- | ------------ | -------------------- | ----------------------- | ------------------------- | ---------------- |
+| <!-- SI-001 --> | <!-- spec / guard / design / proof / context --> | <!-- scope item 摘要。 --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.N --> | <!-- 用户交互、API/data、worker/realtime、security、rendered layout 等 runtime proof 摘要。 --> |
 
 ### Requirement / Scenario Coverage
 
-| Capability               | Requirement                     | Scenario                     | Scope Item IDs                                               | Artifact Handling                       | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof                                   |
-| ------------------------ | ------------------------------- | ---------------------------- | ------------------------------------------------------------ | --------------------------------------- | -------------------- | ----------------------- | --------------------- | -------------------------------------------------- |
-| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- SI-001, SI-002。 --> | <!-- spec scenario / guard handling --> | <!-- AC-001；跨 AC proof 时列相关 AC。 -->      | <!-- AC-001.1 -->       | <!-- AC-003.5。 -->     | <!-- scenario-level observable proof summary。 --> |
+| Capability | Requirement | Scenario | Scope Items | Artifact Handling | Acceptance Slice IDs | Implementation Task IDs | Acceptance Proof Task IDs | Acceptance Proof |
+| ---------- | ----------- | -------- | --------------- | ---------------------------- | -------------------- | ----------------------- | ------------------------- | ---------------- |
+| <!-- capability name --> | <!-- requirement name --> | <!-- scenario name --> | <!-- SI-001, SI-002 --> | <!-- spec / guard / design / proof handling。 --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.N --> | <!-- scenario-level observable proof summary。 --> |
 
 ### Design Decision Coverage
 
-| Design Section                                       | Design Decision                                                           | Scope Item IDs                                                                  | Artifact Handling                      | Acceptance Slice IDs | Implementation Task IDs | Verification Task IDs | Acceptance Proof                         |
-| ---------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------- | -------------------- | ----------------------- | --------------------- | ---------------------------------------- |
-| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification decision。 --> | <!-- SI-001, SI-002, 或 Not applicable。 --> | <!-- design / proof / guard / spec --> | <!-- AC-001；跨 AC proof 时列相关 AC。 -->      | <!-- AC-001.1 -->       | <!-- AC-003.5。 -->     | <!-- design decision proof summary。 --> |
+| Design Section | Design Decision | Scope Items | Artifact Handling | Acceptance Slice IDs | Implementation Task IDs | Acceptance Proof Task IDs | Acceptance Proof |
+| -------------- | ----------------- | --------------- | ---------------------------- | -------------------- | ----------------------- | ------------------------- | ---------------- |
+| <!-- design section --> | <!-- implementation、preservation 或 proof-relevant decision。 --> | <!-- SI-001 --> | <!-- design / guard / proof handling。 --> | <!-- AC-001 --> | <!-- AC-001.1 --> | <!-- AC-001.N --> | <!-- design obligation proof summary。 --> |
 
 ## Runtime Acceptance Index
 
 <!--
-本节是主 agent preflight 的轻量路由表，只把 AC 路由到 Appendix row IDs、Test IDs 和 AC dependency graph。
-如果 change 不触及 web/runtime behavior，写明 Not applicable 和理由。
+本节是主 agent preflight 的轻量路由表，只把 AC 路由到 runtime row、proof row 和 dependency graph。
+如果 change 不触及 runtime behavior，写明 Not applicable 和 scope-backed 理由。
 -->
 
 ### AC Runtime Ownership Index
 
-| AC ID           | Scope Basis                                       | Runtime Surface Rows | Operation Rows  | State / Branch Rows     | Async / Realtime Rows               | Test IDs              | Provides Rows                                                | Consumes Rows                                                                 | Depends On AC IDs                                  | Prerequisite Test IDs                                 | Start Gate                                               | Scope Role                                                                     | No-Scope-Expansion Check                                                               | Detail Matrix Rows                               |
-| --------------- | ------------------------------------------------- | -------------------- | --------------- | ----------------------- | ----------------------------------- | --------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| <!-- AC-001 --> | <!-- SI-001, spec scenario, design decision。 --> | <!-- RS-001 -->      | <!-- OP-001 --> | <!-- ST-001, ST-002 --> | <!-- CH-001 或 Not applicable。 --> | <!-- T-001, T-002 --> | <!-- 本 AC 完成后提供的 rows；没有则 None。 --> | <!-- 本 AC 消费的 baseline 或 earlier AC rows；没有则 None。 --> | <!-- AC-000 / AC-001 / None。 --> | <!-- T-000 / T-001 / None。 --> | <!-- 可在 change 开始后执行 / 需 AC-000 完成后执行。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- scope boundary 摘要。 --> | <!-- RS-001, OP-001, ST-001, CH-001, T-001。 --> |
+| AC ID | Source Basis | Runtime Surface Rows | Operation Rows | State / Branch Rows | Async / Realtime Rows | Provides Rows | Consumes Rows | Depends On AC IDs | Prerequisite Runtime Facts | Start Gate | Scope Role | No-Scope-Expansion Check | Detail Matrix Rows | Acceptance Proof Rows |
+| ----- | ------------ | -------------------- | -------------- | ------------------- | --------------------- | ------------- | ------------- | ----------------- | -------------------------- | ---------- | ---------- | ------------------------ | ------------------ | --------------------- |
+| <!-- AC-001 --> | <!-- SI-001, spec scenario, design decision。 --> | <!-- RS-001 --> | <!-- OP-001 --> | <!-- ST-001 --> | <!-- CH-001 或 Not applicable。 --> | <!-- 本 AC 完成后提供的 runtime rows；没有则 None。 --> | <!-- 本 AC 消费的 baseline 或 earlier AC rows；没有则 None。 --> | <!-- AC-000 / None。 --> | <!-- baseline fact / earlier AC runtime fact / None。 --> | <!-- 可在 change 开始后执行 / 需 AC-000 完成后执行。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- scope boundary 摘要。 --> | <!-- RS-001, OP-001, ST-001, CH-001。 --> | <!-- AP-001。 --> |
+
+<!-- 每个 AC section 是人工审阅和 worker 执行的主要入口；Appendix 是 runtime 明细来源。 -->
+<!-- 每个 checkbox task block 与下一个 checkbox task block 之间必须保留一个空行；不要在同一 task block 的 trace fields 之间插入空行。 -->
 
 ## AC-001 <!-- 中文验收切片名称 -->
 
 Acceptance:
 
-- <!-- 用户/系统可观察的验收行为。必须能从 proposal/spec/design 推导，不从实现计划反推。 -->
+- <!-- 用户/系统可观察的验收行为。必须能从 proposal/spec/design/scope items 推导，不从实现计划反推。 -->
 
 Scope Items:
 
@@ -49,7 +52,7 @@ Scope Items:
 
 Artifact Handling:
 
-- <!-- linked SI IDs 的 handling；例如 SI-001: spec。 -->
+- <!-- linked SI IDs 的 artifact handling；例如 SI-001: spec。 -->
 
 Spec:
 
@@ -63,14 +66,9 @@ Runtime Rows Owned:
 
 - <!-- RS-001, OP-001, ST-001, CH-001；只列 row IDs，row 详情只在 Verification Appendix 中定义。 -->
 
-Test IDs:
-
-- <!-- T-001, T-002；本 AC 的测试计划索引。 -->
-- <!-- 跨 AC proof handoff 写在 Required Evidence / coverage row。 -->
-
 Prerequisites:
 
-- <!-- 本 AC 启动前必须完成的 AC IDs、Test IDs 或 baseline facts；无依赖时写 None 并说明只依赖 baseline。 -->
+- <!-- 本 AC 启动前必须完成的 AC IDs 或 baseline/runtime facts；无依赖时写 None。 -->
 
 Provides:
 
@@ -82,7 +80,7 @@ Consumes:
 
 Start Gate:
 
-- <!-- 进入本 AC 的执行门禁，例如“AC-000.3 与 T-000 已完成，RS-003 已由 earlier AC 提供”。 -->
+- <!-- 进入本 AC 的执行门禁。 -->
 
 No-Scope Boundary:
 
@@ -90,81 +88,59 @@ No-Scope Boundary:
 
 Primary Proof:
 
-- <!-- 人类可读的最高强度验收证明摘要。用户可见行为优先 browser/E2E/rendered proof；后端行为优先 API/DB/job/storage/security facts。 -->
+- <!-- 人类可读的最高强度验收证明摘要。 -->
 
 Required Evidence:
 
-- Test evidence: <!-- T-001, T-002。 -->
-- Browser / rendered evidence: <!-- screenshot / DOM / responsive / a11y / interaction evidence 摘要。 -->
-- Data / API / job / storage evidence: <!-- DB rows / API response / queue status / asset facts / logs / audit facts 摘要。 -->
+- Browser / rendered fact: <!-- 用户可见行为需要的 rendered/readback 事实类别，非测试命令。 -->
+- API / data fact: <!-- API response、DB/readback、DTO、authorization 等事实类别。 -->
+- Job / storage / log fact: <!-- worker、storage、audit/log 等事实类别。 -->
 
-Mock / Fixture Boundary:
+External Boundary / Default Path Policy:
 
-- <!-- AC-level default path / mock 原则摘要；逐 Test ID 的 fixture boundary 在 Test Evidence Matrix 中填写。 -->
+- <!-- production default path、外部依赖、sandbox/adapter 边界；不描述测试 fixture 实现。 -->
 
 Mock Policy:
 
 - <!-- 允许 sandbox/mock 与 default production wiring 的摘要。 -->
 
-- [ ] AC-001.1 <!-- 用中文描述此 acceptance slice 下的具体实现或验证任务。 -->
-      Trace: <!-- 默认写 inherits AC-001；只有当本 task 的 scope/spec/design/no-scope/mock 边界比 AC 更窄或有例外时才展开 override。 -->
-      Runtime Rows: <!-- 本 task 负责或最终验证覆盖的 RS-/OP-/ST-/CH- row IDs；无 runtime 行为时写 Not applicable 并给出理由。 -->
-      Test IDs: <!-- 本 task 建立、维护或由 final verification 执行的 T-### row IDs。 -->
+- [ ] AC-001.1 <!-- 用中文描述此 acceptance slice 下的具体实现任务。 -->
+      Trace: <!-- 默认写 inherits AC-001；只有本 task 的 proposal/spec/design/no-scope/mock 边界更窄或有例外时才展开 override。 -->
+      Runtime Rows: <!-- 本 task 负责或最终 proof 覆盖的 RS-/OP-/ST-/CH- row IDs；无 runtime 行为时写 Not applicable 和 scope-backed 理由。 -->
       Acceptance: <!-- 此任务贡献证明的具体可验收行为。 -->
-      Proof: <!-- proof 摘要。 -->
-      Overrides: <!-- 若不继承 AC-level source/no-scope/mock boundary，在此列 exact override；否则写 None。 -->
+      Proof: <!-- scope-equivalent proof 摘要。 -->
+      Overrides: <!-- 若不继承 AC-level scope/no-scope/mock boundary，在此列 exact override；否则写 None。 -->
+
+<!-- final acceptance/proof checkbox 示例：AC-001.N。 -->
 
 ## Verification Appendix
 
 <!--
-本节是 runtime/test 明细的矩阵骨架；字段含义、门禁和 apply 阶段完成条件见 schema.yaml 与 shared verification gates。
-tasks 阶段填写计划态 rows、Test IDs、fixed command/entry、期望 evidence 和 fixture 摘要；实际执行结果由 apply 阶段更新。
-runtime detail matrices 可按需最小化；不适用时保留 Not applicable 行和理由。
+本节是 runtime 明细矩阵；测试意图和测试 oracle 在 verification.md 中维护。
+runtime detail matrices 可按需最小化；不适用时保留 Not applicable 行和 scope-backed 理由。
+worker 的主要输入应是对应 AC section 加上它引用的 Appendix rows。
 -->
 
 ### Runtime Surface Inventory
 
-| Surface ID      | Surface Type                                                                                          | Owner                               | Entry Point                              | Default Path Required      | External Boundary                              | Scope Basis                                         | Artifact Handling                                  | Scope Role                                                                     | Provider AC ID                                            | Consumer AC IDs                   | AC IDs            | Test IDs         | No-Scope-Expansion Check           |
-| --------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------- | -------------------------- | ---------------------------------------------- | --------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------- | ----------------- | ---------------- | ---------------------------------- |
-| <!-- RS-001 --> | <!-- UI route / client component / API / DB / worker / queue / SSE / storage / auth / config 等。 --> | <!-- module/component/service。 --> | <!-- route/action/job/stream entry。 --> | <!-- yes/no + reason。 --> | <!-- provider/storage/network/env 等边界。 --> | <!-- SI-001 / spec scenario / design decision。 --> | <!-- spec / guard / design / proof / context。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002, AC-003 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 surface。 --> |
+| Surface ID | Surface Type | Owner | Entry Point | Default Path Required | External Boundary | Source Basis | Projection Type | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | No-Scope-Expansion Check |
+| ---------- | ------------ | ----- | ----------- | --------------------- | ----------------- | ------------ | --------------- | ---------- | -------------- | --------------- | ------ | ------------------------ |
+| <!-- RS-001 --> | <!-- UI route / client component / API / DB / worker / queue / SSE / storage / auth / config 等。 --> | <!-- module/component/service。 --> | <!-- route/action/job/stream entry。 --> | <!-- yes/no + reason。 --> | <!-- provider/storage/network/env 等边界。 --> | <!-- SI-001 / spec scenario / design decision。 --> | <!-- spec / design / proof / guard。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002, AC-003 或 None。 --> | <!-- AC-001。 --> | <!-- 不引入 scope 外 surface。 --> |
 
 ### Operation Coverage Matrix
 
-| Operation ID    | Trigger                                            | Control / Route                | Request / Action                          | Expected Rendered UI Update | API/Data Assertion                 | Reload/Persistence Assertion           | Disabled/Failure/Recovery Branches              | Scope Basis               | Artifact Handling   | Scope Role      | Provider AC ID                                            | Consumer AC IDs           | AC IDs            | Test IDs         | No-Scope-Expansion Check             |
-| --------------- | -------------------------------------------------- | ------------------------------ | ----------------------------------------- | --------------------------- | ---------------------------------- | -------------------------------------- | ----------------------------------------------- | ------------------------- | ------------------- | --------------- | --------------------------------------------------------- | ------------------------- | ----------------- | ---------------- | ------------------------------------ |
-| <!-- OP-001 --> | <!-- click/type/select/submit/system trigger。 --> | <!-- UI control or route。 --> | <!-- handler/action/API/job request。 --> | <!-- rendered result。 -->  | <!-- response/data invariant。 --> | <!-- reload/readback persistence。 --> | <!-- disabled/failure/retry/recovery rows。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 operation。 --> |
+| Operation ID | Trigger | Control / Route | Request / Action | Expected Rendered UI Update | API/Data Assertion | Reload/Persistence Assertion | Disabled/Failure/Recovery Branches | Source Basis | Projection Type | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | No-Scope-Expansion Check |
+| ------------ | ------- | --------------- | ---------------- | --------------------------- | ------------------ | ---------------------------- | ---------------------------------- | ------------ | --------------- | ---------- | -------------- | --------------- | ------ | ------------------------ |
+| <!-- OP-001 --> | <!-- click/type/select/submit/system trigger。 --> | <!-- UI control or route。 --> | <!-- handler/action/API/job request。 --> | <!-- rendered result。 --> | <!-- response/data invariant。 --> | <!-- reload/readback persistence。 --> | <!-- disabled/failure/retry/recovery rows。 --> | <!-- SI/spec/design。 --> | <!-- projection。 --> | <!-- role。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- 不引入 scope 外 operation。 --> |
 
 ### State / Branch Coverage Matrix
 
-| State ID        | State / Branch                                                                       | Trigger Into                     | Observable UI / API Outcome    | Data/Event Facts                     | Allowed Next States    | Terminal?         | Scope Basis               | Artifact Handling   | Scope Role      | Provider AC ID                                            | Consumer AC IDs           | AC IDs            | Test IDs         | No-Scope-Expansion Check         |
-| --------------- | ------------------------------------------------------------------------------------ | -------------------------------- | ------------------------------ | ------------------------------------ | ---------------------- | ----------------- | ------------------------- | ------------------- | --------------- | --------------------------------------------------------- | ------------------------- | ----------------- | ---------------- | -------------------------------- |
-| <!-- ST-001 --> | <!-- loading / empty / disabled / success / failed / timeout / unauthorized 等。 --> | <!-- entry condition/event。 --> | <!-- visible/API outcome。 --> | <!-- DB/event/outbox/job facts。 --> | <!-- next states。 --> | <!-- yes/no。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 state。 --> |
+| State ID | State / Branch | Trigger Into | Observable UI / API Outcome | Data/Event Facts | Allowed Next States | Terminal? | Source Basis | Projection Type | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | No-Scope-Expansion Check |
+| -------- | -------------- | ------------ | --------------------------- | ---------------- | ------------------- | --------- | ------------ | --------------- | ---------- | -------------- | --------------- | ------ | ------------------------ |
+| <!-- ST-001 --> | <!-- loading / empty / disabled / success / failed / timeout / unauthorized 等。 --> | <!-- entry condition/event。 --> | <!-- visible/API outcome。 --> | <!-- DB/event/outbox/job facts。 --> | <!-- next states。 --> | <!-- yes/no。 --> | <!-- SI/spec/design。 --> | <!-- projection。 --> | <!-- role。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- 不引入 scope 外 state。 --> |
 
 ### Async / Realtime Chain Matrix
 
-| Chain ID        | User/System Entry                 | Enqueue / Dispatch Fact          | Worker / Consumer Fact                | Domain Mutation               | Event / Outbox Fact              | Client Subscription / Readback | Rendered Terminal State                | Failure Variant                                             | Scope Basis               | Artifact Handling   | Scope Role      | Provider AC ID                                            | Consumer AC IDs           | AC IDs            | Test IDs         | No-Scope-Expansion Check         |
-| --------------- | --------------------------------- | -------------------------------- | ------------------------------------- | ----------------------------- | -------------------------------- | ------------------------------ | -------------------------------------- | ----------------------------------------------------------- | ------------------------- | ------------------- | --------------- | --------------------------------------------------------- | ------------------------- | ----------------- | ---------------- | -------------------------------- |
-| <!-- CH-001 --> | <!-- user action/system job。 --> | <!-- queue/action dispatch。 --> | <!-- worker/consumer processing。 --> | <!-- domain/data change。 --> | <!-- event/outbox/log fact。 --> | <!-- SSE/poll/readback。 -->   | <!-- success/failure terminal UI。 --> | <!-- failed/dispatch_failed/timeout 或 Not applicable。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- T-001。 --> | <!-- 不引入 scope 外 chain。 --> |
-
-### Test Layer Plan
-
-| AC ID           | Behavior / Boundary                                        | Scope Basis               | Required Layers                                                                                                        | Test IDs By Layer                                                                                                                                                                                                           | Omitted Layers / Reason                                                                           | Primary Proof Layer                                                                                            | Regression Entry                                                    | No-Scope-Expansion Check                           |
-| --------------- | ---------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------- |
-| <!-- AC-001 --> | <!-- 外部行为、preserve boundary 或 proof-only guard。 --> | <!-- SI/spec/design。 --> | <!-- unit / component / route/API contract / DB integration / browser E2E / security/negative / config/ops/check。 --> | <!-- unit: T-001；component: T-002；browser E2E: T-003。 --> | <!-- omitted layers and reason。 --> | <!-- primary proof layer。 --> | <!-- regression entry。 --> | <!-- scope guard summary。 --> |
-
-### Test Evidence Matrix
-
-| Test ID                                                                         | AC ID                                                      | Fixed Command                                                                    | Test File / Name                                                                                                                                                                                                                                                                                                                                                                                                               | Layer                                                                                                                                                                                                                                              | Covers Rows                               | Default Path Level              | Fixture Boundary                                                   | Verification Expectation                                                       | Evidence Status                                                                                                    | Requires Tests Passed                                   | Evidence Directory                                                                         | Evidence Produced                                                                                         | CI Runnable?                                                   | Scope Basis               | Artifact Handling   | Scope Role      | No-Scope-Expansion Check            |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------- | ------------------- | --------------- | ----------------------------------- |
-| <!-- T-001 --> | <!-- AC-001 --> | <!-- root/package/CI command or dedicated runner command。 --> | <!-- test file + stable name/filter。 --> | <!-- unit / component / route/API contract / DB integration / worker/job integration / realtime/SSE integration / browser E2E / visual/responsive / security/negative / config/ops/check。 --> | <!-- RS-001, OP-001, ST-001, CH-001。 --> | <!-- default path label。 --> | <!-- planned fixture/mock boundary。 --> | <!-- expected behavior/evidence。 --> | <!-- planned / passed / not-applicable / blocked。 --> | <!-- None / T-000。 --> | <!-- openspec-results/<change-slug>/AC-001/T-001/。 --> | <!-- expected or actual artifacts。 --> | <!-- yes/no + entry or blocker。 --> | <!-- SI/spec/design。 --> | <!-- handling。 --> | <!-- role。 --> | <!-- scope guard summary。 --> |
-
-### Regression Test Deposit
-
-<!--
-本表登记可长期维护的回归沉淀计划；字段含义、完成状态和 apply 阶段门禁见 schema.yaml 与 shared verification gates。
-tasks 阶段填写 target、command、oracle、fixture、CI tier 和 not-testing boundary；实际 deposited 状态由 apply evidence 支撑。
--->
-
-| AC ID           | Test IDs                                                                                   | Permanent Test File                                                                                                                                                                                                                    | Regression Command                                                                                                                 | Behavior Contract                                   | Assertion Oracle                                                                    | Fixture Boundary                                              | CI Tier                                                                            | Not Testing                                                                         | Deposit Status                                                                                                                |
-| --------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| <!-- AC-001 --> | <!-- T-001, T-002。 --> | <!-- planned permanent test file or N/A + reason。 --> | <!-- planned regression command or entry。 --> | <!-- 来自 proposal/spec/design 的外部行为契约。 --> | <!-- assertion oracle。 --> | <!-- fixture/mock boundary summary。 --> | <!-- PR-fast / PR-integration / nightly / release / manual-staging + entry。 --> | <!-- implementation details intentionally out of scope。 --> | <!-- required / deposited / not-applicable / blocked。 --> |
+| Chain ID | User/System Entry | Enqueue / Dispatch Fact | Worker / Consumer Fact | Domain Mutation | Event / Outbox Fact | Client Subscription / Readback | Rendered Terminal State | Failure Variant | Source Basis | Projection Type | Scope Role | Provider AC ID | Consumer AC IDs | AC IDs | No-Scope-Expansion Check |
+| -------- | ----------------- | ----------------------- | ---------------------- | --------------- | ------------------- | ------------------------------ | ----------------------- | --------------- | ------------ | --------------- | ---------- | -------------- | --------------- | ------ | ------------------------ |
+| <!-- CH-001 --> | <!-- user action/system job。 --> | <!-- queue/action dispatch。 --> | <!-- worker/consumer processing。 --> | <!-- domain/data change。 --> | <!-- event/outbox/log fact。 --> | <!-- SSE/poll/readback。 --> | <!-- success/failure terminal UI。 --> | <!-- failed/dispatch_failed/timeout 或 Not applicable。 --> | <!-- SI/spec/design。 --> | <!-- projection。 --> | <!-- role。 --> | <!-- baseline / AC-001 / explicit-negative-boundary。 --> | <!-- AC-002 或 None。 --> | <!-- AC-001。 --> | <!-- 不引入 scope 外 chain。 --> |
