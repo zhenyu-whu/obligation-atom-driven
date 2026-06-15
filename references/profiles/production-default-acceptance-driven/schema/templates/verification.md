@@ -16,17 +16,29 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | <!-- VID-001 --> | <!-- SI-001；spec requirement/scenario；design decision。 --> | <!-- public/runtime behavior。 --> | <!-- UI route/API/DB/job/worker/storage/auth/log 等可观察 surface。 --> | <!-- 应成立的断言依据，必须来自 proposal/spec/design。 --> | <!-- 失败时可观察到的偏差。 --> | <!-- required / preserve / manual / not-applicable。 --> |
 
+## Proof Slice Matrix
+
+<!--
+Proof Slice 是 test agent 的测试生成单位。VID 定义业务 oracle，不等于 test case。
+每个 required VID 至少要有一个 slice；一个 slice 只能有一个 Primary Layer 和一个 Production Owner。
+Production Owner 写代码 owner 边界，不写具体测试文件路径。不得写固定命令、runner selector、evidence path 或 deposit status。
+-->
+
+| Slice ID | VID | Primary Layer | Production Owner | Oracle Fragment | Primary Assertion Shape | Fixture / Mock Boundary | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| <!-- PS-001A --> | <!-- VID-001 --> | <!-- unit / component / route/API / DB/integration / contract / worker/job / realtime/SSE / browser/e2e / visual/responsive / security/negative --> | <!-- packages/domain / packages/db / apps/web / apps/worker 等 production owner；不写测试路径。 --> | <!-- 从该 VID oracle 拆出的单层可证明片段。 --> | <!-- 该 slice 的 primary assertion 形态；不混入其他层 invariant。 --> | <!-- 允许 fixture/mock 与必须保持真实的 default path。 --> | <!-- scope-backed not-applicable/manual/合并建议；否则 None。 --> |
+
 ## Suggested Layer Matrix
 
 | VID | Minimum Sufficient Layers | Layer Reason | Omitted Stable Layers / Reason | Manual / Environment Gate |
 | --- | --- | --- | --- | --- |
-| <!-- VID-001 --> | <!-- unit / component / route/API / DB / worker / realtime / browser / security / visual / ops。 --> | <!-- 为什么这些层能稳定证明该 oracle；更高层 smoke 不能替代可低层稳定断言。 --> | <!-- 为什么某些稳定层不适用；不能只写“已有端到端覆盖”。 --> | <!-- 需要人工或环境 gate 时说明 scope-backed 理由；否则 None。 --> |
+| <!-- VID-001 --> | <!-- 按 Proof Slice 汇总：unit / component / route/API / DB/integration / contract / worker/job / realtime/SSE / browser/e2e / visual/responsive / security/negative。 --> | <!-- 为什么这些层能稳定证明该 oracle；更高层 smoke 不能替代可低层稳定断言。 --> | <!-- 为什么某些稳定层不适用；不能只写“已有端到端覆盖”。 --> | <!-- 需要人工或环境 gate 时说明 scope-backed 理由；否则 None。 --> |
 
 ## Harness Rationale
 
 | VID | Interaction / Boundary Needed | Harness Expectation | Primary Assertion Shape | Failure Localization |
 | --- | --- | --- | --- | --- |
-| <!-- VID-001 --> | <!-- click/type/select/submit、route/API call、DB readback、worker consume、security negative 等。 --> | <!-- 真实 browser/component/API/DB/worker/security/ops boundary 的期望形态，不写具体文件或命令。 --> | <!-- 用户可见结果、DTO、DB invariant、event/log/audit fact、authorization result 等。 --> | <!-- 失败时应能定位到哪个行为分支。 --> |
+| <!-- VID-001 --> | <!-- click/type/select/submit、route/API call、DB readback、worker consume、security negative 等。 --> | <!-- 真实 browser/component/API/DB/worker/security boundary 的期望形态，不写具体文件或命令。 --> | <!-- 用户可见结果、DTO、DB invariant、event/log/audit fact、authorization result 等。 --> | <!-- 失败时应能定位到哪个行为分支。 --> |
 
 ## Mock And Fixture Boundary
 
@@ -52,6 +64,7 @@
 - 不测试 OpenSpec artifact 文本结构、tasks.md 矩阵完整性、change slug、VID 本身或执行产物布局。
 - 不用 artifact/config/text scan 作为产品行为 primary proof。
 - 不为了适配当前实现而削弱 oracle 或改成 implementation-detail test。
+- 不把 `tests/runtime` 或 repo-wide env/ops/workspace/forbidden-drift 检查作为新业务测试默认义务；除非 proposal/spec/design 明确 scope-backed，且能归入被测 production owner。
 
 ## Oracle Consistency Checklist
 
@@ -61,4 +74,8 @@
 - [ ] 每个 oracle 都能通过 public/runtime behavior 观察。
 - [ ] 没有 oracle 要求测试 artifact/process 而非产品行为。
 - [ ] 没有 oracle 依赖 implementation detail。
+- [ ] 每个 required VID 至少有一个 Proof Slice。
+- [ ] 每个 Proof Slice 都有单一 Primary Layer、Production Owner、Oracle Fragment、Primary Assertion Shape 和 Fixture / Mock Boundary。
+- [ ] Proof Slice 不含具体测试路径、固定命令、runner selector、evidence path 或 deposit status。
+- [ ] 没有把 `tests/runtime` 或 repo-wide env/ops/workspace/forbidden-drift 当作新业务测试默认义务。
 - [ ] 每个 required VID 都说明了最小充分层级、mock/fixture 边界和长期回归意图。

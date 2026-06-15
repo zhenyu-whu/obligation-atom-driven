@@ -1,6 +1,6 @@
 name: production-default-acceptance-driven
-version: 3
-description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> verification -> tasks，保持生产实现与运行时验收覆盖在 tasks.md，并把测试意图、行为 oracle 和测试前一致性预检拆入 verification.md
+version: 4
+description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> verification -> tasks，保持生产实现与运行时验收覆盖在 tasks.md，并把测试意图、行为 oracle、Proof Slice 和测试前一致性预检拆入 verification.md
 artifacts:
   - id: proposal
     generates: proposal.md
@@ -132,25 +132,33 @@ artifacts:
 
   - id: verification
     generates: verification.md
-    description: 独立测试意图、行为 oracle 和测试前一致性预检 artifact
+    description: 独立测试意图、行为 oracle、Proof Slice 和测试前一致性预检 artifact
     template: verification.md
     instruction: |
-      创建 verification.md，定义从 proposal、specs 和 design 独立推导的测试意图、行为 oracle、建议测试层、harness 预期、mock/fixture 边界、失败/负向覆盖和不测边界。
+      创建 verification.md，定义从 proposal、specs 和 design 独立推导的测试意图、行为 oracle、Proof Slice、建议测试层、harness 预期、mock/fixture 边界、失败/负向覆盖和不测边界。
 
       目的：
       - `verification.md` 是 independent test intent and oracle artifact，不是测试实现清单、执行证据总账或回归沉淀表。
+      - VID 定义业务 oracle，不是 test case；Proof Slice Matrix 定义 test agent 可消费的单层测试义务模型。
       - `verification.md` 不依赖 `tasks.md`，不得从 `tasks.md` 推导测试目标，也不得为实现任务补造新行为。
       - 每个 VID 必须能回链到 proposal 的 exact `SI-###`、spec requirement/scenario、design decision 或明确 baseline/input trace。
       - oracle 必须描述 public/runtime observable behavior，不能来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
+      - Runtime Acceptance 名称只表示真实运行边界可观察验收；`runtime` 不是测试层级、测试类型或默认目录。
 
       写入前：
       - 读取 proposal、所有实际生成的 delta specs 和 design。
       - 建立 behavior oracle map：从 `spec` scope item、`guard`、material design decision 和 `proof` handling 中抽取可回归行为。
       - 对每个候选 VID，先检查它是否有 source basis、是否能被 public/runtime behavior 观察、是否没有引入 scope 外行为。
+      - 从 `Behavior Oracle Matrix` 中每个 required VID 拆分一个或多个 Proof Slice；按最小充分测试层拆，不把 browser、API、DB、provider、security 断言混在同一 slice。
+      - 每个 Proof Slice 只能有一个 `Primary Layer` 和一个 `Production Owner`。`Primary Layer` 只能是：`unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
+      - `Production Owner` 写 owner 边界，例如 `packages/domain`、`packages/db`、`apps/web`、`apps/worker`，不写具体测试文件路径。
+      - `Oracle Fragment` 和 `Primary Assertion Shape` 只能来自 proposal/specs/design/verification oracle；不得新增 scope 外 behavior。
+      - Proof Slice Matrix 不写固定命令、runner selector、evidence path、deposit status、执行状态或具体测试文件名。
 
       必需章节：
       - `## Verification Intent`
       - `## Behavior Oracle Matrix`
+      - `## Proof Slice Matrix`
       - `## Suggested Layer Matrix`
       - `## Harness Rationale`
       - `## Mock And Fixture Boundary`
@@ -161,15 +169,21 @@ artifacts:
 
       内容约束：
       - `Behavior Oracle Matrix` columns 至少包含：`VID`、`Source Basis`、`Runtime Behavior`、`Observable Surface`、`Oracle`、`Failure Signal`、`Priority`。
+      - `Proof Slice Matrix` columns 至少包含：`Slice ID`、`VID`、`Primary Layer`、`Production Owner`、`Oracle Fragment`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Notes`。
+      - 每个 required VID 至少有一个 Proof Slice；如果一个 VID 需要多层 proof，必须拆成多行 slice，而不是在同一 slice 混合多个 primary layer。
       - `Suggested Layer Matrix` 只给最小充分测试层建议、理由、被省略稳定层理由和人工/环境 gate，不指定具体测试文件、固定命令、runner selector 或 evidence path。
       - `Harness Rationale` 必须说明交互或边界需求、harness 期望、primary assertion shape 和 failure localization，不指定具体文件或命令。
       - `Mock And Fixture Boundary` 必须说明允许的 fixture/mock、不能替换的 default path、被替换 side effect 和补偿 proof。
       - `Failure And Negative Coverage` 必须覆盖 required failure、negative、security、recovery 或 next-state branch；不适用时写 scope-backed reason。
       - `Regression Intent` 只描述长期回归重要性和预期覆盖，不登记 permanent test file、regression command 或 deposit status。
       - `Do Not Test` 必须明确禁止私有 helper、调用次数、DOM 层级、className、快照全文、当前实现分支、OpenSpec artifact 文本结构、change slug、VID 本身、执行产物布局，以及 artifact/config/text scan 作为产品行为 primary proof。
+      - `Do Not Test` 必须明确 `tests/runtime` 不是新业务测试默认目标；repo-wide env/ops/workspace/forbidden-drift 测试不属于后续 production schema 默认要求，除非 proposal/spec/design 明确 scope-backed 且能归入被测 production owner。
 
       Final check：
       - 每个 required VID 都有 source basis、observable surface、oracle 和 failure signal。
+      - 每个 required VID 至少有一个 Proof Slice。
+      - 每个 Proof Slice 都有 scope-backed oracle fragment、单一 primary layer、production owner、primary assertion shape 和 fixture/mock boundary。
+      - Proof Slice 没有混合多个测试层，没有把 `runtime` 当测试层级，也没有把 `tests/runtime` 当默认落位。
       - 没有 VID 从 `tasks.md`、当前实现细节、测试文件结构或 evidence/deposit 结构推导。
       - 没有具体测试路径、固定测试命令、evidence directory 或 deposit status。
       - 每个 required VID 都说明了最小充分层级、harness 预期、mock/fixture 边界、失败/负向覆盖和长期回归意图。
@@ -189,6 +203,7 @@ artifacts:
       目的：
       - `tasks.md` 是 apply-ready production implementation and runtime acceptance model。
       - `tasks.md` 保留 acceptance slice、proposal/spec/design coverage、AC-local runtime ownership、provider/consumer graph、no-scope boundary 和 runtime proof 摘要。
+      - Runtime Acceptance 只表示真实运行边界可观察验收；`runtime` 不是测试层级、测试类型或默认测试目录。
       - `tasks.md` 不包含测试计划、测试编号、测试文件、固定测试命令、evidence directory、evidence status 或 Regression Deposit。
       - `tasks.md` 不消费 `verification.md` 来制造实现需求；两者都只能从 proposal、specs 和 design 推导。
 
@@ -266,10 +281,14 @@ apply:
     `verification.md` 是 independent test intent and oracle artifact：
     - VID 必须回链到 proposal `SI-###`、spec requirement/scenario、design decision 或明确 baseline/input trace。
     - oracle 必须描述 public/runtime observable behavior，不得来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
-    - Suggested layer 只是测试层建议，不是固定测试计划。
+    - Proof Slice Matrix 是测试义务模型，不是执行清单；每个 required VID 必须拆成一个或多个单层 Proof Slice。
+    - Proof Slice 的 `Primary Layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
+    - Proof Slice 的 `Production Owner` 是 production owner 边界，不是测试目录、runner selector 或 evidence 目录。
+    - Suggested layer 只是测试层建议，不是固定测试计划；apply 阶段必须按 `openspec-apply-change.md` 和 `test-quality-strength.md` 消费 Proof Slice 生成或确认测试。
     - apply 阶段不得为了适配当前实现静默修改 `verification.md`。
 
     Artifact integrity blockers：
     - `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
     - `verification.md` 不得包含具体测试路径、固定测试命令、runner selector、evidence directory 或 deposit status。
+    - `verification.md` 若缺少 `Proof Slice Matrix`、required VID 缺少 slice、slice 混合多个 primary layer、slice 缺少 production owner、或 slice 把 `tests/runtime`/repo-wide env/ops/workspace/forbidden-drift 当成默认新测试目标，必须报告 `Artifact Consistency Blocker`。
     - `verification.md` 的 oracle 若与 proposal/specs/design 冲突、引入 scope 外行为、要求测试 artifact/process、或依赖 implementation detail，必须报告 `Artifact Consistency Blocker`。

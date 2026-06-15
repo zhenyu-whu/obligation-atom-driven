@@ -37,7 +37,7 @@
 - `Runtime Acceptance Index` 中的 runtime surface rows、operation rows、state/branch rows、async/realtime rows、provides/consumes rows、depends-on AC、prerequisite runtime facts、scope role、no-scope-expansion check 和 detail matrix row references。
 - `Verification Appendix` 中的 `Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`。
 - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、explicit negative boundary 的 provider/consumer 关系。
-- `verification.md` 的 `Behavior Oracle Matrix`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test` 和 `Oracle Consistency Checklist`。
+- `verification.md` 的 `Behavior Oracle Matrix`、`Proof Slice Matrix`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test` 和 `Oracle Consistency Checklist`。
 
 若 preflight 发现 coverage orphan、GA/SI range、coverage task ID 无法解析、AC 缺少 final acceptance/proof checkbox、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`verification.md` VID 无 source basis、oracle 与 proposal/spec/design 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
 
@@ -61,7 +61,7 @@
 
 ## Phase 2 / Test Agent Oracle Precheck
 
-1. 所有 implementation-worker 自然返回完成且没有明确流程级 blocker 后，按 required VID 启动 test-worker；test-worker 写任何测试前必须检查 `verification.md`。
+1. 所有 implementation-worker 自然返回完成且没有明确流程级 blocker 后，按 required VID 启动 test-worker；test-worker 写任何测试前必须检查 `verification.md` 的 `Behavior Oracle Matrix` 和 `Proof Slice Matrix`。
 2. 以下情况输出 `Artifact Consistency Blocker` 并停止 apply：
    - VID 无 source basis。
    - oracle 与 proposal/specs/design 冲突。
@@ -69,6 +69,12 @@
    - oracle 要求测试 artifact/process，而非产品/runtime 行为。
    - oracle 依赖 implementation detail。
    - oracle 只是检查 evidence、deposit、tasks 矩阵或 OpenSpec artifact 文本结构。
+   - required VID 缺少至少一个 Proof Slice。
+   - Proof Slice 缺少 VID、source/scope-backed oracle fragment、primary assertion shape 或 fixture/mock boundary。
+   - Proof Slice 有多个 primary layer，或 primary layer 不在 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative` 中。
+   - Proof Slice 缺少 production owner，或 production owner 是测试目录、evidence 目录、runner 入口而不是 production owner 边界。
+   - Proof Slice 写入具体测试文件、固定命令、runner selector、evidence path、deposit status 或执行状态。
+   - Proof Slice 把 repo-wide env/ops/workspace/forbidden-drift 作为默认新测试义务，且无 proposal/spec/design 明确 source/scope basis。
 3. 当前实现不支持 oracle、当前实现难测、当前测试会失败，都不是 Artifact Consistency Blocker。
 4. 只要 oracle 能从 proposal/specs/design 合理推出，就必须进入测试生成；不得修改 `verification.md` 来适配当前实现。
 
@@ -76,15 +82,18 @@
 
 1. test-worker 写测试前必须读取并遵守 `openspec/agent-runtime/test-quality-strength.md`。
 2. test-worker 基于 proposal、specs、design、verification 和已实现代码生成并运行测试；`tasks.md` 只能作为 runtime acceptance context，不得作为测试 oracle 来源。
-3. test-worker 必须按 `verification.md` 的 required VID 和 `test-quality-strength.md` 的测试质量强度选择最小充分测试层、harness、mock/fixture 边界和实际运行命令。
-4. 新增或修改的测试必须放在 production owner 附近的长期 test/spec 文件或稳定 e2e/ops 入口中；不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
-5. 测试断言必须来自 proposal/specs/design/verification 的外部行为契约。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。
-6. browser E2E 必须使用真实 browser/context/page 和 user-equivalent actions/readback；component 必须使用交互式 component harness；route/API、DB/integration、worker/job、realtime/SSE、visual/responsive、security/negative、config/ops/check 必须证明各自 production-compatible boundary。
-7. test-worker 对每个 required VID 只能输出：`Passed`、`Authoring Blocker`、`Execution Failure`、`Artifact Consistency Blocker`。
-8. `Passed` 表示标准测试已生成或确认存在，测试表达的 oracle 与 `verification.md` 一致，满足 `test-quality-strength.md`，且实际命令通过。
-9. `Authoring Blocker` 表示无法按标准测试写法覆盖 VID，原因是生产代码缺少合适 public/runtime boundary、稳定 observable surface、可控 dependency boundary、错误信号，或只能通过 implementation-detail/static/artifact proof 覆盖。
-10. `Execution Failure` 表示测试已经能按标准写法生成，测试表达的 oracle 与 `verification.md` 一致，但执行失败、runner/entry 未触达、环境隔离失败或生产行为不满足 oracle。
-11. test-worker 不得弱化 oracle、改成实现细节测试、跳过失败 VID、硬编码 change slug/AC ID/VID/evidence path，或用 broad smoke 替代可低层稳定断言。
+3. test-worker 必须按 `verification.md` 的 required VID 对应 Proof Slice 和 `test-quality-strength.md` 的测试质量强度选择最小充分测试层、placement、harness、mock/fixture 边界和实际运行命令。
+4. test-worker 必须按 Proof Slice 生成或确认测试，不得直接按 VID 写一个混合 browser/API/DB/provider/security 断言的大而全测试。
+5. 新增或修改的测试必须按 `Production Owner + Primary Layer` 放在 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 归 app owner 的 e2e 入口。`tests/runtime/**` 不再作为新业务测试目标，只保留历史测试或 source/scope-backed 手动迁移对象；不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
+6. 同一 production owner、同一 primary layer 且属于同一自然 runtime 行为的多个 Proof Slice 可以合并到同一测试文件或测试用例；不同 primary layer 不得合并成一个 primary proof。
+7. 如果 test-worker 认为 slice 的 layer 或 owner 与代码 reality 不合理，不得静默修改 `verification.md`。只有在 oracle 不变且 source/scope-compatible 时，才可在 apply result 记录 layer/owner 调整理由；否则输出 blocker。
+8. 测试断言必须来自 proposal/specs/design/verification 的外部行为契约。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。
+9. browser E2E 必须使用真实 browser/context/page 和 user-equivalent actions/readback；component 必须使用交互式 component harness；route/API、DB/integration、contract、worker/job、realtime/SSE、visual/responsive、security/negative 必须证明各自 production-compatible boundary。
+10. test-worker 对每个 required VID 和每个 required Proof Slice 只能输出：`Passed`、`Authoring Blocker`、`Execution Failure`、`Artifact Consistency Blocker`。
+11. `Passed` 表示标准测试已生成或确认存在，测试表达的 slice oracle 与 `verification.md` 一致，满足 `test-quality-strength.md`，实际命令通过，且 runner/entry 能真实触达 owner-near 测试。
+12. `Authoring Blocker` 表示无法按标准测试写法覆盖 VID/slice，原因是生产代码缺少合适 public/runtime boundary、稳定 observable surface、可控 dependency boundary、错误信号，或只能通过 implementation-detail/static/artifact proof 覆盖。
+13. `Execution Failure` 表示测试已经能按标准写法生成，测试表达的 oracle 与 `verification.md` 一致，但执行失败、runner/entry 未触达、环境隔离失败或生产行为不满足 oracle。
+14. test-worker 不得弱化 oracle、改成实现细节测试、跳过失败 VID/slice、硬编码 change slug/AC ID/VID/evidence path，或用 broad smoke 替代可低层稳定断言。
 
 ## Phase 4 / Production Fix Loop
 
@@ -105,7 +114,7 @@
 
 1. evidence 由 apply runtime、runner、CI、worker 或 auditor 收集；不写回 `tasks.md` 或 `verification.md`，也不进入产品测试代码。
 2. apply evidence result 必须写入或更新 `openspec-results/<change-slug>/apply-result.md`。该文件是 archive 阶段读取 VID 结果、实际测试文件、实际命令、运行结果、manual/not-applicable 理由、blocker 处理和 subagent 报告摘要的事实来源。
-3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required VID 的最终状态、实际测试文件或稳定入口、实际命令、退出状态或 CI result、manual/environment/not-applicable source-backed reason、未解决 blocker、implementation/test/fix worker 报告摘要。
+3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required VID 的最终状态、每个 required Proof Slice 的覆盖状态、实际测试文件或 owner-near 稳定入口、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、未解决 blocker、implementation/test/fix worker 报告摘要。
 4. 测试代码不得硬编码 `openspec-results/**`、change slug、AC ID、VID 或 evidence path。runner artifact 可通过测试框架 output directory、attachment/report 或 apply 执行方复制保存。
 5. 任一 required VID 仍是 unresolved `Authoring Blocker`、`Execution Failure` 或 `Artifact Consistency Blocker` 时，不得声称 apply 完成或 ready to archive。
 

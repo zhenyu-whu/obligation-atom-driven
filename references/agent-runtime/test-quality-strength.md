@@ -5,10 +5,21 @@
 ## 适用边界
 
 1. test agent 必须在 Phase 2 Oracle Precheck 通过后读取本文档，再开始写测试。
-2. test agent 的测试目标只能来自 `verification.md` 的 required VID 及其 proposal/specs/design source basis。
+2. test agent 的测试目标只能来自 `verification.md` 的 required VID、Proof Slice Matrix 及其 proposal/specs/design source basis。
 3. `tasks.md` 只能作为生产实现和 runtime acceptance model 的上下文，不得作为测试 oracle 来源。
-4. 不得把具体执行计划、测试编号、固定命令、证据目录、CI 状态或回归沉淀状态写回 `tasks.md` 或 `verification.md`；`verification.md` 只承载测试意图、oracle、层级理由、harness 预期和 mock/fixture/default-path 边界。
-5. apply result 可以记录实际测试文件、实际命令、运行结果、VID 覆盖关系、blocker 和 not-applicable reason。
+4. VID 定义业务 oracle，不是 test case；Proof Slice 是 test agent 的测试生成和确认单位。
+5. `runtime` 是 Runtime Acceptance 的验收语义，不是测试层级、测试类型或默认测试目录。
+6. 不得把具体执行计划、测试编号、固定命令、证据目录、CI 状态或回归沉淀状态写回 `tasks.md` 或 `verification.md`；`verification.md` 只承载测试意图、oracle、Proof Slice、层级理由、harness 预期和 mock/fixture/default-path 边界。
+7. apply result 可以记录实际测试文件、实际命令、运行结果、VID 与 Proof Slice 覆盖关系、blocker 和 not-applicable reason。
+
+## Proof Slice Rules
+
+1. test agent 必须以 Proof Slice 为测试生成/确认单位；不得直接按 VID 写混合 browser/API/DB/provider/security 断言的大而全测试。
+2. 每个 Proof Slice 只能有一个 primary layer 和一个 production owner；不同 primary layer 不得混成一个 primary proof。
+3. 同 owner、同 primary layer 且属于同一自然 runtime 行为的多个 Proof Slice 可以合并到同一测试文件或测试用例，但失败信号必须能定位到对应 slice。
+4. slice 的 oracle fragment、primary assertion shape 和 fixture/mock boundary 只能来自 verification/proposal/spec/design；test agent 不得新增 oracle 或扩大 source/scope。
+5. 如果 slice layer/owner 与代码 reality 不符，test agent 不得修改 `verification.md`。oracle 不变且 source-compatible 的调整必须写入 apply result；否则输出 blocker。
+6. repo-wide env/ops/workspace/forbidden-drift 检查不属于 production schema 的默认新测试义务；只有 proposal/spec/design 明确要求且能归入 production owner 时，才可作为 source/scope-backed negative/security slice。
 
 ## 分层强度
 
@@ -21,8 +32,21 @@
 7. SSE、订阅恢复、event projection 和 realtime readback 使用 realtime/SSE integration。
 8. 跨页面真实用户路径、导航、提交后 rendered/readback 和浏览器专属行为使用 browser E2E。
 9. responsive、布局、视觉可读性和截图对比只在 oracle 确实是视觉或布局行为时使用 visual/responsive。
-10. MUST NOT、未授权、越权、敏感字段、redaction、配置失败和运维 guard 使用 security/negative 或 config/ops/check。
+10. MUST NOT、未授权、越权、敏感字段、redaction、配置失败和跨边界负向 guard 使用 security/negative；不得把 repo-wide ops/workspace drift 当成默认新业务测试层。
 11. 如果 `verification.md` 的 suggested layer 与实际最小充分层不一致，test agent 必须按 oracle 选择更合适的层，并在 apply result 说明理由；不得修改 `verification.md` 适配当前实现。
+
+## Test Placement Routing
+
+1. test agent 必须根据 Proof Slice 的 `Production Owner + Primary Layer` 决定测试落位；owner 是 production code 边界，不是测试目录或 evidence 目录。
+2. `unit` / `contract` / domain contract 优先放 `packages/<pkg>/src/__tests__` 或 `packages/<pkg>/tests`。
+3. `DB/integration` 优先放 `packages/db/tests`。
+4. `route/API`、web integration、component 优先放 `apps/web/tests/api`、`apps/web/tests/integration` 或 `apps/web/tests/component`。
+5. `browser/e2e`、`visual/responsive` 优先放 `apps/web/tests/e2e`。
+6. `worker/job` 优先放 `apps/worker/tests`。
+7. `security/negative` 优先归被测 production owner；跨页面或跨系统安全流程才归 e2e owner。
+8. `tests/runtime/**` 不作为新业务测试目标；只保留历史测试或 source/scope-backed 手动迁移对象。
+9. 如果 owner-near tests 不被 root/package/CI entry 触达，test agent 必须修 runner include 或 package scripts，或报告 `Execution Failure`；不得为了通过 runner discovery 把 owner-near 测试移动到 `tests/runtime/**`。
+10. broad workspace command 只能作为补充，不能替代 owner-near 测试命令和 slice 级覆盖。
 
 ## Harness 要求
 
@@ -31,15 +55,15 @@
 3. unit 测试不得触发真实 HTTP、浏览器 DOM、数据库事务、queue/worker、storage 或外部 provider side effect；跨越这些边界时必须改用对应 integration 层。
 4. route/API 测试必须调用实际 route handler、server action、API entry、RPC resolver 或 service contract boundary，并构造 Request、session/auth/context、payload 和错误分支。
 5. DB/integration 测试必须执行真实 database、repository、transaction、migration、constraint、readback 或 invariant path，并隔离 schema、事务或测试数据。
-6. worker/job、realtime/SSE、visual/responsive、security/negative 和 config/ops/check 必须分别证明对应 production-compatible boundary；只证明 mock、fixture、静态文件存在或 broad command 通过不算 primary proof。
+6. contract、worker/job、realtime/SSE、visual/responsive 和 security/negative 必须分别证明对应 production-compatible boundary；只证明 mock、fixture、静态文件存在或 broad command 通过不算 primary proof。
 
 ## Oracle 质量
 
 1. 测试断言必须来自 proposal/specs/design/verification 的外部行为契约，不能写成匹配当前实现输出的循环证明。
 2. 测试应具备重构稳定性：只要外部契约不变，重命名私有函数、重排内部组件、拆分 service 或替换实现算法时测试不应失败。
 3. 不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。
-4. 一个测试可以覆盖多个 VID，但必须是同一 runtime 行为和同一测试层自然覆盖；互相独立的 operation、state、failure/retry、auth/security、layout 或 observability branch 必须拆成独立 test case 或稳定 filter。
-5. 一个 `it` / `test` 不得串联多个独立分支来伪装覆盖；失败信号必须能定位到对应 VID 或行为分支。
+4. 一个测试可以覆盖多个 VID 或 Proof Slice，但必须是同一 production owner、同一 primary layer、同一 runtime 行为的自然覆盖；互相独立的 operation、state、failure/retry、auth/security、layout 或 observability branch 必须拆成独立 test case 或稳定 filter。
+5. 一个 `it` / `test` 不得串联多个独立分支来伪装覆盖；失败信号必须能定位到对应 Proof Slice、VID 或行为分支。
 
 ## Mock 与 Fixture
 
@@ -51,7 +75,7 @@
 
 ## 持久测试与运行入口
 
-1. 新增或修改的测试应放在对应 production owner 附近的长期 test/spec 文件或稳定 e2e/ops 入口中，不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
+1. 新增或修改的测试应按 `Production Owner + Primary Layer` 放在对应 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 放 app owner 的 e2e 入口。不得只放在 `tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
 2. test agent 必须运行能实际触达相关测试的命令，并在 apply result 记录命令、退出状态和关键结果。
 3. broad workspace command 可以作为补充，但不能替代能定位相关 oracle 的测试命令；只执行 discovery/listing 或错误 runner 不算通过。
 4. 新增测试 runner、测试目录或 browser E2E spec 时，必须确认 root/package/CI entry 能真实触达；无法接入时不得输出 `Passed`。
@@ -59,7 +83,7 @@
 
 ## 结果判定
 
-1. `Passed`：required VID 的标准测试已生成或确认存在，满足本文档质量门禁，并且实际命令通过。
+1. `Passed`：required Proof Slice 的标准测试已生成或确认存在，满足本文档质量门禁，实际命令通过，且 runner/entry 能触达 owner-near 测试；required VID 的所有 required slices 都满足后，该 VID 才可汇总为 `Passed`。
 2. `Authoring Blocker`：无法按本文档生成标准测试，原因是生产代码缺少合适 public/runtime boundary、稳定 observable surface、可控 dependency boundary、错误信号，或只能通过 implementation-detail/static/artifact proof 覆盖。
 3. `Execution Failure`：标准测试已经能按本文档生成，oracle 表达正确，但测试命令失败、runner/entry 未触达、环境隔离失败或生产行为不满足 oracle。
 4. `Artifact Consistency Blocker` 仍只限 Phase 2 定义的 artifact/oracle 问题；当前实现不支持 oracle、测试难写或测试失败都不是 artifact consistency blocker。
