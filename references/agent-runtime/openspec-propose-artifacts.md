@@ -11,7 +11,7 @@
 3. 上一条只豁免“固定字段或标识本身”，不豁免 agent 填写的解释性内容。凡是 agent 自己写入的句子、短语说明、表格单元格说明、trace block 字段值、proof、preserve、risk、verification、acceptance、design rationale、task description、Requirement 正文、Scenario 的 WHEN/THEN 条件与结果正文，都必须使用简体中文。
 4. 技术英文术语可以作为标识或名词短语保留，但承载语义的句子必须中文化。允许写 `fixture loader`、`GET /api/health`、`pnpm -w check` 这类标识；不允许写 `Runtime checks prove default wiring` 这类英文解释句，应改为“运行时检查证明默认 wiring 可用”。
 5. 表格判定规则：表头可以按 template 保持英文；表格中由 agent 填写的每个说明类单元格都按正文处理，必须中文。只有单元格内容完全由 ID、路径、代码标识、任务编号、capability 名称或源文档精确术语组成时，才可以保持英文或原文。
-6. `tasks.md` 的 AC-level 字段 `Source Atoms:`、`Scope Items:`、`Projection:`、`Artifact Handling:`、`Spec:`、`Design:`、`Acceptance:`、`No-Scope Boundary:`、`Primary Proof:`、`External Boundary / Default Path Policy:`、`Mock Policy:` 以及 task-level 字段 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` 可以保持英文；字段值必须中文，除非字段值只是固定 trace marker（例如 `inherits AC-###`）、ID、路径、代码标识、命令、projection/handling enum 或精确 requirement/scenario 名称。checkbox 后的任务标题属于 task description，必须中文。
+6. `tasks.md` 的 AC-level 字段 `Source Atoms:`、`Scope Items:`、`Projection:`、`Artifact Handling:`、`Spec:`、`Design:`、`Acceptance:`、`No-Scope Boundary:`、`Primary Proof:`、`External Boundary / Default Path Policy:`、`Mock Policy:` 以及 task-level 字段 `Source Atoms:`、`Scope Items:`、`Projection:`、`Artifact Handling:`、`Runtime Rows:`、`Acceptance:`、`Source:`、`Baseline:`、`Preserve:`、`Proof:`、`Mock Policy:` 可以保持英文；字段值必须中文，除非字段值只是 ID、路径、代码标识、projection/handling enum 或精确 requirement/scenario 名称。checkbox 后的任务标题属于 task description，必须中文。
 7. specs artifact 中 OpenSpec 固定关键词和 heading 可保持 template 要求；Requirement 正文、Scenario 的 WHEN/THEN 条件与结果说明必须中文。Requirement / Scenario 名称若由 agent 新拟定，优先中文；只有需要精确引用已有英文规范名或源文档原文术语时才保留英文。
 8. proposal / design / tasks artifact 的固定章节标题可保持 template 形式；Why、What、Impact、Design decisions、Risks、Open Questions、Alignment Gate、AC 说明、Proof、Mock Policy 等解释性正文必须中文。
 9. 语言自查最低标准：把反引号中的代码/路径/命令/ID 暂时忽略后，每个由 agent 填写的自然语言句子仍应主要是简体中文；若剩余内容是一句英文或英文主导的说明，即判定为不合格。
@@ -148,12 +148,12 @@
 
 1. `tasks.md` 是 production implementation and runtime acceptance model；`verification.md` 是 independent test intent and oracle artifact。
 2. `verification.md` 必须在 `tasks.md` 之前生成，依赖 proposal/specs/design，不依赖 `tasks.md`。
-3. `verification.md` 必须包含 `Verification Intent`、`Behavior Oracle Matrix`、`Suggested Layer Matrix`、`Mock And Fixture Boundary`、`Regression Intent`、`Do Not Test`、`Oracle Consistency Checklist`。
+3. `verification.md` 必须包含 `Verification Intent`、`Behavior Oracle Matrix`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test`、`Oracle Consistency Checklist`。
 4. 每个 required VID 必须有 source basis、public/runtime observable surface、oracle、failure signal 和 priority。oracle 不能来自当前实现细节、`tasks.md`、测试文件结构或 evidence/deposit 结构。
-5. `verification.md` 不得包含具体测试文件、固定测试命令、evidence directory 或 deposit status。
+5. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
 6. `tasks.md` 必须按 `## AC-### <name>` 分组，保留 `Acceptance-Driven Coverage`、`Runtime Acceptance Index`、AC sections 和 `Verification Appendix`。
 7. 每个 AC section 必须有 `Acceptance:`、`Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
-8. 每个 checkbox task 只能包含 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段。
+8. obligation profile 的每个 checkbox task 必须包含 `Source Atoms:`、`Projection:`、`Spec:`、`Design:`、`Runtime Rows:`、`Acceptance:`、`Source:`、`Preserve:`、`Proof:`、`Mock Policy:` trace 字段。
 9. `tasks.md` 的 `Acceptance-Driven Coverage` 必须包含 `Obligation Atom Coverage`、`Requirement / Scenario Coverage`、`Design Obligation Coverage`；`Obligation Atom Coverage` 每行只能包含一个 exact `GA-####`。
 10. coverage 表中的 `Verification Task IDs` 必须改为 `Acceptance Proof Task IDs`；引用的是 checkbox proof task，不是测试编号。
 11. `Runtime Acceptance Index` 必须建立 runtime provision graph，区分 baseline、current-change AC、future change 和 explicit negative boundary；AC sections 必须按拓扑顺序生成。
@@ -172,13 +172,13 @@
 4. specs 只为包含 `Artifact Handling: spec` 或 `guard` 的 capability 创建 delta spec；不得为 design/proof/context-only scope 创建空 spec。
 5. design 必须使用 proposal `Change Scope Coverage`、spec `Scope Items` 和 `Baseline Trace` 作为 scope-reading interface。
 6. `verification.md` 必须在 `tasks.md` 之前生成，依赖 proposal/specs/design，不依赖 `tasks.md`。
-7. `verification.md` 必须包含 VID、source basis、public/runtime observable oracle、suggested layer、mock/fixture boundary、regression intent 和 do-not-test boundary。
-8. `verification.md` 不得包含具体测试文件、固定测试命令、evidence directory 或 deposit status。
+7. `verification.md` 必须包含 VID、source basis、public/runtime observable oracle、suggested layer、harness rationale、mock/fixture boundary、failure/negative coverage、regression intent 和 do-not-test boundary。
+8. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
 9. `tasks.md` 必须按 `## AC-### <name>` 分组，保留 `Acceptance-Driven Coverage`、`Runtime Acceptance Index`、AC sections 和 `Verification Appendix`。
 10. 每个 AC section 必须包含 `Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
 11. `tasks.md` 的 `Acceptance-Driven Coverage` 必须包含 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage`；`Scope Item Coverage` 每行只能包含一个 exact `SI-###`。
 12. coverage 表中的 `Verification Task IDs` 必须改为 `Acceptance Proof Task IDs`；引用的是 checkbox proof task，不是测试编号。
-13. 每个 checkbox task 只能包含 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段。
+13. default profile 的每个 checkbox task 必须包含 `Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows:`、`Acceptance:`、`Baseline:`、`Preserve:`、`Proof:`、`Mock Policy:` trace 字段。
 14. `Verification Appendix` 只保留 runtime detail matrices：surface、operation、state/branch、async/realtime chain。
 15. `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
 16. Final task 自查必须确认没有 orphan scope item、SI range、后置 provider dependency、scope 外行为或 runtime row orphan。
@@ -192,7 +192,7 @@
 3. `production-default-acceptance-driven` / `proposal.md`：`Change Scope Coverage` 覆盖每个 material scope item；每个非 context `SI-###` 有 `Artifact Handling` 和 downstream coverage expectation；无 `GA-####` register、无 orchestrate 依赖、无 SI ranges。
 4. specs：只为有 OpenSpec delta 的 capability 生成 spec file；每个 generated spec 至少包含一个 `### Requirement:`；无 spec-level orphan GA/SI；无 ranges。
 5. design：每个 in-scope scenario、design obligation/decision、guard item 和需要 implementation placement 的 material source/scope item 有 design decision、guard handling 或 explicit blocker；无需要 implementer 猜测的行为。
-6. `verification.md`：每个 required VID 有 source basis、observable surface、oracle、failure signal、priority、suggested layer、mock/fixture boundary 和 do-not-test boundary。
+6. `verification.md`：每个 required VID 有 source basis、observable surface、oracle、failure signal、priority、suggested layer、harness rationale、mock/fixture boundary、failure/negative coverage、regression intent 和 do-not-test boundary。
 7. `verification.md` 不得包含具体测试路径、固定命令、evidence directory、deposit status，且不得把 artifact/process 当作产品行为 oracle。
 8. `tasks.md`：三张 coverage 表完整；GA/SI 单行单 ID；所有 task ID 引用都能解析到 checkbox；每个 AC 有 final acceptance/proof checkbox；每个 AC 有 Prerequisites/Provides/Consumes/Start Gate；AC section 顺序满足 runtime provision graph；无 orphan rows、无 ranges、无后置 provider dependency。
 9. `tasks.md` 保留 `Runtime Acceptance Index` 和只含 runtime detail matrices 的 `Verification Appendix`；不得出现测试矩阵、测试执行证据或回归沉淀字段。

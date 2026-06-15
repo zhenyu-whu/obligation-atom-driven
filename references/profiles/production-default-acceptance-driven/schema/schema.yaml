@@ -135,7 +135,7 @@ artifacts:
     description: 独立测试意图、行为 oracle 和测试前一致性预检 artifact
     template: verification.md
     instruction: |
-      创建 verification.md，定义从 proposal、specs 和 design 独立推导的测试意图、行为 oracle、建议测试层、mock/fixture 边界和不测边界。
+      创建 verification.md，定义从 proposal、specs 和 design 独立推导的测试意图、行为 oracle、建议测试层、harness 预期、mock/fixture 边界、失败/负向覆盖和不测边界。
 
       目的：
       - `verification.md` 是 independent test intent and oracle artifact，不是测试实现清单、执行证据总账或回归沉淀表。
@@ -152,22 +152,27 @@ artifacts:
       - `## Verification Intent`
       - `## Behavior Oracle Matrix`
       - `## Suggested Layer Matrix`
+      - `## Harness Rationale`
       - `## Mock And Fixture Boundary`
+      - `## Failure And Negative Coverage`
       - `## Regression Intent`
       - `## Do Not Test`
       - `## Oracle Consistency Checklist`
 
       内容约束：
       - `Behavior Oracle Matrix` columns 至少包含：`VID`、`Source Basis`、`Runtime Behavior`、`Observable Surface`、`Oracle`、`Failure Signal`、`Priority`。
-      - `Suggested Layer Matrix` 只给测试层建议和理由，不指定具体测试文件、固定命令、runner selector 或 evidence path。
+      - `Suggested Layer Matrix` 只给最小充分测试层建议、理由、被省略稳定层理由和人工/环境 gate，不指定具体测试文件、固定命令、runner selector 或 evidence path。
+      - `Harness Rationale` 必须说明交互或边界需求、harness 期望、primary assertion shape 和 failure localization，不指定具体文件或命令。
       - `Mock And Fixture Boundary` 必须说明允许的 fixture/mock、不能替换的 default path、被替换 side effect 和补偿 proof。
+      - `Failure And Negative Coverage` 必须覆盖 required failure、negative、security、recovery 或 next-state branch；不适用时写 scope-backed reason。
       - `Regression Intent` 只描述长期回归重要性和预期覆盖，不登记 permanent test file、regression command 或 deposit status。
-      - `Do Not Test` 必须明确禁止私有 helper、调用次数、DOM 层级、className、快照全文、当前实现分支、OpenSpec artifact 文本结构、change slug、AC ID、VID 本身、evidence directory、Regression Deposit 行，以及 artifact/config/text scan 作为产品行为 primary proof。
+      - `Do Not Test` 必须明确禁止私有 helper、调用次数、DOM 层级、className、快照全文、当前实现分支、OpenSpec artifact 文本结构、change slug、VID 本身、执行产物布局，以及 artifact/config/text scan 作为产品行为 primary proof。
 
       Final check：
       - 每个 required VID 都有 source basis、observable surface、oracle 和 failure signal。
       - 没有 VID 从 `tasks.md`、当前实现细节、测试文件结构或 evidence/deposit 结构推导。
       - 没有具体测试路径、固定测试命令、evidence directory 或 deposit status。
+      - 每个 required VID 都说明了最小充分层级、harness 预期、mock/fixture 边界、失败/负向覆盖和长期回归意图。
       - Oracle Consistency Checklist 能支持 test agent 在写测试前输出 `Artifact Consistency Blocker`。
     requires:
       - proposal
@@ -209,14 +214,21 @@ artifacts:
 
       Runtime Acceptance Index：
       - 必须包含 `AC Runtime Ownership Index` table。
-      - columns 至少包含：`AC ID`、`Source Basis`、`Runtime Surface Rows`、`Operation Rows`、`State / Branch Rows`、`Async / Realtime Rows`、`Provides Rows`、`Consumes Rows`、`Depends On AC IDs`、`Prerequisite Runtime Facts`、`Start Gate`、`Scope Role`、`No-Scope-Expansion Check`、`Detail Matrix Rows`、`Acceptance Proof Rows`。
+      - columns 至少包含：`AC ID`、`Scope Basis`、`Runtime Surface Rows`、`Operation Rows`、`State / Branch Rows`、`Async / Realtime Rows`、`Provides Rows`、`Consumes Rows`、`Depends On AC IDs`、`Prerequisite Runtime Facts`、`Start Gate`、`Scope Role`、`No-Scope-Expansion Check`、`Detail Matrix Rows`、`Acceptance Proof Task IDs`。
       - Runtime Acceptance Index 只作为主 agent preflight 路由表，不是测试计划来源。
 
       AC section：
       - 每个 AC section 必须包含 `Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
       - `Required Evidence:` 只允许描述 runtime proof category，例如 browser/rendered fact、API/data fact、job/storage fact、log/audit fact；不得写测试文件、测试命令、evidence path 或执行状态。
       - `External Boundary / Default Path Policy:` 描述 production/default path、外部依赖和 sandbox 约束，不描述测试 fixture 实现。
-      - 每个 checkbox task 只能包含 `Trace:`、`Runtime Rows:`、`Acceptance:`、`Proof:`、`Overrides:` trace 字段。
+      - 每个 checkbox task 必须包含 `Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows:`、`Acceptance:`、`Baseline:`、`Preserve:`、`Proof:`、`Mock Policy:` trace 字段。
+      - `Scope Items:` 必须列 exact `SI-###`；无 scope-backed 行为的 repository/setup task 才可写 `Not applicable` 并给出理由。
+      - `Runtime Rows:` 必须列该 task 负责或最终 proof 覆盖的 RS-/OP-/ST-/CH- rows；无 runtime 行为时写 `Not applicable` 并给出 scope-backed 理由。
+      - `Acceptance:` 必须描述 task 贡献证明的具体行为，而不是 file-edit summary。
+      - `Baseline:` 必须列 proposal baseline/input read set、spec/design 的既有行为或输入事实。
+      - `Preserve:` 必须说明必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints。
+      - `Proof:` 必须说明可观察 proof；用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback。
+      - `Mock Policy:` 必须说明 mock/sandbox/default path 规则；不得用 mock 替代 required runtime boundary。
       - 每个 AC section 必须至少有一个 final acceptance/proof checkbox。
 
       Verification Appendix：

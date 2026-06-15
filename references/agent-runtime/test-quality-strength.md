@@ -7,7 +7,7 @@
 1. test agent 必须在 Phase 2 Oracle Precheck 通过后读取本文档，再开始写测试。
 2. test agent 的测试目标只能来自 `verification.md` 的 required VID 及其 proposal/specs/design source basis。
 3. `tasks.md` 只能作为生产实现和 runtime acceptance model 的上下文，不得作为测试 oracle 来源。
-4. 不得把测试计划、测试编号、固定命令、证据目录、CI 状态或回归沉淀状态写回 `tasks.md` 或 `verification.md`。
+4. 不得把具体执行计划、测试编号、固定命令、证据目录、CI 状态或回归沉淀状态写回 `tasks.md` 或 `verification.md`；`verification.md` 只承载测试意图、oracle、层级理由、harness 预期和 mock/fixture/default-path 边界。
 5. apply result 可以记录实际测试文件、实际命令、运行结果、VID 覆盖关系、blocker 和 not-applicable reason。
 
 ## 分层强度

@@ -33,11 +33,11 @@
 
 两个 schema 的 common preflight 必须索引：
 
-- AC sections、AC-local execution contract fields、checkbox task IDs、trace inheritance / overrides、coverage table rows、Prerequisites/Provides/Consumes/Start Gate 和 proof requirements。
+- AC sections、AC-local execution contract fields、checkbox task IDs、source/scope trace fields、coverage table rows、Prerequisites/Provides/Consumes/Start Gate 和 proof requirements。
 - `Runtime Acceptance Index` 中的 runtime surface rows、operation rows、state/branch rows、async/realtime rows、provides/consumes rows、depends-on AC、prerequisite runtime facts、scope role、no-scope-expansion check 和 detail matrix row references。
 - `Verification Appendix` 中的 `Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`。
 - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、explicit negative boundary 的 provider/consumer 关系。
-- `verification.md` 的 `Behavior Oracle Matrix`、`Suggested Layer Matrix`、`Mock And Fixture Boundary`、`Do Not Test` 和 `Oracle Consistency Checklist`。
+- `verification.md` 的 `Behavior Oracle Matrix`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test` 和 `Oracle Consistency Checklist`。
 
 若 preflight 发现 coverage orphan、GA/SI range、coverage task ID 无法解析、AC 缺少 final acceptance/proof checkbox、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`verification.md` VID 无 source basis、oracle 与 proposal/spec/design 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
 
