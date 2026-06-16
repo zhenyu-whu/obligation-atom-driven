@@ -44,7 +44,7 @@
 
 ## Verification Design
 
-<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / stable negative boundary check / smoke。用户可见操作必须有 positive interaction proof；静态 DOM、截图或 SSR/static render 只能作补充。不要生成完整 route/file/table allowlist 这类全仓结构冻结式 guard，除非用户显式要求架构冻结。 -->
+<!-- 每个关键行为映射到 unit / DB integration / route/API / worker / SSE / storage / component / E2E / responsive / stable negative boundary check / smoke。用户可见操作必须有 positive interaction proof；静态 DOM、截图或 SSR/static render 只能作补充。不要生成完整 route/file/table allowlist 这类全仓结构冻结式 guard，除非用户显式要求架构冻结。本节只描述 proof strategy；canonical RS-/OP-/ST-/CH- runtime row registry 必须由 runtime-acceptance.md 承载。 -->
 
 ## Rollout / Compatibility
 
