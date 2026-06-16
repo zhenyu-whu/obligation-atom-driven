@@ -37,11 +37,11 @@
 
 - AC sections、AC-local execution contract fields、checkbox task IDs、source/scope trace fields、coverage table rows、Prerequisites/Provides/Consumes/Start Gate 和 proof requirements。
 - `Runtime Acceptance Index` 中引用的 runtime surface rows、operation rows、state/branch rows、async/realtime rows、provides/consumes rows、depends-on AC、prerequisite runtime facts、scope role、no-scope-expansion check 和 detail matrix row references，且所有 row 必须存在于 `runtime-acceptance.md`。
-- `Runtime Acceptance Projection` 中的 `Runtime Row Ownership Projection`、`Provider / Consumer Projection` 和 `Projection Closure Checklist`。
+- `Runtime Acceptance Projection` 中的 `Runtime Row Ownership Projection` 和 `Provider / Consumer Projection`。
 - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、explicit negative boundary 的 provider/consumer 关系。
 - `verification.md` 的 `Behavior Oracle Matrix`、`Proof Slice Matrix`、`Runtime Coverage Reconciliation`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test` 和 `Oracle Consistency Checklist`。
 
-若 preflight 发现 coverage orphan、GA/SI range、coverage task ID 无法解析、AC 缺少 final acceptance/proof checkbox、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`runtime-acceptance.md` row 缺少 source/scope basis 或 default path/no-scope boundary、tasks/verification 引用未定义 runtime row、required/preserve/proof-only runtime row 缺少 tasks projection 或 verification projection、同一 row 在 runtime-acceptance/tasks/verification 中 source/scope/default path/no-scope 冲突、`verification.md` VID 无 source basis、oracle 与 proposal/spec/design/runtime-acceptance 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
+若 preflight 发现 coverage orphan、GA/SI range、implementation task ID 无法解析、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`runtime-acceptance.md` row 缺少 source/scope basis 或 default path/no-scope boundary、tasks/verification 引用未定义 runtime row、required/preserve/proof-only runtime row 缺少 tasks projection 或 verification projection、同一 row 在 runtime-acceptance/tasks/verification 中 source/scope/default path/no-scope 冲突、`verification.md` VID 无 source basis、Proof Slice `Production Owner` 是复合 owner / owner list、oracle 与 proposal/spec/design/runtime-acceptance 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
 
 ## Subagent 分派硬约束
 
@@ -78,6 +78,7 @@
    - Proof Slice 缺少 VID、source/scope-backed oracle fragment、primary assertion shape 或 fixture/mock boundary。
    - Proof Slice 有多个 primary layer，或 primary layer 不在 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative` 中。
    - Proof Slice 缺少 production owner，或 production owner 是测试目录、evidence 目录、runner 入口而不是 production owner 边界。
+   - Proof Slice 的 production owner 包含多个 production owner boundary，例如逗号分隔、多个反引号 owner、`+`、`/` owner list、`and`、`和`、`与` 连接的复合 owner。
    - Proof Slice 写入具体测试文件、固定命令、runner selector、evidence path、deposit status 或执行状态。
    - Proof Slice 把 repo-wide env/ops/workspace/forbidden-drift 作为默认新测试义务，且无 proposal/spec/design 明确 source/scope basis。
 3. 当前实现不支持 oracle、当前实现难测、当前测试会失败，都不是 Artifact Consistency Blocker。
@@ -89,7 +90,7 @@
 2. test-worker 基于 proposal、specs、design、runtime-acceptance、verification 和已实现代码生成并运行测试；`tasks.md` 只能作为 runtime acceptance context，不得作为测试 oracle 来源。
 3. test-worker 必须按 `verification.md` 的 required VID 对应 Proof Slice 和 `test-quality-strength.md` 的测试质量强度选择最小充分测试层、placement、harness、mock/fixture 边界和实际运行命令，并在结果中记录 Runtime Row -> VID -> Proof Slice 覆盖关系。
 4. test-worker 必须按 Proof Slice 生成或确认测试，不得直接按 VID 写一个混合 browser/API/DB/provider/security 断言的大而全测试。
-5. 新增或修改的测试必须按 `Production Owner + Primary Layer` 放在 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 归 app owner 的 e2e 入口。`tests/runtime/**` 不再作为新业务测试目标，只保留历史测试或 source/scope-backed 手动迁移对象；不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
+5. 新增或修改的测试必须按单一 `Production Owner + Primary Layer` 放在 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 归 app owner 的 e2e 入口。协作依赖只影响 harness/mock/default-path 说明，不扩大 owner。`tests/runtime/**` 不再作为新业务测试目标，只保留历史测试或 source/scope-backed 手动迁移对象；不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
 6. 同一 production owner、同一 primary layer 且属于同一自然 runtime 行为的多个 Proof Slice 可以合并到同一测试文件或测试用例；不同 primary layer 不得合并成一个 primary proof。
 7. 如果 test-worker 认为 slice 的 layer 或 owner 与代码 reality 不合理，不得静默修改 `verification.md`。只有在 oracle 不变且 source/scope-compatible 时，才可在 apply result 记录 layer/owner 调整理由；否则输出 blocker。
 8. 测试断言必须来自 proposal/specs/design/runtime-acceptance/verification 的外部行为契约。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。

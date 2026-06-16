@@ -20,7 +20,7 @@
 
 | Surface ID | Surface Type | Owner Candidate | Entry Point | Runtime Obligation | Observable Fact | Default Path Policy | External Boundary | Scope Basis | Artifact Handling | Scope Role | No-Scope-Expansion Check |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| <!-- RS-001 --> | <!-- UI route / client component / API / DB / worker / queue / SSE / storage / auth / config 等。 --> | <!-- module/component/service owner candidate。 --> | <!-- route/action/job/stream entry。 --> | <!-- 该 surface 必须提供或保留的 runtime behavior。 --> | <!-- 可观察 rendered/API/DB/auth/log 等 fact。 --> | <!-- production/default path 是否必须真实及理由。 --> | <!-- provider/storage/network/env 等边界。 --> | <!-- SI-001 / spec scenario / design decision。 --> | <!-- handling。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- 不引入 scope 外 surface。 --> |
+| <!-- RS-001 --> | <!-- UI route / client component / API / DB / worker / queue / SSE / storage / auth / config 等。 --> | <!-- 单一 advisory primary owner candidate；多模块依赖写 External Boundary，不复制为 Proof Slice Production Owner list。 --> | <!-- route/action/job/stream entry。 --> | <!-- 该 surface 必须提供或保留的 runtime behavior。 --> | <!-- 可观察 rendered/API/DB/auth/log 等 fact。 --> | <!-- production/default path 是否必须真实及理由。 --> | <!-- provider/storage/network/env 等边界。 --> | <!-- SI-001 / spec scenario / design decision。 --> | <!-- handling。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- 不引入 scope 外 surface。 --> |
 
 ## Operation Coverage Matrix
 

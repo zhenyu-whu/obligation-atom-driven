@@ -15,7 +15,7 @@
 ## Proof Slice Rules
 
 1. test agent 必须以 Proof Slice 为测试生成/确认单位；不得直接按 VID 写混合 browser/API/DB/provider/security 断言的大而全测试。
-2. 每个 Proof Slice 只能有一个 primary layer 和一个 production owner；不同 primary layer 不得混成一个 primary proof。
+2. 每个 Proof Slice 只能有一个 primary layer 和一个 production owner；production owner 必须是单一 production code boundary token，不能是 owner list；不同 primary layer 不得混成一个 primary proof。
 3. 同 owner、同 primary layer 且属于同一自然 runtime 行为的多个 Proof Slice 可以合并到同一测试文件或测试用例，但失败信号必须能定位到对应 slice。
 4. slice 必须声明 `Runtime Row IDs`，且每个 row ID 必须存在于 `runtime-acceptance.md`；slice 的 oracle fragment、primary assertion shape 和 fixture/mock boundary 只能来自 verification/proposal/spec/design/runtime-acceptance；test agent 不得新增 oracle 或扩大 source/scope。
 5. 如果 slice layer/owner 与代码 reality 不符，test agent 不得修改 `verification.md`。oracle 不变且 source-compatible 的调整必须写入 apply result；否则输出 blocker。
@@ -37,13 +37,13 @@
 
 ## Test Placement Routing
 
-1. test agent 必须根据 Proof Slice 的 `Production Owner + Primary Layer` 决定测试落位；owner 是 production code 边界，不是测试目录或 evidence 目录。
+1. test agent 必须根据 Proof Slice 的单一 `Production Owner + Primary Layer` 决定测试落位；owner 是 production code 边界，不是测试目录、协作边界列表或 evidence 目录。
 2. `unit` / `contract` / domain contract 优先放 `packages/<pkg>/src/__tests__` 或 `packages/<pkg>/tests`。
 3. `DB/integration` 优先放 `packages/db/tests`。
 4. `route/API`、web integration、component 优先放 `apps/web/tests/api`、`apps/web/tests/integration` 或 `apps/web/tests/component`。
 5. `browser/e2e`、`visual/responsive` 优先放 `apps/web/tests/e2e`。
 6. `worker/job` 优先放 `apps/worker/tests`。
-7. `security/negative` 优先归被测 production owner；跨页面或跨系统安全流程才归 e2e owner。
+7. `security/negative` 优先归单一被测 production owner；跨页面或跨系统安全流程才归单一 e2e app owner。不得用多个 owner 表示跨边界协作。
 8. `tests/runtime/**` 不作为新业务测试目标；只保留历史测试或 source/scope-backed 手动迁移对象。
 9. 如果 owner-near tests 不被 root/package/CI entry 触达，test agent 必须修 runner include 或 package scripts，或报告 `Execution Failure`；不得为了通过 runner discovery 把 owner-near 测试移动到 `tests/runtime/**`。
 10. broad workspace command 只能作为补充，不能替代 owner-near 测试命令和 slice 级覆盖。
@@ -75,7 +75,7 @@
 
 ## 持久测试与运行入口
 
-1. 新增或修改的测试应按 `Production Owner + Primary Layer` 放在对应 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 放 app owner 的 e2e 入口。不得只放在 `tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
+1. 新增或修改的测试应按单一 `Production Owner + Primary Layer` 放在对应 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 放 app owner 的 e2e 入口。协作依赖写入 harness/mock/default-path 说明，不改变 owner。不得只放在 `tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
 2. test agent 必须运行能实际触达相关测试的命令，并在 apply result 记录命令、退出状态和关键结果。
 3. broad workspace command 可以作为补充，但不能替代能定位相关 oracle 的测试命令；只执行 discovery/listing 或错误 runner 不算通过。
 4. 新增测试 runner、测试目录或 browser E2E spec 时，必须确认 root/package/CI entry 能真实触达；无法接入时不得输出 `Passed`。
