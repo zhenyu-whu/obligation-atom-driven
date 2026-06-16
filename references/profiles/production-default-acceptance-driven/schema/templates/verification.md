@@ -12,8 +12,8 @@
 
 ## Behavior Oracle Matrix
 
-| VID | Runtime Row IDs | Source Basis | Runtime Behavior | Observable Surface | Oracle | Failure Signal | Priority |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| VID              | Runtime Row IDs                                                                       | Source Basis                                                  | Runtime Behavior                   | Observable Surface                                                      | Oracle                                                                        | Failure Signal                  | Priority                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------- |
 | <!-- VID-001 --> | <!-- RS-001, OP-001, ST-001, CH-001；只引用 runtime-acceptance.md 中已定义 rows。 --> | <!-- SI-001；spec requirement/scenario；design decision。 --> | <!-- public/runtime behavior。 --> | <!-- UI route/API/DB/job/worker/storage/auth/log 等可观察 surface。 --> | <!-- 应成立的断言依据，必须来自 proposal/spec/design/runtime-acceptance。 --> | <!-- 失败时可观察到的偏差。 --> | <!-- required / preserve / manual / not-applicable。 --> |
 
 ## Proof Slice Matrix
@@ -26,44 +26,38 @@ Production Owner 必须是 exactly one token，例如 apps/web 或 packages/doma
 多 production boundary proof 必须拆成多个 slice，或选择 public entrypoint owner，并把下游真实边界写入 Fixture / Mock Boundary 或 Notes。
 -->
 
-| Slice ID | VID | Runtime Row IDs | Primary Layer | Production Owner | Oracle Fragment | Primary Assertion Shape | Fixture / Mock Boundary | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Slice ID         | VID              | Runtime Row IDs                                                       | Primary Layer                                                                                                                                       | Production Owner                                                                                       | Oracle Fragment                                 | Primary Assertion Shape                                               | Fixture / Mock Boundary                                                                                                        | Notes                                                             |
+| ---------------- | ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
 | <!-- PS-001A --> | <!-- VID-001 --> | <!-- RS-001, OP-001；只引用 runtime-acceptance.md 中已定义 rows。 --> | <!-- unit / component / route/API / DB/integration / contract / worker/job / realtime/SSE / browser/e2e / visual/responsive / security/negative --> | <!-- apps/web；必须是 exactly one owner token，例如 apps/web 或 packages/domain，不写 owner list。 --> | <!-- 从该 VID oracle 拆出的单层可证明片段。 --> | <!-- 该 slice 的 primary assertion 形态；不混入其他层 invariant。 --> | <!-- 允许 fixture/mock 与必须保持真实的 default path；协作 production boundary 写在这里或 Notes，不写进 Production Owner。 --> | <!-- scope-backed not-applicable/manual/合并建议；否则 None。 --> |
-
-## Runtime Coverage Reconciliation
-
-| Runtime Row ID | Row Type | Source / Scope Basis | Runtime Obligation | Scope Role | VID IDs | Proof Slice IDs | Coverage Status | Gap / Not-Covered Reason |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| <!-- RS-001 --> | <!-- surface / operation / state-branch / async-realtime-chain --> | <!-- SI/spec/design/runtime-acceptance scope basis。 --> | <!-- runtime-acceptance.md 中的 canonical runtime obligation 摘要。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- VID-001 --> | <!-- PS-001A --> | <!-- covered / manual / not-applicable / blocker --> | <!-- covered 时写 None；否则写 scope-backed 理由。 --> |
 
 ## Suggested Layer Matrix
 
-| VID | Minimum Sufficient Layers | Layer Reason | Omitted Stable Layers / Reason | Manual / Environment Gate |
-| --- | --- | --- | --- | --- |
+| VID              | Minimum Sufficient Layers                                                                                                                                                  | Layer Reason                                                                    | Omitted Stable Layers / Reason                              | Manual / Environment Gate                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
 | <!-- VID-001 --> | <!-- 按 Proof Slice 汇总：unit / component / route/API / DB/integration / contract / worker/job / realtime/SSE / browser/e2e / visual/responsive / security/negative。 --> | <!-- 为什么这些层能稳定证明该 oracle；更高层 smoke 不能替代可低层稳定断言。 --> | <!-- 为什么某些稳定层不适用；不能只写“已有端到端覆盖”。 --> | <!-- 需要人工或环境 gate 时说明 scope-backed 理由；否则 None。 --> |
 
 ## Harness Rationale
 
-| VID | Interaction / Boundary Needed | Harness Expectation | Primary Assertion Shape | Failure Localization |
-| --- | --- | --- | --- | --- |
+| VID              | Interaction / Boundary Needed                                                                          | Harness Expectation                                                                              | Primary Assertion Shape                                                                   | Failure Localization                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------- |
 | <!-- VID-001 --> | <!-- click/type/select/submit、route/API call、DB readback、worker consume、security negative 等。 --> | <!-- 真实 browser/component/API/DB/worker/security boundary 的期望形态，不写具体文件或命令。 --> | <!-- 用户可见结果、DTO、DB invariant、event/log/audit fact、authorization result 等。 --> | <!-- 失败时应能定位到哪个行为分支。 --> |
 
 ## Mock And Fixture Boundary
 
-| VID | Allowed Fixture | Allowed Mock | Default Path That Must Remain Real | Replaced Side Effect | Compensating Proof Needed |
-| --- | --- | --- | --- | --- | --- |
+| VID              | Allowed Fixture                                 | Allowed Mock                                   | Default Path That Must Remain Real                       | Replaced Side Effect                                 | Compensating Proof Needed                                |
+| ---------------- | ----------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
 | <!-- VID-001 --> | <!-- 输入数据、凭证、claims、确定性时间等。 --> | <!-- 慢速、外部、非确定性边界；无则 None。 --> | <!-- 不能被替换的 production behavior/default path。 --> | <!-- 被 mock 或 fixture 替换的真实 side effect。 --> | <!-- 需要怎样的 default-path proof 补偿；无则 None。 --> |
 
 ## Failure And Negative Coverage
 
-| VID | Required Failure / Negative Branch | Source Basis | Observable Failure Signal | Recovery / Next-State Oracle | Not Covered / Reason |
-| --- | --- | --- | --- | --- | --- |
+| VID              | Required Failure / Negative Branch                                                              | Source Basis              | Observable Failure Signal | Recovery / Next-State Oracle                 | Not Covered / Reason                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------- | ------------------------- | ------------------------- | -------------------------------------------- | ---------------------------------------------------- |
 | <!-- VID-001 --> | <!-- unauthorized / validation failed / timeout / retry / disabled / empty / redaction 等。 --> | <!-- SI/spec/design。 --> | <!-- 可观察失败信号。 --> | <!-- 恢复、重试、终态或允许 next state。 --> | <!-- 不适用时写 scope-backed reason；否则 None。 --> |
 
 ## Regression Intent
 
-| VID | Regression Importance | Expected Long-Term Coverage | Not Suitable For Permanent Automated Test / Reason |
-| --- | --- | --- | --- |
+| VID              | Regression Importance                     | Expected Long-Term Coverage                                             | Not Suitable For Permanent Automated Test / Reason       |
+| ---------------- | ----------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------- |
 | <!-- VID-001 --> | <!-- high / medium / low + 中文理由。 --> | <!-- 希望长期保留的行为覆盖意图和适合的覆盖层，不写具体文件或命令。 --> | <!-- 不适合自动化时写 scope-backed 理由；否则 None。 --> |
 
 ## Do Not Test
@@ -74,7 +68,17 @@ Production Owner 必须是 exactly one token，例如 apps/web 或 packages/doma
 - 不为了适配当前实现而削弱 oracle 或改成 implementation-detail test。
 - 不把 `tests/runtime` 或 repo-wide env/ops/workspace/forbidden-drift 检查作为新业务测试默认义务；除非 proposal/spec/design 明确 scope-backed，且能归入被测 production owner。
 
-## Oracle Consistency Checklist
+## Trace Appendix
+
+<!-- 本附录是审计平面，不是 Delivery Plane。test agent 以主体 oracle 和 Proof Slice 写测试；主 agent、archive、final reviewer 用本附录检查 runtime coverage reconciliation 和 oracle 一致性。 -->
+
+### Runtime Coverage Reconciliation
+
+| Runtime Row ID  | Row Type                                                           | Source / Scope Basis                                     | Runtime Obligation                                                      | Scope Role                                                                     | VID IDs          | Proof Slice IDs  | Coverage Status                                      | Gap / Not-Covered Reason                               |
+| --------------- | ------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------- | ---------------- | ---------------------------------------------------- | ------------------------------------------------------ |
+| <!-- RS-001 --> | <!-- surface / operation / state-branch / async-realtime-chain --> | <!-- SI/spec/design/runtime-acceptance scope basis。 --> | <!-- runtime-acceptance.md 中的 canonical runtime obligation 摘要。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- VID-001 --> | <!-- PS-001A --> | <!-- covered / manual / not-applicable / blocker --> | <!-- covered 时写 None；否则写 scope-backed 理由。 --> |
+
+### Oracle Consistency Checklist
 
 - [ ] 每个 VID 都有 proposal/spec/design source basis。
 - [ ] 每个 VID 和 Proof Slice 都只引用 `runtime-acceptance.md` 中已定义的 Runtime Row IDs。

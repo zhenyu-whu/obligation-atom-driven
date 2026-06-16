@@ -4,11 +4,18 @@
 
 本文档是两个 production schema 的 apply 编排来源：`production-obligation-atom-driven` 和 `production-default-acceptance-driven`。schema 的 `apply.instruction` 只解释 schema-local artifact 语义；本文档负责执行顺序、subagent 编排、测试反馈闭环、evidence 输出和 ready-for-archive 判定。两个 production schema 的新格式必须同时具备 `runtime-acceptance.md`、`verification.md` 和 `tasks.md`；不实现旧 `tasks.md` 内置测试矩阵模式的兼容分支。
 
+两个 production schema 的 apply 读取模型：
+
+- artifact 主体是 Delivery Plane，承载 worker/tester 直接消费的交付契约。
+- `## Trace Appendix` 是审计平面，承载 coverage、source/scope trace、runtime projection、reconciliation 和 alignment gate。
+- 主 agent、change-stabilizer 和 final-reviewer 必须读取 `Trace Appendix` 做 preflight/archive/复核审计。
+- implementation-worker 默认只消费当前 AC Delivery Plane section、相关 `runtime-acceptance.md` rows、必要 proposal/spec/design delivery 摘要和明确传入的约束摘录；不得把 appendix table row 当作额外 executable work。
+
 ## 执行入口
 
 1. 严格先执行 `openspec-apply-change` 技能原有流程：选择 change、读取 `openspec status --change "<name>" --json`、读取 `openspec instructions apply --change "<name>" --json`，并取得 `schemaName`、`contextFiles`、进度、任务列表和动态 schema apply instruction。
 2. 对两个 production schema，apply requirements 必须包含 `runtime-acceptance`、`verification` 和 `tasks`。若动态 instruction 只包含旧的 `tasks` / `verification`，主 agent 仍必须从同一 change 目录读取 `runtime-acceptance.md` 和 `verification.md`；缺失即 blocker。
-3. 主 agent 必须读取 proposal、delta specs、design、runtime-acceptance、verification、tasks，以及动态 schema apply instruction。不得读取或要求 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 source artifact。
+3. 主 agent 必须读取 proposal、delta specs、design、runtime-acceptance、verification、tasks 的 Delivery Plane 和 `Trace Appendix`，以及动态 schema apply instruction。不得读取或要求 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 source artifact。
 4. 动态 schema apply instruction 只作为 schema-local adapter 使用：解释 GA/SI 术语、artifact 字段、禁止旧矩阵字段和状态写入边界。若它与本文档的执行编排、subagent 模型、质量门禁或停止条件冲突，以本文档为准。
 5. 如果 `tasks.md` 仍包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段，停止 apply，要求重新生成 artifacts。
 6. 如果 `verification.md` 包含具体测试路径、固定测试命令、runner selector、evidence directory 或 deposit status，停止 apply，要求修订 artifact。
@@ -17,29 +24,29 @@
 
 `production-obligation-atom-driven` 必须索引：
 
-- proposal `Change Atom Coverage Register` rows、direct atoms、guard/boundary atoms、artifact projection 和 registered source line ranges。
-- spec requirements/scenarios 及其 exact `GA-####` 引用。
-- design obligations 及其 exact `GA-####` 引用。
+- proposal `Trace Appendix` 的 `Change Atom Coverage Register` rows、direct atoms、guard/boundary atoms、artifact projection 和 registered source line ranges。
+- spec Delivery Plane requirements/scenarios 及其 `Trace Appendix` exact `GA-####` 引用。
+- design Delivery Plane obligations 及其 `Trace Appendix` exact `GA-####` 引用。
 - `runtime-acceptance.md` 中 canonical RS-/OP-/ST-/CH- rows、source basis、runtime obligation、observable fact、default path policy、external boundary、scope role 和 no-scope-expansion check。
-- `tasks.md` 中 `Obligation Atom Coverage`、`Requirement / Scenario Coverage`、`Design Obligation Coverage` rows，且每行只能有一个 exact `GA-####`。
-- `verification.md` 中每个 VID 的 Runtime Row IDs、source basis、runtime behavior、observable surface、oracle、failure signal 和 priority。
+- `tasks.md` `Trace Appendix` 中 `Obligation Atom Coverage`、`Requirement / Scenario Coverage`、`Design Obligation Coverage` rows，且每行只能有一个 exact `GA-####`。
+- `verification.md` Delivery Plane 中每个 VID 的 Runtime Row IDs、source basis、runtime behavior、observable surface、oracle、failure signal 和 priority。
 
 `production-default-acceptance-driven` 必须索引：
 
-- proposal `Change Scope Coverage` rows、change-local `SI-###` scope items、guard/context rows、artifact handling 和 baseline/input references。
-- spec requirements/scenarios 及其 exact `SI-###` 引用。
-- design decisions 及其 exact `SI-###` 引用。
+- proposal `Trace Appendix` 的 `Change Scope Coverage` rows、change-local `SI-###` scope items、guard/context rows、artifact handling 和 baseline/input references。
+- spec Delivery Plane requirements/scenarios 及其 `Trace Appendix` exact `SI-###` 引用。
+- design Delivery Plane decisions 及其 `Trace Appendix` exact `SI-###` 引用。
 - `runtime-acceptance.md` 中 canonical RS-/OP-/ST-/CH- rows、scope basis、runtime obligation、observable fact、default path policy、external boundary、scope role 和 no-scope-expansion check。
-- `tasks.md` 中 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage` rows，且每行只能有一个 exact `SI-###`。
-- `verification.md` 中每个 VID 的 Runtime Row IDs、source basis、runtime behavior、observable surface、oracle、failure signal 和 priority。
+- `tasks.md` `Trace Appendix` 中 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage` rows，且每行只能有一个 exact `SI-###`。
+- `verification.md` Delivery Plane 中每个 VID 的 Runtime Row IDs、source basis、runtime behavior、observable surface、oracle、failure signal 和 priority。
 
 两个 schema 的 common preflight 必须索引：
 
-- AC sections、AC-local execution contract fields、checkbox task IDs、source/scope trace fields、coverage table rows、Prerequisites/Provides/Consumes/Start Gate 和 proof requirements。
-- `Runtime Acceptance Index` 中引用的 runtime surface rows、operation rows、state/branch rows、async/realtime rows、provides/consumes rows、depends-on AC、prerequisite runtime facts、scope role、no-scope-expansion check 和 detail matrix row references，且所有 row 必须存在于 `runtime-acceptance.md`。
-- `Runtime Acceptance Projection` 中的 `Runtime Row Ownership Projection` 和 `Provider / Consumer Projection`。
+- AC Delivery Plane sections、AC-local execution contract fields、checkbox task IDs、Prerequisites/Provides/Consumes/Start Gate 和 proof requirements。
+- `tasks.md` `Trace Appendix` / `Runtime Acceptance Index` 中引用的 runtime surface rows、operation rows、state/branch rows、async/realtime rows、provides/consumes rows、depends-on AC、prerequisite runtime facts、scope role、no-scope-expansion check 和 detail matrix row references，且所有 row 必须存在于 `runtime-acceptance.md` Delivery Plane。
+- `tasks.md` `Trace Appendix` / `Runtime Acceptance Projection` 中的 `Runtime Row Ownership Projection` 和 `Provider / Consumer Projection`。
 - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、explicit negative boundary 的 provider/consumer 关系。
-- `verification.md` 的 `Behavior Oracle Matrix`、`Proof Slice Matrix`、`Runtime Coverage Reconciliation`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test` 和 `Oracle Consistency Checklist`。
+- `verification.md` Delivery Plane 的 `Behavior Oracle Matrix`、`Proof Slice Matrix`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test`，以及 `Trace Appendix` 的 `Runtime Coverage Reconciliation` 和 `Oracle Consistency Checklist`。
 
 若 preflight 发现 coverage orphan、GA/SI range、implementation task ID 无法解析、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`runtime-acceptance.md` row 缺少 source/scope basis 或 default path/no-scope boundary、tasks/verification 引用未定义 runtime row、required/preserve/proof-only runtime row 缺少 tasks projection 或 verification projection、同一 row 在 runtime-acceptance/tasks/verification 中 source/scope/default path/no-scope 冲突、`verification.md` VID 无 source basis、Proof Slice `Production Owner` 是复合 owner / owner list、oracle 与 proposal/spec/design/runtime-acceptance 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
 
@@ -49,16 +56,16 @@
 2. 创建或启动任何 apply-stage `implementation-worker`、`test-worker`、`fix-worker`、`change-stabilizer` 或 `final-reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` apply-stage subagent，必须暂停 apply 并向用户报告 blocker。
 3. 所有 worker 必须串行执行。任一时刻最多只能有一个 apply-stage worker 处于运行中；implementation、test、fix、stabilizer、reviewer 不得并行。
 4. 启动任何 worker 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该 worker 必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
-5. 每个 worker 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/tasks/verification 片段、当前 AC 或 VID 范围、允许修改范围、状态写入边界、blocker 分类和最终报告格式。
+5. 每个 worker 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section 或 VID/Proof Slice 范围、相关 runtime-acceptance rows、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 `Trace Appendix` 片段传给 implementation-worker。
 6. 必须明确告知所有 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户改动；遇到重叠文件或冲突风险必须适配现有改动并在最终报告说明。
 
 ## Phase 1 / Production Implementation
 
 1. implementation-worker 的分派单位是包含未完成 checkbox 的 `AC-###` 一级 section；按 runtime provision graph 拓扑顺序逐个 AC 串行启动。
-2. 每个 implementation-worker 只负责自己 AC section 内的 production implementation、runtime-acceptance rows、provider/consumer graph、no-scope boundary 和 AC-local proof 摘要。
-3. implementation-worker 只能使用 proposal、specs、design、runtime-acceptance 和 tasks 作为实现需求来源。`verification.md` 只可用于理解后续测试 oracle，不得用来制造实现需求或扩大 source/scope。
+2. 每个 implementation-worker 只负责自己 AC Delivery Plane section 内的 production implementation、runtime-acceptance rows、provider/consumer graph、no-scope boundary 和 AC-local proof 摘要。
+3. implementation-worker 只能使用 proposal、specs、design、runtime-acceptance 和 tasks Delivery Plane 作为实现需求来源。`Trace Appendix` 只作为主 agent 传入的审计摘录或 blocker 排查依据，不得用来制造额外实现任务；`verification.md` 只可用于理解后续测试 oracle，不得用来制造实现需求或扩大 source/scope。
 4. 当前 AC 的 `Prerequisites`、`Provides`、`Consumes`、`Start Gate` 未满足时，不得用 mock、fixture、假持久化或越界实现绕过；必须先处理前置 AC 或修订 artifacts。
-5. 任务 checkbox 只能由负责该 AC 的 implementation-worker 勾选；必须满足 AC-level source/scope、projection/handling、No-Scope Boundary、Mock Policy、task `Proof`、linked spec/design、default runtime path 和 task override 约束。
+5. 任务 checkbox 只能由负责该 AC 的 implementation-worker 勾选；必须满足 AC Delivery Plane、No-Scope Boundary、Mock Policy、task `Proof`、linked spec/design delivery contract、default runtime path，以及 `Trace Appendix` 中对应 task projection 的审计约束。
 6. 主 agent 在 implementation-worker 运行期间只能做编排等待和状态记录；不得审查未完成 diff、运行验证命令、修改代码、修改 artifacts、勾选任务或接手实现。
 
 ## Phase 2 / Test Agent Oracle Precheck
@@ -87,7 +94,7 @@
 ## Phase 3 / Test Authoring + Execution
 
 1. test-worker 写测试前必须读取并遵守 `openspec/agent-runtime/test-quality-strength.md`。
-2. test-worker 基于 proposal、specs、design、runtime-acceptance、verification 和已实现代码生成并运行测试；`tasks.md` 只能作为 runtime acceptance context，不得作为测试 oracle 来源。
+2. test-worker 基于 proposal、specs、design、runtime-acceptance、verification Delivery Plane 和已实现代码生成并运行测试；`tasks.md` 只能作为 runtime acceptance context，不得作为测试 oracle 来源。
 3. test-worker 必须按 `verification.md` 的 required VID 对应 Proof Slice 和 `test-quality-strength.md` 的测试质量强度选择最小充分测试层、placement、harness、mock/fixture 边界和实际运行命令，并在结果中记录 Runtime Row -> VID -> Proof Slice 覆盖关系。
 4. test-worker 必须按 Proof Slice 生成或确认测试，不得直接按 VID 写一个混合 browser/API/DB/provider/security 断言的大而全测试。
 5. 新增或修改的测试必须按单一 `Production Owner + Primary Layer` 放在 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 归 app owner 的 e2e 入口。协作依赖只影响 harness/mock/default-path 说明，不扩大 owner。`tests/runtime/**` 不再作为新业务测试目标，只保留历史测试或 source/scope-backed 手动迁移对象；不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
@@ -138,7 +145,7 @@
 1. `change-stabilizer` 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立只读 `final-reviewer` subagent 执行最终复核检验。这是所有自动实现和全局收敛后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
 2. `final-reviewer` 必须在 change-stabilizer 结束后启动，且不得与 worker 或 change-stabilizer 并行运行；若 change-stabilizer 返回流程级 blocker 或仍有未完成修复/证据收敛工作，不得启动 final-reviewer。
 3. 主 agent 启动 final-reviewer 时必须传入：change 名称、schema 名称、contextFiles、proposal/specs/design/runtime-acceptance/verification/tasks 路径、所有 worker 最终报告、worker 改动范围、change-stabilizer 最终报告、stabilizer 改动范围、实际测试文件、实际命令、apply-result 路径、runtime acceptance model 和 verification oracle 路径。主 agent 不得为了准备 final-reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker/stabilizer 结果是否可信。
-4. final-reviewer 负责独立只读复核：检查代码 diff、artifacts、tasks checkbox、runtime-acceptance model、verification VID/oracle、测试质量、实际测试文件、实际命令结果、apply-result、跨 AC 集成冲突、默认路径/no-mock 约束；必要时可重跑命令。
+4. final-reviewer 负责独立只读复核：检查代码 diff、artifacts Delivery Plane、Trace Appendix coverage、tasks checkbox、runtime-acceptance model、verification VID/oracle、测试质量、实际测试文件、实际命令结果、apply-result、跨 AC 集成冲突、默认路径/no-mock 约束；必要时可重跑命令。
 5. final-reviewer 只输出复核报告和 pass/blocker 结论，不得直接修改代码、artifacts、checkbox、apply-result 或测试文件。
 6. 若 final-reviewer 在 change-stabilizer 完成后仍发现 blocker，主 agent 必须汇报 final-reviewer blocker 并停止 apply 流程，状态为 blocked for human review；不得自行接手修复、替 stabilizer 补 proof、替 final-reviewer 复验或自动启动第二轮 stabilizer，除非用户在 blocker 汇报后明确要求继续处理。
 7. 只有 final-reviewer 返回 pass，才可在最终汇报中声称复核通过或 ready to archive。final-reviewer 未运行、运行失败、无法满足模型/推理配置、或返回 blocker 时，不得声称 ready to archive。

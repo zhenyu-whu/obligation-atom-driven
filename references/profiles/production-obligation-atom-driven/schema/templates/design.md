@@ -6,14 +6,6 @@
 
 <!-- Goals 和 Non-Goals 均必须追溯到 Global Atoms。 -->
 
-## Production Source Map
-
-<!-- 将此 change 映射到 Global Atom IDs、source files、line ranges 与 exact original sources。不要用整篇文档代替精准 line ranges。 -->
-
-| Global Atom ID | Artifact Projection                                                                                    | Source Document / Lines   | Design Consumption                    | Implementation Boundary                         |
-| -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------- | ----------------------------------------------- |
-| `GA-0001`      | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
-
 ## Decisions
 
 <!-- 记录 source-backed implementation decisions。若 source 只定义行为未定义技术形态，说明 source gap、选择的最小 source-compatible 形态、对应 GA IDs，以及为避免扩大 scope 而拒绝的更大替代方案。 -->
@@ -50,7 +42,27 @@
 
 <!-- migration ordering、backfill、compatibility、staging/production rollout、rollback constraints。 -->
 
-## Production Alignment Gate
+## Risks / Trade-offs
+
+<!-- 记录 source-compatible trade-offs，不得扩大 scope。 -->
+
+## Open Questions
+
+<!-- 没有剩余问题时写“无”。 -->
+
+## Trace Appendix
+
+<!-- 本附录是审计平面，不是 Delivery Plane。主 agent、archive、final reviewer 可读取它确认 source/design 覆盖；implementation worker 默认不把本附录表格当作 executable work。 -->
+
+### Production Source Map
+
+<!-- 将此 change 映射到 Global Atom IDs、source files、line ranges 与 exact original sources。不要用整篇文档代替精准 line ranges。 -->
+
+| Global Atom ID | Artifact Projection                                                                                    | Source Document / Lines   | Design Consumption                    | Implementation Boundary                         |
+| -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------- | ----------------------------------------------- |
+| `GA-0001`      | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
+
+### Production Alignment Gate
 
 - Global Atom IDs implemented / preserved / deferred: <!-- GA-0001 implemented, GA-0002 preserved, GA-0003 deferred；逐个枚举 exact IDs，不使用 ranges -->
 - Artifact Projection handling: <!-- design-obligation 已进入 design；verification-obligation 已进入 Verification Design/tasks handoff；spec-guard 已体现 preserve / stable negative behavior；无 projection mismatch -->
@@ -68,11 +80,3 @@
 - Observability/ops/deployment complete: <!-- 是 / 不适用 / blocker -->
 - Later-change boundaries preserved: <!-- 是 / blocker -->
 - Implementation inference remaining: <!-- 无 / open question -->
-
-## Risks / Trade-offs
-
-<!-- 记录 source-compatible trade-offs，不得扩大 scope。 -->
-
-## Open Questions
-
-<!-- 没有剩余问题时写“无”。 -->

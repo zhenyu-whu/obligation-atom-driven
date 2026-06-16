@@ -1,6 +1,6 @@
 name: production-default-acceptance-driven
-version: 5
-description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks，将 canonical runtime coverage 拆入 runtime-acceptance.md，并由 tasks.md 和 verification.md 分别投影实现验收与测试 oracle
+version: 6
+description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入末尾 Trace Appendix
 artifacts:
   - id: proposal
     generates: proposal.md
@@ -9,21 +9,27 @@ artifacts:
     instruction: |
       创建 proposal，说明 WHY 此 change 必要、WHAT 会改变、哪些 capability 受影响，以及后续 specs/design/verification/tasks 如何覆盖本 change 的 material scope。
 
+      Delivery Plane / Trace Appendix：
+      - 每个 artifact 主体是 `Delivery Plane`，只承载 reviewer、implementer 或 tester 直接消费的交付契约。
+      - 每个 artifact 末尾的 `## Trace Appendix` 是审计平面，承载覆盖映射、baseline/source trace、runtime projection、reconciliation 和 alignment gate。
+      - 下游 artifacts 可以读取上游 `Trace Appendix` 建立 coverage；implementation worker 默认不把 `Trace Appendix` 表格行当作 executable work。
+      - `Trace Appendix` 不得新增 scope 外行为、测试计划、测试执行状态、evidence path、deposit status 或实现需求。
+
       核心规则：
       - 本 schema 用于 Greenfield 项目完成后的后续新增、修改和修复。它遵循 OpenSpec default schema 的 proposal/specs/design 心智，并新增独立 verification artifact；不消费 `openspec/orchestrate`、change plan、final change packet、全局编号表或 capability anchor packet。
       - proposal 的主要输入是用户请求、现有 `openspec/specs/`、现有代码、当前产品行为，以及用户显式提供的 issue、设计稿、外部文档或调研结论。不得要求创建 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 artifact。
       - 若用户请求本身足够明确，优先用它定义 change boundary；若请求含糊，先读取现有 specs/code 建立 baseline，并在仍无法安全判断时只提出必要澄清。
       - 若 change 修改 existing capability，读取对应 `openspec/specs/<capability>/spec.md`。若新增 capability，使用 kebab-case capability 名称。
-      - Proposal 必须包含 `Change Scope Coverage`，用 change-local `SI-###` 标识 material scope item。`SI-###` 只在本 change 内有效，不是全局编号。
+      - Proposal 的 `Trace Appendix` 必须包含 `Change Scope Coverage`，用 change-local `SI-###` 标识 material scope item。`SI-###` 只在本 change 内有效，不是全局编号。
       - `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`spec` 表示应进入 requirement/scenario；`guard` 表示 non-goal、MUST NOT、preserve 或明确负向边界；`design` 表示主要由 design 决定实现形态；`proof` 表示主要由 verification/runtime proof 验证；`context` 只提供背景，不生成实现范围。
-      - 下游 artifacts 必须引用 exact `SI-###`，不得使用 ranges。每个 material scope item 必须有 downstream coverage expectation。
+      - 下游 artifacts 必须引用 exact `SI-###`，不得使用 ranges。每个 material scope item 必须在 `Trace Appendix` 中有 downstream coverage expectation。
       - Proposal 可以保留 open design decisions，但不得把尚未确认的实现选择伪装成用户已要求的产品范围。
       - 当用户请求描述可见操作或控件能力时，proposal 必须保留具体 operation verb 和可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
 
       写入前：
       - 读取现有 `openspec/specs/` 中相关 capability spec。没有相关 spec 时记录为 new capability。
       - 按需读取现有代码、测试、配置和路由，确认 baseline 与影响面；不要做无边界的全仓库探索。
-      - 若用户提供外部输入，读取相关片段并记录到 `Baseline / Input Read Set`。
+      - 若用户提供外部输入，读取相关片段并记录到 `Trace Appendix` 的 `Baseline / Input Read Set`。
       - 建立 scope item list，并为每个 material item 分配 `SI-###`。
 
       阻断条件：
@@ -34,15 +40,13 @@ artifacts:
 
       必需章节：
       - **Why**
-      - **Baseline / Input Read Set**
       - **What Changes**
       - **Capabilities**
-      - **Change Scope Coverage**
       - **Non-Goals**
       - **Impact**
       - **Rollout / Readiness**
       - **Open Questions**
-      - **Proposal Alignment Gate**
+      - **Trace Appendix**，其中包含 **Baseline / Input Read Set**、**Change Scope Coverage** 和 **Proposal Alignment Gate**
     requires: []
 
   - id: specs
@@ -53,7 +57,7 @@ artifacts:
       创建 OpenSpec delta specification files，定义 production system 应该做什么。
 
       写入前：
-      - 读取 `proposal.md`，使用 `Change Scope Coverage` 作为 scope-reading interface。
+      - 读取 `proposal.md`，使用 `Trace Appendix` 的 `Change Scope Coverage` 作为 scope-reading interface。
       - 只为有 `Artifact Handling: spec` 或 `Artifact Handling: guard` 的 capability 创建 delta spec。只有 `design`、`proof` 或 `context` scope item 时不得创建空 spec。
       - 修改 existing capability 前，读取 `openspec/specs/<capability>/spec.md` 并保持 capability folder name。
       - 建立 capability-to-scope map。每个 `spec` scope item 必须落到 requirement/scenario；每个 `guard` scope item 必须落到 guard、MUST NOT、non-goal 或 Production Alignment Gate。
@@ -68,15 +72,14 @@ artifacts:
       - 每个 requirement 使用 `### Requirement: <name>`。
       - Requirement names 和 scenario names 由 agent 拟定时优先中文；只有 existing requirement name、API/DB/package identifiers 或稳定技术术语才保留英文。
       - Requirement 正文使用 SHALL / MUST / MUST NOT 表达规范行为。
-      - 每个 requirement 必须包含 `Scope Items:` bullets，列出 exact `SI-###` 和简短 scope 摘要。
-      - 每个 requirement 必须包含 `Baseline Trace:` bullets，列出用户输入、existing spec、代码路径、路由/API、数据表、配置、测试或外部输入来源；没有外部来源时说明来自用户请求。
+      - `Trace Appendix` 必须包含 requirement scope trace 表，列出 requirement、scenario、exact `SI-###` 和用户输入、existing spec、代码路径、路由/API、数据表、配置、测试或外部输入来源；没有外部来源时说明来自用户请求。
       - 每个 scenario 使用 `#### Scenario: <name>`，且必须使用 exactly 4 hashtags。
       - 每个 requirement 必须至少有一个 scenario。
       - 若 requirement 包含多个用户可见操作，scenario 必须逐项枚举或拆分；每个操作要定义触发、预期 UI/API/data 后果、持久化或 reload 后结果，以及适用的 disabled/failure/recovery 行为。
 
       Final alignment gate：
-      - 每个 spec file 必须以 `## Production Alignment Gate` 结束。
-      - Gate 必须列出 covered scope items、artifact handling、baseline/input consumed、product workflow coverage、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和明确边界/负向行为 coverage。
+      - 每个 spec file 必须以 `## Trace Appendix` 结束。
+      - `Trace Appendix` 的 Gate 必须列出 covered scope items、artifact handling、baseline/input consumed、product workflow coverage、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和明确边界/负向行为 coverage。
       - 如果任何 spec-relevant scope item 未被 requirement/scenario 或 guard 表示，停止并修订 proposal/specs。
     requires:
       - proposal
@@ -90,7 +93,7 @@ artifacts:
 
       写入前：
       - 读取 proposal 和所有实际生成的 delta specs；不要期待纯 design/proof-only capability 有 spec file。
-      - 使用 proposal 的 `Change Scope Coverage`、spec `Scope Items`、spec `Baseline Trace` 作为 scope-reading interface。
+      - 使用 proposal `Trace Appendix` 的 `Change Scope Coverage`、spec `Trace Appendix` 的 scope trace 作为 scope-reading interface。
       - 按需读取现有代码、测试、配置、数据库 schema、路由/API 和相关 specs，确认 design 能落到真实 production boundary。
       - 起草前建立 design coverage map。每个 spec requirement/scenario、每个 `Artifact Handling: design` item、每个 `guard` item，以及每个需要 implementation placement 的 material scope item 都必须映射到 design decision、guard handling 或 explicit blocker。
 
@@ -104,7 +107,6 @@ artifacts:
       必需章节：
       - **Context**
       - **Goals / Non-Goals**
-      - **Baseline / Scope Map**
       - **Decisions**
       - **Architecture / Module Boundary Design**
       - **Domain / Data / Migration Design**
@@ -114,11 +116,11 @@ artifacts:
       - **Observability / Ops / Deployment Design**
       - **Verification Design**
       - **Rollout / Compatibility**
-      - **Production Alignment Gate**
       - **Risks / Trade-offs**
       - **Open Questions**
+      - **Trace Appendix**，其中包含 **Baseline / Scope Map** 和 **Production Alignment Gate**
 
-      `Production Alignment Gate` 必须回答：
+      `Trace Appendix` 的 `Production Alignment Gate` 必须回答：
       - 哪些 `SI-###` 被 implemented、preserved、deferred 或作为明确边界/负向 guard。
       - 每个 artifact handling 是否被正确消费，尤其是 `design`、`proof` 和 `guard` 是否没有被伪装成 spec requirement。
       - 每个 spec scenario 是否有 design 中对应的 implementation contract。
@@ -153,12 +155,11 @@ artifacts:
 
       必需章节：
       - `## Runtime Acceptance Intent`
-      - `## Runtime Coverage Source Map`
       - `## Runtime Surface Inventory`
       - `## Operation Coverage Matrix`
       - `## State / Branch Coverage Matrix`
       - `## Async / Realtime Chain Matrix`
-      - `## Coverage Closure Checklist`
+      - `## Trace Appendix`，其中包含 `Runtime Coverage Source Map` 和 `Coverage Closure Checklist`
 
       内容约束：
       - Runtime row ID 必须全局唯一，并且只使用 `RS-###`、`OP-###`、`ST-###`、`CH-###` 格式。
@@ -172,7 +173,7 @@ artifacts:
       - 每个 in-scope requirement scenario、material design decision、guard 和 proof handling item 都映射到至少一个 runtime row，或有 scope-backed not-applicable reason。
       - 没有 orphan scope item、orphan scenario、orphan design decision 或 orphan proof handling item。
       - 没有 scope 外 runtime behavior、无 SI ranges、无 duplicate runtime row IDs。
-      - 每个 runtime row 都能被后续 tasks 和 verification 投影引用，不需要 implementer 或 test agent 从 proposal/spec/design 外部重新发明 row。
+      - 每个 runtime row 都能被后续 tasks 和 verification 投影引用，不需要 implementer 或 test agent 从 proposal/spec/design 外部重新发明 row；source map 和 closure checklist 只放在 `Trace Appendix`。
     requires:
       - proposal
       - specs
@@ -211,19 +212,18 @@ artifacts:
       - `## Verification Intent`
       - `## Behavior Oracle Matrix`
       - `## Proof Slice Matrix`
-      - `## Runtime Coverage Reconciliation`
       - `## Suggested Layer Matrix`
       - `## Harness Rationale`
       - `## Mock And Fixture Boundary`
       - `## Failure And Negative Coverage`
       - `## Regression Intent`
       - `## Do Not Test`
-      - `## Oracle Consistency Checklist`
+      - `## Trace Appendix`，其中包含 `Runtime Coverage Reconciliation` 和 `Oracle Consistency Checklist`
 
       内容约束：
       - `Behavior Oracle Matrix` columns 至少包含：`VID`、`Runtime Row IDs`、`Source Basis`、`Runtime Behavior`、`Observable Surface`、`Oracle`、`Failure Signal`、`Priority`。
       - `Proof Slice Matrix` columns 至少包含：`Slice ID`、`VID`、`Runtime Row IDs`、`Primary Layer`、`Production Owner`、`Oracle Fragment`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Notes`。
-      - `Runtime Coverage Reconciliation` columns 至少包含：`Runtime Row ID`、`Row Type`、`Source / Scope Basis`、`Runtime Obligation`、`Scope Role`、`VID IDs`、`Proof Slice IDs`、`Coverage Status`、`Gap / Not-Covered Reason`。
+      - `Trace Appendix` 的 `Runtime Coverage Reconciliation` columns 至少包含：`Runtime Row ID`、`Row Type`、`Source / Scope Basis`、`Runtime Obligation`、`Scope Role`、`VID IDs`、`Proof Slice IDs`、`Coverage Status`、`Gap / Not-Covered Reason`。
       - 每个 required VID 至少有一个 Proof Slice；如果一个 VID 需要多层 proof，必须拆成多行 slice，而不是在同一 slice 混合多个 primary layer。
       - `Suggested Layer Matrix` 只给最小充分测试层建议、理由、被省略稳定层理由和人工/环境 gate，不指定具体测试文件、固定命令、runner selector 或 evidence path。
       - `Harness Rationale` 必须说明交互或边界需求、harness 期望、primary assertion shape 和 failure localization，不指定具体文件或命令。
@@ -244,7 +244,7 @@ artifacts:
       - 没有 VID 从 `tasks.md`、当前实现细节、测试文件结构或 evidence/deposit 结构推导。
       - 没有具体测试路径、固定测试命令、evidence directory 或 deposit status。
       - 每个 required VID 都说明了最小充分层级、harness 预期、mock/fixture 边界、失败/负向覆盖和长期回归意图。
-      - Oracle Consistency Checklist 能支持 test agent 在写测试前输出 `Artifact Consistency Blocker`。
+      - `Trace Appendix` 的 Oracle Consistency Checklist 能支持 test agent 在写测试前输出 `Artifact Consistency Blocker`。
     requires:
       - proposal
       - specs
@@ -259,8 +259,8 @@ artifacts:
       创建 task list，将 production implementation work 拆成以 acceptance 为完成标准的执行清单，并建立 runtime acceptance model。
 
       目的：
-      - `tasks.md` 是 apply-ready production implementation and runtime acceptance model。
-      - `tasks.md` 保留 acceptance slice、proposal/spec/design coverage、AC-local runtime ownership、provider/consumer graph、no-scope boundary 和 runtime proof 摘要。
+      - `tasks.md` 主体是 apply-ready production implementation Delivery Plane，AC sections 是 implementation worker 的默认入口。
+      - `tasks.md` 的 `Trace Appendix` 保留 proposal/spec/design coverage、AC-local runtime ownership、provider/consumer graph 和 runtime proof 摘要，供主 agent、archive、stabilizer 和 final reviewer 审计。
       - canonical runtime rows 只来自 `runtime-acceptance.md`；`tasks.md` 不再独立定义 RS-/OP-/ST-/CH- rows。
       - Runtime Acceptance 只表示真实运行边界可观察验收；`runtime` 不是测试层级、测试类型或默认测试目录。
       - `tasks.md` 不包含测试计划、测试编号、测试文件、固定测试命令、evidence directory、evidence status 或 Regression Deposit。
@@ -268,50 +268,47 @@ artifacts:
 
       写入前：
       - 读取 proposal、所有实际生成的 delta specs、design 和 runtime-acceptance.md。
-      - 建立 proposal `SI-###` rows、artifact handling map、spec scenarios、design decisions、AC sections、checkbox task IDs 和 coverage table references 的索引。
+      - 建立 proposal `SI-###` rows、artifact handling map、spec scenarios、design decisions、AC sections、checkbox task IDs 和 `Trace Appendix` coverage table references 的索引。
       - 索引 runtime-acceptance.md 中的 canonical runtime rows：runtime surface、operation、state/branch、async/realtime chain、default path policy、external boundary 和 no-scope boundary。
       - 建立 runtime provision graph：每个 runtime row 由 baseline、current-change AC、future change 或 explicit negative boundary 提供；AC sections 必须按该 graph 拓扑排序。
       - 区分 Scope/Artifact Owner AC 与 Runtime Acceptance Owner AC。跨 AC handoff 只能写在 coverage/proof 摘要中，不得把测试编号或测试执行细节塞进 owner AC。
 
       必需结构：
-      - `## Acceptance-Driven Coverage`
-      - `## Runtime Acceptance Index`
-      - `## AC-### <中文验收切片名称>` sections
-      - `## Runtime Acceptance Projection`
+      - 文件开头必须是 `## AC-### <中文验收切片名称>` Delivery Plane sections。
+      - 文件末尾必须是 `## Trace Appendix`。
+      - `Trace Appendix` 必须包含 `Acceptance-Driven Coverage`、`Runtime Acceptance Index` 和 `Runtime Acceptance Projection`。
 
-      Acceptance-Driven Coverage：
+      Trace Appendix / Acceptance-Driven Coverage：
       - 必须包含 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage` 三张表。
       - `Scope Item Coverage` 每行只能有一个 exact `SI-###`，不得使用 ranges、aggregate rows 或多 ID 单元格。
       - coverage 表必须包含 `Acceptance Slice IDs`、`Implementation Task IDs` 和 `Acceptance Proof`。
       - `Acceptance Proof` 是 runtime proof 摘要，不是 checkbox、测试编号、执行状态或 artifact closure 工作。
       - coverage 表不得出现测试文件、测试命令、evidence path、deposit status 或测试编号。
 
-      Runtime Acceptance Index：
+      Trace Appendix / Runtime Acceptance Index：
       - 必须包含 `AC Runtime Ownership Index` table。
       - columns 至少包含：`AC ID`、`Scope Basis`、`Runtime Surface Rows`、`Operation Rows`、`State / Branch Rows`、`Async / Realtime Rows`、`Provides Rows`、`Consumes Rows`、`Depends On AC IDs`、`Prerequisite Runtime Facts`、`Start Gate`、`Scope Role`、`No-Scope-Expansion Check`、`Detail Matrix Rows`、`Runtime Proof Summary`。
       - Runtime Acceptance Index 只作为主 agent preflight 路由表，不是测试计划来源。
       - 所有 RS-/OP-/ST-/CH- row ID 必须已在 runtime-acceptance.md 中定义；不得在 tasks.md 新增 canonical runtime row。
 
       AC section：
-      - 每个 AC section 必须包含 `Acceptance:`、`Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
+      - 每个 AC section 必须包含 `Acceptance:`、`Implementation Contract:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
       - `Required Evidence:` 只允许描述 runtime proof category，例如 browser/rendered fact、API/data fact、job/storage fact、log/audit fact；不得写测试文件、测试命令、evidence path 或执行状态。
       - `External Boundary / Default Path Policy:` 描述 production/default path、外部依赖和 sandbox 约束，不描述测试 fixture 实现。
-      - 每个 checkbox task 必须包含 `Scope Items:`、`Artifact Handling:`、`Spec:`、`Design:`、`Runtime Rows:`、`Acceptance:`、`Baseline:`、`Preserve:`、`Proof:`、`Mock Policy:` trace 字段。
-      - `Scope Items:` 必须列 exact `SI-###`；无 scope-backed 行为的 repository/setup task 才可写 `Not applicable` 并给出理由。
+      - 每个 checkbox task 必须包含 `Runtime Rows:`、`Acceptance:`、`Preserve:`、`Proof:`、`Mock / Default Path Policy:` 字段。
       - `Runtime Rows:` 必须列该 task 负责或最终 proof 覆盖的 RS-/OP-/ST-/CH- rows；无 runtime 行为时写 `Not applicable` 并给出 scope-backed 理由。
       - `Acceptance:` 必须描述 task 贡献证明的具体行为，而不是 file-edit summary。
-      - `Baseline:` 必须列 proposal baseline/input read set、spec/design 的既有行为或输入事实。
       - `Preserve:` 必须说明必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints。
       - `Proof:` 必须说明可观察 proof；用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback。
-      - `Mock Policy:` 必须说明 mock/sandbox/default path 规则；不得用 mock 替代 required runtime boundary。
-      Runtime Acceptance Projection：
+      - `Mock / Default Path Policy:` 必须说明 mock/sandbox/default path 规则；不得用 mock 替代 required runtime boundary。
+      Trace Appendix / Runtime Acceptance Projection：
       - 只保留 runtime-acceptance.md 到 AC/implementation checkbox 的 projection tables：`Runtime Row Ownership Projection`、`Provider / Consumer Projection`。
       - projection tables 必须包含 runtime row ID、row type、owner AC、implementation task IDs、provides/consumes rows、depends-on AC、start gate、projection status 和 blocker/not-applicable reason。
       - 本节不得重新定义 canonical runtime row 详情；runtime detail 只允许存在于 runtime-acceptance.md。
       - 不得包含测试层计划、测试证据矩阵、回归沉淀表、测试编号、固定命令、测试文件、evidence directory、CI runnable 或 deposit status。
 
       Final check：
-      - 每个 material scope item 的 `Artifact Handling` 在 proposal、specs、design、AC sections、task overrides 与 coverage tables 中一致或有明确 handoff 理由。
+      - 每个 material scope item 的 `Artifact Handling` 在 proposal、specs、design、AC sections、task overrides 与 `Trace Appendix` coverage tables 中一致或有明确 handoff 理由。
       - 每个 in-scope requirement scenario 和 material design decision 都映射到 AC section 或 explicit blocker。
       - 每个 runtime-acceptance.md 中 required / preserve / proof-only runtime row 都有 owner AC、provider/consumer relationship、implementation task projection 和 runtime proof summary，或 explicit blocker/not-applicable reason。
       - tasks.md 没有引用 runtime-acceptance.md 中不存在的 runtime row，也没有定义新的 canonical runtime row。
@@ -335,11 +332,12 @@ apply:
     - 它定义 RS-/OP-/ST-/CH- runtime rows、scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
     - `tasks.md` 和 `verification.md` 只能引用其中已定义的 runtime rows，不得各自发明新的 canonical runtime row。
 
-    `tasks.md` 是 production implementation and runtime acceptance model：
+    `tasks.md` 是 production implementation Delivery Plane and runtime acceptance audit model：
     - 使用 change-local `SI-###` 作为 scope item ID；`SI-###` 只在本 change 内有效。
-    - `Acceptance-Driven Coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
-    - `Runtime Acceptance Index` 和 `Runtime Acceptance Projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
-    - AC section 是 implementation slice；coverage tables 和 runtime appendix 不是额外 executable work。
+    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口。
+    - `Trace Appendix` 的 `Acceptance-Driven Coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
+    - `Trace Appendix` 的 `Runtime Acceptance Index` 和 `Runtime Acceptance Projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
+    - `Trace Appendix` 中的 coverage tables 和 runtime projection 不是额外 executable work。
     - `tasks.md` 只允许更新 implementation checkbox；不得写入测试计划、测试编号、测试文件、固定命令、evidence path、执行状态或 deposit 状态。
 
     `verification.md` 是 independent test intent and oracle artifact：

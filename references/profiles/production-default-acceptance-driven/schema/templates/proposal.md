@@ -2,14 +2,6 @@
 
 <!-- 说明此 change 的动机：它解决哪个产品、技术、生产就绪或验证缺口？ -->
 
-## Baseline / Input Read Set
-
-<!-- 列出本 proposal 实际读取的用户输入、existing specs、代码路径、测试、配置、设计稿、issue 或外部文档。不要填入未读取的宽泛来源。 -->
-
-| Input | Reference | Purpose | Result |
-| --- | --- | --- | --- |
-| <!-- 用户请求 / existing spec / code / test / design / issue --> | <!-- path、URL、消息摘要或 spec 名称 --> | <!-- baseline / scope / conflict / impact --> | <!-- confirmed / refined / blocker --> |
-
 ## What Changes
 
 <!-- 描述新增或修改的用户/系统行为、数据/API contracts、routes、workers、events、auth/security rules、storage、observability、deployment 与 verification surfaces。引用 exact SI-###。 -->
@@ -17,20 +9,16 @@
 ## Capabilities
 
 ### New Capabilities
+
 <!-- 只有新增 capability 时填写，使用 kebab-case capability name。 -->
+
 - `<name>`: <!-- capability 范围；Scope Items: SI-... -->
 
 ### Modified Capabilities
+
 <!-- 修改 existing capability 时填写，使用 openspec/specs/ 中已有 capability name。 -->
+
 - `<existing-name>`: <!-- 变化的 requirement 或 guard；Scope Items: SI-... -->
-
-## Change Scope Coverage
-
-<!-- 每个 material scope item 一行。Scope Item ID 使用 change-local SI-###，只在本 change 内有效，不使用 ranges。Artifact Handling 只能为 spec / guard / design / proof / context。 -->
-
-| Scope Item ID | Input / Baseline Source | Scope Type | Artifact Handling | Capability | Behavior / Constraint | Evidence Need | Downstream Coverage |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `SI-001` | <!-- 用户请求 / existing spec / code path / issue / design --> | <!-- behavior / guard / design / proof / context --> | <!-- spec / guard / design / proof / context --> | <!-- capability name --> | <!-- 具体行为、边界或验证要求 --> | <!-- unit / component / API / DB / E2E / security / smoke / N/A --> | <!-- specs/design/tasks coverage expectation --> |
 
 ## Non-Goals
 
@@ -48,7 +36,27 @@
 
 <!-- 没有剩余问题时写“无”。 -->
 
-## Proposal Alignment Gate
+## Trace Appendix
+
+<!-- 本附录是审计平面，不是 Delivery Plane。主 agent、archive、final reviewer 可读取它做覆盖闭环；implementation worker 默认不把本附录的表格行当作 executable work。 -->
+
+### Baseline / Input Read Set
+
+<!-- 列出本 proposal 实际读取的用户输入、existing specs、代码路径、测试、配置、设计稿、issue 或外部文档。不要填入未读取的宽泛来源。 -->
+
+| Input                                                            | Reference                                | Purpose                                       | Result                                 |
+| ---------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------- | -------------------------------------- |
+| <!-- 用户请求 / existing spec / code / test / design / issue --> | <!-- path、URL、消息摘要或 spec 名称 --> | <!-- baseline / scope / conflict / impact --> | <!-- confirmed / refined / blocker --> |
+
+### Change Scope Coverage
+
+<!-- 每个 material scope item 一行。Scope Item ID 使用 change-local SI-###，只在本 change 内有效，不使用 ranges。Artifact Handling 只能为 spec / guard / design / proof / context。 -->
+
+| Scope Item ID | Input / Baseline Source                                        | Scope Type                                           | Artifact Handling                                | Capability               | Behavior / Constraint             | Evidence Need                                                       | Downstream Coverage                              |
+| ------------- | -------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ | ------------------------ | --------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| `SI-001`      | <!-- 用户请求 / existing spec / code path / issue / design --> | <!-- behavior / guard / design / proof / context --> | <!-- spec / guard / design / proof / context --> | <!-- capability name --> | <!-- 具体行为、边界或验证要求 --> | <!-- unit / component / API / DB / E2E / security / smoke / N/A --> | <!-- specs/design/tasks coverage expectation --> |
+
+### Proposal Alignment Gate
 
 - Existing specs read: <!-- paths / none -->
 - Baseline code or tests read: <!-- paths / none -->

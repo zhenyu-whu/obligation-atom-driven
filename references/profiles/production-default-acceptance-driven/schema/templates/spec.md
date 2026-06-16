@@ -4,13 +4,7 @@
 
 ### Requirement: <!-- requirement name，优先中文；只有 exact source-native 技术标题才保留英文 -->
 
-<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-level behavior 或 guard。 -->
-
-Scope Items:
-- `SI-001`: <!-- exact Scope Item ID 和 scope 摘要。逐个枚举 ID；不要使用 SI-001-SI-010 这类 ranges。 -->
-
-Baseline Trace:
-- <!-- 用户请求、existing spec、code path、route、DTO、table、test、设计稿或 issue。没有外部来源时写“用户请求”。 -->
+<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-level behavior 或 guard。Scope item 与 baseline trace 明细写入末尾 Trace Appendix。 -->
 
 #### Scenario: <!-- scenario name，优先中文；只有 exact source-native 名称才保留英文 -->
 
@@ -29,7 +23,17 @@ Baseline Trace:
 
 <!-- 只在有 FROM / TO 时使用。无重命名时删除本节。 -->
 
-## Production Alignment Gate
+## Trace Appendix
+
+<!-- 本附录是审计平面，不是 Delivery Plane。下游 design/runtime/tasks/verification 可读取它建立 coverage；implementation worker 默认不把本附录表格当作 executable work。 -->
+
+### Requirement Scope Trace
+
+| Requirement                     | Scenario                                      | Scope Item IDs                                        | Baseline Trace                                                                                                     |
+| ------------------------------- | --------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| <!-- exact requirement name --> | <!-- exact scenario name / Not applicable --> | <!-- SI-001, SI-002；逐个枚举 ID，不使用 ranges。 --> | <!-- 用户请求、existing spec、code path、route、DTO、table、test、设计稿或 issue。没有外部来源时写“用户请求”。 --> |
+
+### Production Alignment Gate
 
 - Scope items covered: <!-- SI-001, SI-002；逐个枚举 exact IDs，不使用 ranges -->
 - Artifact handling coverage: <!-- spec items 进入 requirement/scenario；guard items 进入 MUST NOT / non-goal / gate -->

@@ -4,28 +4,44 @@
 
 ### Requirement: <!-- requirement name，优先中文；只有 exact source-native 技术标题才保留英文 -->
 
-<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-requirement atoms 或必要 spec-guard；不要把 design-obligation / verification-obligation 伪装成用户或系统行为 scenario。 -->
-
-Source Atoms:
-- `GA-0001`: <!-- exact Global Atom ID 和 obligation 摘要。逐个枚举 ID；不要使用 GA-0001-GA-0010 这类 ranges。 -->
-
-Source Trace:
-- <!-- exact source path + line range + source rule，例如 `docs/...` L10-L20。 -->
+<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-requirement atoms 或必要 spec-guard；不要把 design-obligation / verification-obligation 伪装成用户或系统行为 scenario。Source atom、source trace 和 handoff 明细写入末尾 Trace Appendix。 -->
 
 #### Scenario: <!-- scenario name，优先中文；只有 exact source-native 名称才保留英文 -->
 
 - WHEN <!-- condition / actor / state / API / route / job / UI event -->
 - THEN <!-- expected source-backed system behavior。若 source 行为包含多个用户操作，逐项枚举或拆分 scenario，并写明 UI/API/data/reload/failure 后果；不要只写“支持操作”。 -->
 
-## Artifact Projection Notes
+## MODIFIED Requirements
+
+<!-- 修改 existing requirement 时必须复制完整 existing requirement block，再按 OpenSpec delta 修改。无修改时删除本节。 -->
+
+## REMOVED Requirements
+
+<!-- 只在有 Reason 和 Migration 时使用。无删除时删除本节。 -->
+
+## RENAMED Requirements
+
+<!-- 只在有 FROM / TO 时使用。无重命名时删除本节。 -->
+
+## Trace Appendix
+
+<!-- 本附录是审计平面，不是 Delivery Plane。下游 design/runtime/tasks/verification 可读取它建立 coverage；implementation worker 默认不把本附录表格当作 executable work。 -->
+
+### Requirement Source Trace
+
+| Requirement                     | Scenario                                      | Global Atom IDs                                         | Source Trace                                                                     |
+| ------------------------------- | --------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| <!-- exact requirement name --> | <!-- exact scenario name / Not applicable --> | <!-- GA-0001, GA-0002；逐个枚举 ID，不使用 ranges。 --> | <!-- exact source path + line range + source rule，例如 `docs/...` L10-L20。 --> |
+
+### Artifact Projection Notes
 
 <!-- 仅在此文件已经包含至少一个有效 delta requirement 时使用。对同一 capability 中没有进入 requirement/scenario 的 relevant atoms 做投射说明，尤其是 design-obligation、verification-obligation、spec-guard，或非 direct contextual-only。这里是 specs 内的 handoff 记录；design-obligation 必须在 design artifact 中实际消费，verification-obligation 必须在 tasks/proof 中实际消费。若没有 notes，删除整个 Artifact Projection Notes section；不要写“无”。 -->
 
-| Global Atom ID | Artifact Projection | Spec Handling | Design / Tasks Handoff |
-| --- | --- | --- | --- |
-| `GA-0001` | <!-- spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- guard / non-goal / noted only / not applicable --> | <!-- design section 或 tasks/proof expectation --> |
+| Global Atom ID | Artifact Projection                                                                 | Spec Handling                                           | Design / Tasks Handoff                             |
+| -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------- |
+| `GA-0001`      | <!-- spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- guard / non-goal / noted only / not applicable --> | <!-- design section 或 tasks/proof expectation --> |
 
-## Production Alignment Gate
+### Production Alignment Gate
 
 - Global Atom IDs covered: <!-- GA-0001, GA-0002, ...；逐个枚举 exact IDs，不使用 ranges -->
 - Artifact Projection coverage: <!-- spec-requirement 进入 requirement/scenario；spec-guard/design/verification/context 已在 notes/gate handoff；无 projection mismatch -->
