@@ -3,7 +3,7 @@
 <!--
 本 artifact 是 canonical runtime coverage registry。
 它只定义本 change 必须实现和验证的 RS-/OP-/ST-/CH- runtime rows，供 tasks.md 和 verification.md 投影引用。
-它不是 implementation task list、测试计划、执行证据、AC checkbox、VID 状态或 regression deposit。
+它不是 implementation task list、测试计划、执行证据、AC checkbox、Proof Slice 状态或 regression deposit。
 -->
 
 - Scope: <!-- 本次 runtime acceptance 覆盖的产品/系统运行时边界。 -->
@@ -38,6 +38,18 @@
 
 <!-- 本附录是审计平面，不是 Delivery Plane。它用于确认 canonical runtime rows 的 source 覆盖闭环；tasks.md 和 verification.md 只引用主体中已定义的 runtime rows。 -->
 
+### Runtime Upstream Coverage Map
+
+<!--
+逐项列出 proposal direct GA、spec scenario、material design obligation、spec guard 和 verification/proof obligation。
+每个 covered item 必须映射到主体中已定义的具体 RS-/OP-/ST-/CH- rows。
+不得用 Direct atom closure、主题汇总行或 checklist 作为唯一覆盖证明。
+-->
+
+| Upstream Item | Upstream Type | Artifact Projection | Upstream Runtime Obligation | Runtime Row IDs | Coverage Mode | Not-Applicable Reason |
+| ------------- | ------------- | ------------------- | --------------------------- | --------------- | ------------- | --------------------- |
+| <!-- GA-0001 / Scenario: xxx / Design: xxx --> | <!-- direct atom / spec scenario / design obligation / spec guard / verification obligation --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation --> | <!-- 必须被 runtime rows 保留的可运行义务、边界或 proof expectation。 --> | <!-- RS-001, OP-001；必须来自主体 canonical rows。 --> | <!-- direct-row-source / appendix-row-map / not-applicable --> | <!-- covered 时写 None；否则写 source-backed reason。 --> |
+
 ### Runtime Coverage Source Map
 
 | Source / Scope Basis                                 | Artifact Projection                                                                                    | Runtime Row IDs                         | Runtime Obligation Summary                  | Observable Fact Category                                       | No-Scope-Expansion Check                     |
@@ -47,8 +59,10 @@
 ### Coverage Closure Checklist
 
 - [ ] 每个 canonical runtime row 都有 source basis、runtime obligation、observable fact、default path policy、external boundary、scope role 和 no-scope-expansion check。
+- [ ] 每个 proposal direct `GA-####`、in-scope spec scenario、material design obligation、spec guard 和 verification/proof obligation 都在 `Runtime Upstream Coverage Map` 中映射到具体 runtime row，或有 source-backed not-applicable reason。
+- [ ] 没有 upstream item 只通过 `Direct atom closure`、主题汇总行或 checklist 覆盖；每个 covered item 的 row IDs 都能解析到主体 canonical rows。
 - [ ] 每个 in-scope spec scenario、material design obligation 和 verification-obligation 都映射到至少一个 runtime row，或有 source-backed not-applicable reason。
 - [ ] 每个 runtime row ID 全局唯一，且只使用 `RS-###`、`OP-###`、`ST-###`、`CH-###` 格式。
-- [ ] 本 artifact 不包含 AC checkbox、implementation task、VID 状态、Proof Slice 状态、测试文件、固定命令、evidence path 或 deposit status。
+- [ ] 本 artifact 不包含 AC checkbox、implementation task、Proof Slice 状态、测试文件、固定命令、evidence path 或 deposit status。
 - [ ] 后续 `tasks.md` 必须只引用本 artifact 中已定义的 runtime rows 并分配 AC/proof ownership。
-- [ ] 后续 `verification.md` 必须只引用本 artifact 中已定义的 runtime rows 并分配 VID/Proof Slice coverage。
+- [ ] 后续 `verification.md` 必须只引用本 artifact 中已定义的 runtime rows 并分配 Proof Slice coverage。
