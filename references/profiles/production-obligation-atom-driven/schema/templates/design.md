@@ -1,14 +1,14 @@
 ## Context
 
-<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。引用 GA IDs。 -->
+<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 GA coverage；exact source/atom mapping 写入 Trace Appendix。 -->
 
 ## Goals / Non-Goals
 
-<!-- Goals 和 Non-Goals 均必须追溯到 Global Atoms。 -->
+<!-- Goals 和 Non-Goals 只表达设计目标、边界和 later-change exclusions；exact GA/source trace 写入 Trace Appendix。 -->
 
 ## Decisions
 
-<!-- 记录 source-backed implementation decisions。若 source 只定义行为未定义技术形态，说明 source gap、选择的最小 source-compatible 形态、对应 GA IDs，以及为避免扩大 scope 而拒绝的更大替代方案。 -->
+<!-- 记录 source-backed implementation decisions。每个 decision 使用 Decision / Source Gap / Minimal Shape / Rejected Expansion 形态；不要加入 coverage/trace 列。 -->
 
 ## Architecture / Module Boundary Design
 

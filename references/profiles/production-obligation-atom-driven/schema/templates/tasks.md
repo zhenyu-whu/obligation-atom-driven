@@ -1,61 +1,40 @@
 <!--
-本文件主体是 Delivery Plane：implementation worker 默认从 AC sections 和相关 runtime-acceptance rows 执行。
+本文件主体是 Delivery Plane：implementation worker 默认从 AC sections 的 Resolved Runtime Contract 和 checkbox tasks 执行。
 末尾 Trace Appendix 是审计平面，只供主 agent、archive、stabilizer 和 final reviewer 做 coverage / projection 检查；appendix 表格行不是额外 executable work。
 每个 checkbox task block（checkbox + Runtime Rows/Acceptance/Preserve/Proof/Mock / Default Path Policy）与下一个 checkbox task block 之间必须保留一个空行。
 -->
 
 ## AC-001 <!-- 中文验收切片名称 -->
 
-Acceptance:
+Outcome:
 
-- <!-- 用户/系统可观察的验收行为。必须能从 proposal/spec/design/obligation atoms 推导，不从实现计划反推。 -->
-
-Implementation Contract:
-
-- <!-- worker 需要直接执行的实现契约摘要；引用必要 requirement/scenario/design decision 名称即可，完整 GA 映射放入 Trace Appendix。 -->
-
-Runtime Rows Owned:
-
-- <!-- RS-001, OP-001, ST-001, CH-001；只列 runtime-acceptance.md 主体中已定义的 row IDs。 -->
-
-Prerequisites:
-
-- <!-- 本 AC 启动前必须完成的 AC IDs 或 baseline/runtime facts；无依赖时写 None 并说明只依赖 baseline。 -->
-
-Provides:
-
-- <!-- 本 AC 完成后为后续 AC 提供的 runtime surfaces / operations / states / contracts / proof facts；没有则写 None。 -->
-
-Consumes:
-
-- <!-- 本 AC proof 消费的 baseline 或 earlier AC rows / contracts / facts；消费 current-change row 时必须能回到 Prerequisites。 -->
+- <!-- 用户/系统可观察的验收结果。必须能从 proposal/spec/design/runtime-acceptance 推导，不从实现计划反推，不列 GA coverage。 -->
 
 Start Gate:
 
-- <!-- 进入本 AC 的执行门禁，例如“AC-000.3 已完成，RS-003 已由 earlier AC 提供”。 -->
+- <!-- 本 AC 启动前必须完成的 AC IDs、baseline/runtime facts 或 None。provider/consumer graph 只写入 Trace Appendix。 -->
 
-No-Scope Boundary:
+Runtime Rows:
 
-- <!-- 明确本 AC 不得引入的 source 外 route/control/state/API/job/event/provider/storage/retry/lifecycle 行为。 -->
+- <!-- RS-001, OP-001, ST-001, CH-001；只列 runtime-acceptance.md 主体中已定义的 row IDs。 -->
 
-Primary Proof:
+Resolved Runtime Contract:
 
-- <!-- 最强验收证据摘要。用户可见行为优先 rendered/readback proof；后端行为优先 API/DB/job/storage/security facts。若涉及新增/编辑/删除/选择/提交等操作，列出 operation matrix，不用控件存在替代交互 proof。 -->
+| Row             | Worker-facing obligation                                  | Observable proof                                          | Default / no-scope boundary                               |
+| --------------- | --------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| <!-- RS-001 --> | <!-- 摘录 runtime-acceptance.md 中该 row 对 worker 的语义义务。 --> | <!-- 摘录该 row 的可观察 proof 类别。 --> | <!-- 摘录 default path 与 no-scope boundary。 --> |
 
-Required Evidence:
+Implementation Scope:
 
-- Browser / rendered fact: <!-- 用户可见行为需要的 rendered/readback/responsive/a11y/interaction fact；mutating controls 必须包含 click/type/select/blur/submit 等实际触发和 rendered result。 -->
-- API / data / readback fact: <!-- API response、DTO、DB rows、reload/readback、authorization 等事实类别。 -->
-- Job / storage / log / audit fact: <!-- worker、queue、storage、asset、log、audit 等事实类别。 -->
-- Default path proof: <!-- 必须保留 production/default wiring 的 runtime boundary；仅说明事实类别，不写测试实现。 -->
+- <!-- worker 可执行的 production change 范围；不要放 provider/consumer graph、GA coverage 或测试计划。 -->
 
-External Boundary / Default Path Policy:
+Preserve:
 
-- <!-- production default path、外部依赖、sandbox/adapter 边界；不描述测试 fixture 实现。 -->
+- <!-- 必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints，以及明确 no-scope boundary。 -->
 
-Mock Policy:
+Proof Contract:
 
-- <!-- 哪些允许 sandbox/mock；哪些必须走 default production wiring。 -->
+- <!-- 本 AC 完成后应具备的可观察 proof 类别。用户可见操作必须覆盖 interaction、API/data effect 和 reload/readback。 -->
 
 - [ ] AC-001.1 <!-- 用中文描述此 acceptance slice 下的具体实现或验收 proof 任务。 -->
       Runtime Rows: <!-- 本 task 负责或最终 proof 覆盖的 RS-/OP-/ST-/CH- row IDs；必须已在 runtime-acceptance.md 主体中定义；无 runtime 行为时写 Not applicable 并给出 source-backed 理由。 -->

@@ -20,15 +20,18 @@
 
 <!--
 Proof Slice 是 test agent 的测试生成单位。VID 定义业务 oracle，不等于 test case。
-每个 required VID 至少要有一个 slice；一个 slice 只能有一个 Primary Layer 和一个 Production Owner。
+每个 required VID 至少要有一个 slice；一个 slice 只能有一个 Primary Runtime Row ID、一个 Primary Layer 和一个 Production Owner。
+Primary Runtime Row ID 必须是 Runtime Row IDs 中的一个 RS-/OP-/ST-/CH- row，并表示该 slice 的原子行为分支；Runtime Row IDs 可包含必要 supporting rows。
+独立 operation、state、failure/retry、auth/security、layout 或 observability branch 必须拆成不同 slice；Oracle Fragment 不得聚合多个独立分支，例如 skeleton、extract_failed、retry。
 Production Owner 写单一代码 owner 边界，不写具体测试文件路径。不得写固定命令、runner selector、evidence path 或 deposit status。
 Production Owner 必须是 exactly one token，例如 apps/web 或 packages/domain；不得写逗号分隔、斜杠分隔、+ 连接、and/和/与 连接或多个反引号 owner。
 多 production boundary proof 必须拆成多个 slice，或选择 public entrypoint owner，并把下游真实边界写入 Fixture / Mock Boundary 或 Notes。
+同 owner、同 layer 的多个 atomic slices 可以共享长期测试入口或参数化结构，但失败信号必须能定位到具体 Slice ID。
 -->
 
-| Slice ID         | VID              | Runtime Row IDs                                                       | Primary Layer                                                                                                                                       | Production Owner                                                                                       | Oracle Fragment                                 | Primary Assertion Shape                                               | Fixture / Mock Boundary                                                                                                        | Notes                                                             |
-| ---------------- | ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| <!-- PS-001A --> | <!-- VID-001 --> | <!-- RS-001, OP-001；只引用 runtime-acceptance.md 中已定义 rows。 --> | <!-- unit / component / route/API / DB/integration / contract / worker/job / realtime/SSE / browser/e2e / visual/responsive / security/negative --> | <!-- apps/web；必须是 exactly one owner token，例如 apps/web 或 packages/domain，不写 owner list。 --> | <!-- 从该 VID oracle 拆出的单层可证明片段。 --> | <!-- 该 slice 的 primary assertion 形态；不混入其他层 invariant。 --> | <!-- 允许 fixture/mock 与必须保持真实的 default path；协作 production boundary 写在这里或 Notes，不写进 Production Owner。 --> | <!-- scope-backed not-applicable/manual/合并建议；否则 None。 --> |
+| Slice ID         | VID              | Runtime Row IDs                                                       | Primary Runtime Row ID                           | Primary Layer                                                                                                                                       | Production Owner                                                                                       | Oracle Fragment                                                   | Primary Assertion Shape                                               | Fixture / Mock Boundary                                                                                                        | Notes                                                             |
+| ---------------- | ---------------- | --------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| <!-- PS-001A --> | <!-- VID-001 --> | <!-- RS-001, OP-001；只引用 runtime-acceptance.md 中已定义 rows。 --> | <!-- OP-001；必须包含在 Runtime Row IDs 中。 --> | <!-- unit / component / route/API / DB/integration / contract / worker/job / realtime/SSE / browser/e2e / visual/responsive / security/negative --> | <!-- apps/web；必须是 exactly one owner token，例如 apps/web 或 packages/domain，不写 owner list。 --> | <!-- 从该 VID oracle 拆出的单层、单 primary row 原子行为分支。 --> | <!-- 该 slice 的 primary assertion 形态；不混入其他层 invariant。 --> | <!-- 允许 fixture/mock 与必须保持真实的 default path；协作 production boundary 写在这里或 Notes，不写进 Production Owner。 --> | <!-- scope-backed not-applicable/manual/合并建议；否则 None。 --> |
 
 ## Suggested Layer Matrix
 
@@ -89,8 +92,10 @@ Production Owner 必须是 exactly one token，例如 apps/web 或 packages/doma
 - [ ] 没有 oracle 依赖 implementation detail。
 - [ ] 每个 required VID 至少有一个 Proof Slice。
 - [ ] 每个 required / preserve / proof-only runtime row 都有 VID 和 Proof Slice，除非有 scope-backed manual/not-applicable reason。
-- [ ] 每个 Proof Slice 都有单一 Primary Layer、Production Owner、Oracle Fragment、Primary Assertion Shape 和 Fixture / Mock Boundary。
+- [ ] 每个 Proof Slice 都有单一 Primary Runtime Row ID、Primary Layer、Production Owner、Oracle Fragment、Primary Assertion Shape 和 Fixture / Mock Boundary。
+- [ ] 每个 Proof Slice 的 Primary Runtime Row ID 存在于该 slice 的 Runtime Row IDs 中，并且表示单一原子 operation、state、failure/retry、auth/security、layout 或 observability branch。
 - [ ] 每个 Proof Slice 的 Production Owner 是单一 owner token，不含逗号、斜杠、+、and/和/与 或多个 owner。
+- [ ] 没有 Proof Slice 因 owner/layer 相同而合并多个独立 runtime branches。
 - [ ] Proof Slice 不含具体测试路径、固定命令、runner selector、evidence path 或 deposit status。
 - [ ] 没有把 `tests/runtime` 或 repo-wide env/ops/workspace/forbidden-drift 当作新业务测试默认义务。
 - [ ] 每个 required VID 都说明了最小充分层级、mock/fixture 边界和长期回归意图。

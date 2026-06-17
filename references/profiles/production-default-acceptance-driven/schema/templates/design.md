@@ -1,6 +1,6 @@
 ## Context
 
-<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。引用 SI IDs。 -->
+<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 SI coverage；exact scope/source mapping 写入 Trace Appendix。 -->
 
 ## Goals / Non-Goals
 
@@ -8,7 +8,7 @@
 
 ## Decisions
 
-<!-- 记录 implementation decisions。若 proposal/spec 只定义行为未定义技术形态，说明选择的最小 production-compatible 形态，以及拒绝的 scope-expanding alternatives。 -->
+<!-- 记录 implementation decisions。每个 decision 使用 Decision / Source Gap / Minimal Shape / Rejected Expansion 形态；不要加入 coverage/trace 列。 -->
 
 ## Architecture / Module Boundary Design
 

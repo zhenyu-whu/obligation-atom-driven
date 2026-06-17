@@ -1,19 +1,20 @@
 name: production-default-acceptance-driven
-version: 6
-description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入末尾 Trace Appendix
+version: 7
+description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入末尾 Trace Appendix；tasks AC 主体包含 resolved runtime contract
 artifacts:
   - id: proposal
     generates: proposal.md
     description: default-style proposal，带轻量 change scope coverage
     template: proposal.md
     instruction: |
-      创建 proposal，说明 WHY 此 change 必要、WHAT 会改变、哪些 capability 受影响，以及后续 specs/design/verification/tasks 如何覆盖本 change 的 material scope。
+      创建 proposal，说明 WHY 此 change 必要、WHAT 会改变、哪些 capability 受影响，以及 reviewer 直接判断所需的业务边界、行为承诺、影响面和 readiness；scope coverage、handling 和 baseline trace 只写入末尾 `Trace Appendix`。
 
       Delivery Plane / Trace Appendix：
       - 每个 artifact 主体是 `Delivery Plane`，只承载 reviewer、implementer 或 tester 直接消费的交付契约。
       - 每个 artifact 末尾的 `## Trace Appendix` 是审计平面，承载覆盖映射、baseline/source trace、runtime projection、reconciliation 和 alignment gate。
       - 下游 artifacts 可以读取上游 `Trace Appendix` 建立 coverage；implementation worker 默认不把 `Trace Appendix` 表格行当作 executable work。
       - `Trace Appendix` 不得新增 scope 外行为、测试计划、测试执行状态、evidence path、deposit status 或实现需求。
+      - Proposal 和 design 的 Delivery Plane 主体不得承载 exhaustive `SI-###` coverage list、`Scope Items:`、source coverage suffix、projection 或 alignment gate；这些内容只允许出现在 `Trace Appendix`。
 
       核心规则：
       - 本 schema 用于 Greenfield 项目完成后的后续新增、修改和修复。它遵循 OpenSpec default schema 的 proposal/specs/design 心智，并新增独立 verification artifact；不消费 `openspec/orchestrate`、change plan、final change packet、全局编号表或 capability anchor packet。
@@ -25,6 +26,7 @@ artifacts:
       - 下游 artifacts 必须引用 exact `SI-###`，不得使用 ranges。每个 material scope item 必须在 `Trace Appendix` 中有 downstream coverage expectation。
       - Proposal 可以保留 open design decisions，但不得把尚未确认的实现选择伪装成用户已要求的产品范围。
       - 当用户请求描述可见操作或控件能力时，proposal 必须保留具体 operation verb 和可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
+      - Proposal Delivery Plane 的 `Why`、`What Changes`、`Capabilities`、`Non-Goals` 只写业务边界、行为承诺、影响面和 readiness；不得在主体列 exhaustive `SI-###`、`Scope Items:` 或“覆盖 SI...”类 coverage suffix。
 
       写入前：
       - 读取现有 `openspec/specs/` 中相关 capability spec。没有相关 spec 时记录为 new capability。
@@ -37,6 +39,7 @@ artifacts:
       - 无法判断 change 是新增 capability、修改 existing capability、还是只属于实现/测试/运维修复。
       - 发现本 change 会破坏已归档或现有 specs 的明确 MUST/MUST NOT，且用户没有要求修改该 capability。
       - scope item 缺少 artifact handling 或 downstream coverage expectation。
+      - `## Trace Appendix` 之前的 proposal 主体出现 exhaustive `SI-###` coverage、`Scope Items:`、scope coverage suffix 或 alignment gate。
 
       必需章节：
       - **Why**
@@ -102,6 +105,7 @@ artifacts:
       - 当 scope 定义行为但未定义实现形态时，design 必须选择最小 production-compatible technical shape，并说明为什么不扩大到更大的产品范围。
       - Design 不得把生产行为替换成 placeholder、diagnostic、mock-only、static-only、fixture-only 或 sandbox-only 行为，除非 proposal 明确标记为 deferred、non-goal、context 或 proof-only。
       - Design 必须说明 change 如何处理 architecture/runtime/module boundaries、routing/navigation、data ownership、transactions、auth/security、async processing、realtime streams、storage、provider boundaries、rendering chain、deployment 和 verification strategy；canonical RS-/OP-/ST-/CH- runtime row registry 不写入 design，必须由后续 `runtime-acceptance.md` 承载。
+      - Design Delivery Plane 主体不得把 `Satisfies`、`SI-###` 列表、source/scope coverage 列或 alignment gate 放入设计表。`Decisions` 的最小形态为 `Decision`、`Source Gap`、`Minimal Shape`、`Rejected Expansion`；exact scope/source mapping 只写入 `Trace Appendix`。
       - 对每个会改变数据、状态、route 或用户可见结果的 UI control，Frontend / UX Design 必须定义 owner component、runtime/client-server boundary、event trigger、handler/action/API route、request payload、response merge 或 reload persistence、submitting/disabled/error/retry behavior。
 
       必需章节：
@@ -188,7 +192,7 @@ artifacts:
 
       目的：
       - `verification.md` 是 independent test intent and oracle artifact，不是测试实现清单、执行证据总账或回归沉淀表。
-      - VID 定义业务 oracle，不是 test case；Proof Slice Matrix 定义 test agent 可消费的单层测试义务模型。
+      - VID 定义业务 oracle，不是 test case；Proof Slice Matrix 定义 test agent 可消费的单层、单 primary runtime row 原子测试义务模型。
       - `verification.md` 不依赖 `tasks.md`，不得从 `tasks.md` 推导测试目标，也不得为实现任务补造新行为。
       - `verification.md` 必须引用 runtime-acceptance.md 中已定义的 Runtime Row IDs，并证明 required/preserve/proof-only runtime rows 均有 VID/Proof Slice coverage 或 scope-backed manual/not-applicable reason。
       - 每个 VID 必须能回链到 proposal 的 exact `SI-###`、spec requirement/scenario、design decision 或明确 baseline/input trace。
@@ -199,13 +203,15 @@ artifacts:
       - 读取 proposal、所有实际生成的 delta specs、design 和 runtime-acceptance.md。
       - 建立 behavior oracle map：从 `spec` scope item、`guard`、material design decision、`proof` handling 和 runtime-acceptance canonical rows 中抽取可回归行为。
       - 对每个候选 VID，先检查它是否有 source basis、是否能被 public/runtime behavior 观察、是否没有引入 scope 外行为。
-      - 从 `Behavior Oracle Matrix` 中每个 required VID 拆分一个或多个 Proof Slice；按最小充分测试层拆，不把 browser、API、DB、provider、security 断言混在同一 slice。
-      - 每个 Proof Slice 只能有一个 `Primary Layer` 和一个 `Production Owner`。`Primary Layer` 只能是：`unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
+      - 从 `Behavior Oracle Matrix` 中每个 required VID 拆分一个或多个 Proof Slice；先按最小充分测试层拆，再按 runtime-acceptance.md 中独立 `OP-/ST-/CH-/RS-` primary row 或行为分支拆，不把 browser、API、DB、provider、security 断言混在同一 slice。
+      - 每个 Proof Slice 只能有一个 `Primary Runtime Row ID`、一个 `Primary Layer` 和一个 `Production Owner`。`Primary Layer` 只能是：`unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
+      - `Primary Runtime Row ID` 必须是该 slice `Runtime Row IDs` 中的一个已定义 row，并表示该 slice 的原子 operation、state、failure/retry、auth/security、layout 或 observability branch；`Runtime Row IDs` 可包含必要 supporting rows。
+      - 独立 operation、state、failure/retry、auth/security、layout 或 observability branch 不得只因 owner/layer 相同合并到一个 Proof Slice；多 row 串联行为只能在单个 row 是 primary、其他 row 是 supporting 时放入同一 slice。
       - `Production Owner` 写 owner 边界，例如 `packages/domain`、`packages/db`、`apps/web`、`apps/worker`，不写具体测试文件路径。
       - `Production Owner` 必须是 exactly one production code boundary token，例如 `apps/web` 或 `packages/domain`；不得包含逗号、多个反引号 owner、`+`、`/` owner list、`and`、`和`、`与` 或任何 owner list。
       - 如果一个 oracle fragment 需要多个 production boundaries 才能证明，必须拆成多个 Proof Slice；若选择 public entrypoint owner，则下游真实边界只能写入 `Fixture / Mock Boundary`、`Notes`、default-path 说明或 compensating proof，不能写进 `Production Owner`。
       - `security/negative` 的 `Production Owner` 是单一被测拒绝、授权或脱敏 contract owner；跨页面或跨系统安全流程归单一 `apps/web` e2e owner，不写多 owner。
-      - `Oracle Fragment` 和 `Primary Assertion Shape` 只能来自 proposal/specs/design/verification oracle；不得新增 scope 外 behavior。
+      - `Oracle Fragment` 和 `Primary Assertion Shape` 只能来自 proposal/specs/design/verification oracle；不得新增 scope 外 behavior，也不得用“skeleton、extract_failed、retry”这类列表聚合多个独立 primary branches。
       - Proof Slice Matrix 不写固定命令、runner selector、evidence path、deposit status、执行状态或具体测试文件名。
 
       必需章节：
@@ -222,9 +228,9 @@ artifacts:
 
       内容约束：
       - `Behavior Oracle Matrix` columns 至少包含：`VID`、`Runtime Row IDs`、`Source Basis`、`Runtime Behavior`、`Observable Surface`、`Oracle`、`Failure Signal`、`Priority`。
-      - `Proof Slice Matrix` columns 至少包含：`Slice ID`、`VID`、`Runtime Row IDs`、`Primary Layer`、`Production Owner`、`Oracle Fragment`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Notes`。
+      - `Proof Slice Matrix` columns 至少包含：`Slice ID`、`VID`、`Runtime Row IDs`、`Primary Runtime Row ID`、`Primary Layer`、`Production Owner`、`Oracle Fragment`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Notes`。
       - `Trace Appendix` 的 `Runtime Coverage Reconciliation` columns 至少包含：`Runtime Row ID`、`Row Type`、`Source / Scope Basis`、`Runtime Obligation`、`Scope Role`、`VID IDs`、`Proof Slice IDs`、`Coverage Status`、`Gap / Not-Covered Reason`。
-      - 每个 required VID 至少有一个 Proof Slice；如果一个 VID 需要多层 proof，必须拆成多行 slice，而不是在同一 slice 混合多个 primary layer。
+      - 每个 required VID 至少有一个 Proof Slice；如果一个 VID 需要多层 proof 或多个独立 runtime branches，必须拆成多行 slice，而不是在同一 slice 混合多个 primary layer 或多个 primary runtime rows。
       - `Suggested Layer Matrix` 只给最小充分测试层建议、理由、被省略稳定层理由和人工/环境 gate，不指定具体测试文件、固定命令、runner selector 或 evidence path。
       - `Harness Rationale` 必须说明交互或边界需求、harness 期望、primary assertion shape 和 failure localization，不指定具体文件或命令。
       - `Mock And Fixture Boundary` 必须说明允许的 fixture/mock、不能替换的 default path、被替换 side effect 和补偿 proof。
@@ -238,9 +244,10 @@ artifacts:
       - 每个 VID 和 Proof Slice 都只引用 runtime-acceptance.md 中已定义的 Runtime Row IDs。
       - 每个 required / preserve / proof-only runtime row 都有 VID 和 Proof Slice，除非有 scope-backed manual/not-applicable reason。
       - 每个 required VID 至少有一个 Proof Slice。
-      - 每个 Proof Slice 都有 scope-backed oracle fragment、单一 primary layer、production owner、primary assertion shape 和 fixture/mock boundary。
+      - 每个 Proof Slice 都有 scope-backed oracle fragment、单一 primary runtime row、单一 primary layer、production owner、primary assertion shape 和 fixture/mock boundary。
+      - 每个 Proof Slice 的 `Primary Runtime Row ID` 存在于该 slice 的 `Runtime Row IDs` 中，并且没有因 owner/layer 相同合并多个独立 primary runtime branches。
       - 每个 Proof Slice 的 `Production Owner` 单元格不含 owner list、复合 owner 或协作边界列表。
-      - Proof Slice 没有混合多个测试层，没有把 `runtime` 当测试层级，也没有把 `tests/runtime` 当默认落位。
+      - Proof Slice 没有混合多个测试层或多个 primary runtime rows，没有把 `runtime` 当测试层级，也没有把 `tests/runtime` 当默认落位。
       - 没有 VID 从 `tasks.md`、当前实现细节、测试文件结构或 evidence/deposit 结构推导。
       - 没有具体测试路径、固定测试命令、evidence directory 或 deposit status。
       - 每个 required VID 都说明了最小充分层级、harness 预期、mock/fixture 边界、失败/负向覆盖和长期回归意图。
@@ -292,9 +299,15 @@ artifacts:
       - 所有 RS-/OP-/ST-/CH- row ID 必须已在 runtime-acceptance.md 中定义；不得在 tasks.md 新增 canonical runtime row。
 
       AC section：
-      - 每个 AC section 必须包含 `Acceptance:`、`Implementation Contract:`、`Runtime Rows Owned:`、`Prerequisites:`、`Provides:`、`Consumes:`、`Start Gate:`、`No-Scope Boundary:`、`Primary Proof:`、`Required Evidence:`、`External Boundary / Default Path Policy:`、`Mock Policy:`。
-      - `Required Evidence:` 只允许描述 runtime proof category，例如 browser/rendered fact、API/data fact、job/storage fact、log/audit fact；不得写测试文件、测试命令、evidence path 或执行状态。
-      - `External Boundary / Default Path Policy:` 描述 production/default path、外部依赖和 sandbox 约束，不描述测试 fixture 实现。
+      - 每个 AC section 必须按 worker-first 顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
+      - `Outcome:` 描述该 AC 完成后用户/系统可观察的结果，不写 coverage ID list。
+      - `Start Gate:` 只写启动前置 AC、baseline/runtime facts 或 `None`；provider/consumer graph 只写在 `Trace Appendix`。
+      - `Runtime Rows:` 只列 runtime-acceptance.md 主体已定义的 RS-/OP-/ST-/CH- row IDs；无 runtime 行为时写 `Not applicable` 并给出 scope-backed 理由。
+      - `Resolved Runtime Contract:` 是 AC 主体必填表，固定 columns 为 `Row`、`Worker-facing obligation`、`Observable proof`、`Default / no-scope boundary`。
+      - `Resolved Runtime Contract` 只能摘录 runtime-acceptance.md 已定义 row 的 worker-facing 语义；不得新增 canonical runtime row，不得包含 `SI-###`、source/scope trace、projection、VID、Proof Slice、测试路径、固定命令或 evidence path。
+      - `Resolved Runtime Contract` 的 row IDs 必须与本 AC `Runtime Rows:` 列表一致，并且不得与 runtime-acceptance.md canonical row 的 runtime obligation、observable fact、default path policy 或 no-scope boundary 冲突。
+      - `Implementation Scope:` 描述 worker 可执行的实现范围；`Preserve:` 描述必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints；`Proof Contract:` 描述可观察 proof 类别，不写测试实现。
+      - `Provides:`、`Consumes:`、`Depends On:`、`Prerequisite Runtime Facts:` 和 `Detail Matrix Rows:` 不得作为 AC 主体必填字段；这些 provider/consumer graph 信息只保留在 `Trace Appendix` 的 `Runtime Acceptance Index` / `Runtime Acceptance Projection`。
       - 每个 checkbox task 必须包含 `Runtime Rows:`、`Acceptance:`、`Preserve:`、`Proof:`、`Mock / Default Path Policy:` 字段。
       - `Runtime Rows:` 必须列该 task 负责或最终 proof 覆盖的 RS-/OP-/ST-/CH- rows；无 runtime 行为时写 `Not applicable` 并给出 scope-backed 理由。
       - `Acceptance:` 必须描述 task 贡献证明的具体行为，而不是 file-edit summary。
@@ -311,6 +324,7 @@ artifacts:
       - 每个 material scope item 的 `Artifact Handling` 在 proposal、specs、design、AC sections、task overrides 与 `Trace Appendix` coverage tables 中一致或有明确 handoff 理由。
       - 每个 in-scope requirement scenario 和 material design decision 都映射到 AC section 或 explicit blocker。
       - 每个 runtime-acceptance.md 中 required / preserve / proof-only runtime row 都有 owner AC、provider/consumer relationship、implementation task projection 和 runtime proof summary，或 explicit blocker/not-applicable reason。
+      - 每个 AC 主体都有 `Resolved Runtime Contract`，其 row IDs 与 `Runtime Rows:` 一致，并且全部存在于 runtime-acceptance.md canonical rows。
       - tasks.md 没有引用 runtime-acceptance.md 中不存在的 runtime row，也没有定义新的 canonical runtime row。
       - AC section 输出顺序满足 runtime provision graph；没有后置 provider dependency、循环依赖或 hidden runtime dependency。
       - `tasks.md` 不得出现 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
@@ -334,7 +348,7 @@ apply:
 
     `tasks.md` 是 production implementation Delivery Plane and runtime acceptance audit model：
     - 使用 change-local `SI-###` 作为 scope item ID；`SI-###` 只在本 change 内有效。
-    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口。
+    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 默认消费 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
     - `Trace Appendix` 的 `Acceptance-Driven Coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
     - `Trace Appendix` 的 `Runtime Acceptance Index` 和 `Runtime Acceptance Projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
     - `Trace Appendix` 中的 coverage tables 和 runtime projection 不是额外 executable work。
@@ -343,7 +357,8 @@ apply:
     `verification.md` 是 independent test intent and oracle artifact：
     - VID 必须回链到 proposal `SI-###`、spec requirement/scenario、design decision、明确 baseline/input trace 或 runtime-acceptance.md runtime rows。
     - oracle 必须描述 public/runtime observable behavior，不得来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
-    - Proof Slice Matrix 是测试义务模型，不是执行清单；每个 required VID 必须拆成一个或多个单层 Proof Slice。
+    - Proof Slice Matrix 是测试义务模型，不是执行清单；每个 required VID 必须拆成一个或多个单层、单 primary runtime row 的 atomic Proof Slice。
+    - 每个 Proof Slice 必须有 `Primary Runtime Row ID`，且该 row 必须存在于同一 slice 的 `Runtime Row IDs` 中；独立 operation、state、failure/retry、auth/security、layout 或 observability branch 不得合并成一个 slice。
     - Proof Slice 的 `Primary Layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
     - Proof Slice 的 `Production Owner` 是 production owner 边界，不是测试目录、runner selector 或 evidence 目录。
     - Proof Slice 的 `Production Owner` 必须是 exactly one production code boundary token；包含逗号、多个 owner token、`+`、`/` owner list、`and`、`和` 或 `与` 的复合 owner 必须视为无效。
@@ -353,9 +368,10 @@ apply:
     Artifact integrity blockers：
     - `runtime-acceptance.md` 缺失、runtime row ID 重复、runtime row 缺少 scope basis/default path/no-scope boundary、或包含测试/任务/evidence/deposit 字段，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` 或 `verification.md` 引用了 runtime-acceptance.md 中不存在的 runtime row，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` AC 主体缺少 `Resolved Runtime Contract`，或该表 row IDs 与 AC `Runtime Rows:` 不一致，或与 runtime-acceptance.md canonical row 语义冲突，必须报告 `Artifact Consistency Blocker`。
     - runtime-acceptance.md 中 required / preserve / proof-only runtime row 缺少 tasks projection 或 verification VID/Proof Slice projection，必须报告 `Artifact Consistency Blocker`。
     - 同一 runtime row 在 runtime-acceptance.md、tasks.md 和 verification.md 中的 scope basis、scope role、default path policy 或 no-scope boundary 冲突，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
     - `verification.md` 不得包含具体测试路径、固定测试命令、runner selector、evidence directory 或 deposit status。
-    - `verification.md` 若缺少 `Proof Slice Matrix`、required VID 缺少 slice、slice 混合多个 primary layer、slice 缺少 production owner、slice 的 production owner 是复合 owner / owner list、或 slice 把 `tests/runtime`/repo-wide env/ops/workspace/forbidden-drift 当成默认新测试目标，必须报告 `Artifact Consistency Blocker`。
+    - `verification.md` 若缺少 `Proof Slice Matrix`、required VID 缺少 slice、slice 缺少 `Primary Runtime Row ID`、primary row 不在该 slice 的 `Runtime Row IDs` 中、slice 合并多个独立 primary runtime branches、slice 混合多个 primary layer、slice 缺少 production owner、slice 的 production owner 是复合 owner / owner list、或 slice 把 `tests/runtime`/repo-wide env/ops/workspace/forbidden-drift 当成默认新测试目标，必须报告 `Artifact Consistency Blocker`。
     - `verification.md` 的 oracle 若与 proposal/specs/design 冲突、引入 scope 外行为、要求测试 artifact/process、或依赖 implementation detail，必须报告 `Artifact Consistency Blocker`。

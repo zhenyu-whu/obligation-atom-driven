@@ -9,7 +9,7 @@
 - artifact 主体是 Delivery Plane，承载 worker/tester 直接消费的交付契约。
 - `## Trace Appendix` 是审计平面，承载 coverage、source/scope trace、runtime projection、reconciliation 和 alignment gate。
 - 主 agent、change-stabilizer 和 final-reviewer 必须读取 `Trace Appendix` 做 preflight/archive/复核审计。
-- implementation-worker 默认只消费当前 AC Delivery Plane section、相关 `runtime-acceptance.md` rows、必要 proposal/spec/design delivery 摘要和明确传入的约束摘录；不得把 appendix table row 当作额外 executable work。
+- implementation-worker 默认只消费当前 AC Delivery Plane section（尤其是 `Resolved Runtime Contract`）、必要 proposal/spec/design delivery 摘要和明确传入的约束摘录；`runtime-acceptance.md` canonical rows 主要用于 preflight、冲突排查和主 agent 摘录校验，不得把 appendix table row 当作额外 executable work。
 
 ## 执行入口
 
@@ -42,13 +42,14 @@
 
 两个 schema 的 common preflight 必须索引：
 
-- AC Delivery Plane sections、AC-local execution contract fields、checkbox task IDs、Prerequisites/Provides/Consumes/Start Gate 和 proof requirements。
+- AC Delivery Plane sections、AC-local fields（`Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract`）、checkbox task IDs 和 task-level proof requirements。
+- 每个 AC 的 `Resolved Runtime Contract` row IDs 必须与该 AC `Runtime Rows` 列表一致，且全部存在于 `runtime-acceptance.md`；resolved 摘录不得与 canonical row 的 runtime obligation、observable fact、default path policy 或 no-scope boundary 冲突。
 - `tasks.md` `Trace Appendix` / `Runtime Acceptance Index` 中引用的 runtime surface rows、operation rows、state/branch rows、async/realtime rows、provides/consumes rows、depends-on AC、prerequisite runtime facts、scope role、no-scope-expansion check 和 detail matrix row references，且所有 row 必须存在于 `runtime-acceptance.md` Delivery Plane。
 - `tasks.md` `Trace Appendix` / `Runtime Acceptance Projection` 中的 `Runtime Row Ownership Projection` 和 `Provider / Consumer Projection`。
 - runtime provision graph：baseline-provided、provided-by-current-ac、consumed-by-current-ac、future-change-only、explicit negative boundary 的 provider/consumer 关系。
 - `verification.md` Delivery Plane 的 `Behavior Oracle Matrix`、`Proof Slice Matrix`、`Suggested Layer Matrix`、`Harness Rationale`、`Mock And Fixture Boundary`、`Failure And Negative Coverage`、`Regression Intent`、`Do Not Test`，以及 `Trace Appendix` 的 `Runtime Coverage Reconciliation` 和 `Oracle Consistency Checklist`。
 
-若 preflight 发现 coverage orphan、GA/SI range、implementation task ID 无法解析、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`runtime-acceptance.md` row 缺少 source/scope basis 或 default path/no-scope boundary、tasks/verification 引用未定义 runtime row、required/preserve/proof-only runtime row 缺少 tasks projection 或 verification projection、同一 row 在 runtime-acceptance/tasks/verification 中 source/scope/default path/no-scope 冲突、`verification.md` VID 无 source basis、Proof Slice `Production Owner` 是复合 owner / owner list、oracle 与 proposal/spec/design/runtime-acceptance 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
+若 preflight 发现 coverage orphan、GA/SI range、implementation task ID 无法解析、runtime row 无 owner、AC 顺序违反 provider/consumer graph、`runtime-acceptance.md` row 缺少 source/scope basis 或 default path/no-scope boundary、tasks/verification 引用未定义 runtime row、AC `Resolved Runtime Contract` 缺失/row ID 不一致/与 canonical row 冲突、required/preserve/proof-only runtime row 缺少 tasks projection 或 verification projection、同一 row 在 runtime-acceptance/tasks/verification 中 source/scope/default path/no-scope 冲突、`verification.md` VID 无 source basis、Proof Slice `Production Owner` 是复合 owner / owner list、oracle 与 proposal/spec/design/runtime-acceptance 冲突、或 tasks/verification 使用了被禁止的旧测试矩阵字段，必须先修订 artifacts，不得让 worker 直接用代码绕过。
 
 ## Subagent 分派硬约束
 
@@ -56,16 +57,16 @@
 2. 创建或启动任何 apply-stage `implementation-worker`、`test-worker`、`fix-worker`、`change-stabilizer` 或 `final-reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` apply-stage subagent，必须暂停 apply 并向用户报告 blocker。
 3. 所有 worker 必须串行执行。任一时刻最多只能有一个 apply-stage worker 处于运行中；implementation、test、fix、stabilizer、reviewer 不得并行。
 4. 启动任何 worker 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该 worker 必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
-5. 每个 worker 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section 或 VID/Proof Slice 范围、相关 runtime-acceptance rows、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 `Trace Appendix` 片段传给 implementation-worker。
+5. 每个 worker 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section（含 `Resolved Runtime Contract`）或 VID/Proof Slice 范围、preflight 需要的相关 runtime-acceptance canonical row 摘录、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 `Trace Appendix` 片段传给 implementation-worker。
 6. 必须明确告知所有 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户改动；遇到重叠文件或冲突风险必须适配现有改动并在最终报告说明。
 
 ## Phase 1 / Production Implementation
 
 1. implementation-worker 的分派单位是包含未完成 checkbox 的 `AC-###` 一级 section；按 runtime provision graph 拓扑顺序逐个 AC 串行启动。
-2. 每个 implementation-worker 只负责自己 AC Delivery Plane section 内的 production implementation、runtime-acceptance rows、provider/consumer graph、no-scope boundary 和 AC-local proof 摘要。
-3. implementation-worker 只能使用 proposal、specs、design、runtime-acceptance 和 tasks Delivery Plane 作为实现需求来源。`Trace Appendix` 只作为主 agent 传入的审计摘录或 blocker 排查依据，不得用来制造额外实现任务；`verification.md` 只可用于理解后续测试 oracle，不得用来制造实现需求或扩大 source/scope。
-4. 当前 AC 的 `Prerequisites`、`Provides`、`Consumes`、`Start Gate` 未满足时，不得用 mock、fixture、假持久化或越界实现绕过；必须先处理前置 AC 或修订 artifacts。
-5. 任务 checkbox 只能由负责该 AC 的 implementation-worker 勾选；必须满足 AC Delivery Plane、No-Scope Boundary、Mock Policy、task `Proof`、linked spec/design delivery contract、default runtime path，以及 `Trace Appendix` 中对应 task projection 的审计约束。
+2. 每个 implementation-worker 只负责自己 AC Delivery Plane section 内的 `Outcome`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
+3. implementation-worker 只能使用 proposal、specs、design、runtime-acceptance 的 canonical row 摘录和 tasks Delivery Plane 作为实现需求来源。`Trace Appendix` 只作为主 agent 传入的审计摘录或 blocker 排查依据，不得用来制造额外实现任务；`verification.md` 只可用于理解后续测试 oracle，不得用来制造实现需求或扩大 source/scope。
+4. 当前 AC 的 `Start Gate` 或 `Trace Appendix` provider/consumer graph 未满足时，不得用 mock、fixture、假持久化或越界实现绕过；必须先处理前置 AC 或修订 artifacts。
+5. 任务 checkbox 只能由负责该 AC 的 implementation-worker 勾选；必须满足 AC Delivery Plane、`Preserve`、`Proof Contract`、task `Proof`、task `Mock / Default Path Policy`、linked spec/design delivery contract、default runtime path，以及 `Trace Appendix` 中对应 task projection 的审计约束。
 6. 主 agent 在 implementation-worker 运行期间只能做编排等待和状态记录；不得审查未完成 diff、运行验证命令、修改代码、修改 artifacts、勾选任务或接手实现。
 
 ## Phase 2 / Test Agent Oracle Precheck
@@ -82,7 +83,10 @@
    - required VID 缺少至少一个 Proof Slice。
    - VID 或 Proof Slice 引用 runtime-acceptance.md 中不存在的 Runtime Row ID。
    - required / preserve / proof-only runtime row 缺少 VID 或 Proof Slice，且没有 source/scope-backed manual/not-applicable reason。
-   - Proof Slice 缺少 VID、source/scope-backed oracle fragment、primary assertion shape 或 fixture/mock boundary。
+   - Proof Slice Matrix 缺少 `Primary Runtime Row ID` 列。
+   - Proof Slice 缺少 VID、Primary Runtime Row ID、source/scope-backed oracle fragment、primary assertion shape 或 fixture/mock boundary。
+   - Proof Slice 的 Primary Runtime Row ID 不在该 slice 的 Runtime Row IDs 中，或该 row 未在 runtime-acceptance.md 中定义。
+   - Proof Slice 合并多个独立 primary runtime branches，例如把独立 operation、state、failure/retry、auth/security、layout 或 observability branches 塞进一个 oracle fragment。
    - Proof Slice 有多个 primary layer，或 primary layer 不在 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative` 中。
    - Proof Slice 缺少 production owner，或 production owner 是测试目录、evidence 目录、runner 入口而不是 production owner 边界。
    - Proof Slice 的 production owner 包含多个 production owner boundary，例如逗号分隔、多个反引号 owner、`+`、`/` owner list、`and`、`和`、`与` 连接的复合 owner。
@@ -95,10 +99,10 @@
 
 1. test-worker 写测试前必须读取并遵守 `openspec/agent-runtime/test-quality-strength.md`。
 2. test-worker 基于 proposal、specs、design、runtime-acceptance、verification Delivery Plane 和已实现代码生成并运行测试；`tasks.md` 只能作为 runtime acceptance context，不得作为测试 oracle 来源。
-3. test-worker 必须按 `verification.md` 的 required VID 对应 Proof Slice 和 `test-quality-strength.md` 的测试质量强度选择最小充分测试层、placement、harness、mock/fixture 边界和实际运行命令，并在结果中记录 Runtime Row -> VID -> Proof Slice 覆盖关系。
-4. test-worker 必须按 Proof Slice 生成或确认测试，不得直接按 VID 写一个混合 browser/API/DB/provider/security 断言的大而全测试。
+3. test-worker 必须按 `verification.md` 的 required VID 对应 atomic Proof Slice 和 `test-quality-strength.md` 的测试质量强度选择最小充分测试层、placement、harness、mock/fixture 边界和实际运行命令，并在结果中记录 Primary Runtime Row -> VID -> Proof Slice 覆盖关系。
+4. test-worker 必须按 atomic Proof Slice 生成或确认测试，不得直接按 VID 写一个混合 browser/API/DB/provider/security 断言的大而全测试，也不得把多个独立 primary runtime branches 串成一个测试。
 5. 新增或修改的测试必须按单一 `Production Owner + Primary Layer` 放在 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 归 app owner 的 e2e 入口。协作依赖只影响 harness/mock/default-path 说明，不扩大 owner。`tests/runtime/**` 不再作为新业务测试目标，只保留历史测试或 source/scope-backed 手动迁移对象；不得只放在 `openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
-6. 同一 production owner、同一 primary layer 且属于同一自然 runtime 行为的多个 Proof Slice 可以合并到同一测试文件或测试用例；不同 primary layer 不得合并成一个 primary proof。
+6. 同一 production owner、同一 primary layer 的多个 Proof Slice 可以共享同一测试文件或参数化结构；不同 primary runtime row、不同独立 branch 或不同 primary layer 不得合并成一个 primary proof 或串联在一个 `it` / `test` 中。
 7. 如果 test-worker 认为 slice 的 layer 或 owner 与代码 reality 不合理，不得静默修改 `verification.md`。只有在 oracle 不变且 source/scope-compatible 时，才可在 apply result 记录 layer/owner 调整理由；否则输出 blocker。
 8. 测试断言必须来自 proposal/specs/design/runtime-acceptance/verification 的外部行为契约。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。
 9. browser E2E 必须使用真实 browser/context/page 和 user-equivalent actions/readback；component 必须使用交互式 component harness；route/API、DB/integration、contract、worker/job、realtime/SSE、visual/responsive、security/negative 必须证明各自 production-compatible boundary。
@@ -127,7 +131,7 @@
 
 1. evidence 由 apply runtime、runner、CI、worker 或 auditor 收集；不写回 `tasks.md` 或 `verification.md`，也不进入产品测试代码。
 2. apply evidence result 必须写入或更新 `openspec-results/<change-slug>/apply-result.md`。该文件是 archive 阶段读取 VID 结果、实际测试文件、实际命令、运行结果、manual/not-applicable 理由、blocker 处理和 subagent 报告摘要的事实来源。
-3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required runtime row 的 tasks/verification 覆盖状态、每个 required VID 的最终状态、每个 required Proof Slice 的覆盖状态、Runtime Row -> VID -> Proof Slice -> test result 映射、实际测试文件或 owner-near 稳定入口、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、未解决 blocker、implementation/test/fix worker 报告摘要。
+3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required runtime row 的 tasks/verification 覆盖状态、每个 required VID 的最终状态、每个 required Proof Slice 的覆盖状态、Primary Runtime Row -> VID -> Proof Slice -> test result 映射、实际测试文件或 owner-near 稳定入口、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、未解决 blocker、implementation/test/fix worker 报告摘要。
 4. 测试代码不得硬编码 `openspec-results/**`、change slug、AC ID、VID 或 evidence path。runner artifact 可通过测试框架 output directory、attachment/report 或 apply 执行方复制保存。
 5. 任一 required VID 仍是 unresolved `Authoring Blocker`、`Execution Failure` 或 `Artifact Consistency Blocker` 时，不得声称 apply 完成或 ready to archive。
 
