@@ -1,5 +1,5 @@
 name: production-default-acceptance-driven
-version: 8
+version: 9
 description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入末尾 Trace Appendix；tasks AC 主体包含 resolved runtime contract
 artifacts:
   - id: proposal
@@ -7,49 +7,34 @@ artifacts:
     description: default-style proposal，带轻量 change scope coverage
     template: proposal.md
     instruction: |
-      创建 proposal，说明 WHY 此 change 必要、WHAT 会改变、哪些 capability 受影响，以及 reviewer 直接判断所需的业务边界、行为承诺、影响面和 readiness；scope coverage、handling 和 baseline trace 只写入末尾 `Trace Appendix`。
+      创建或维护 proposal.md。
 
-      Delivery Plane / Trace Appendix：
-      - 每个 artifact 主体是 `Delivery Plane`，只承载 reviewer、implementer 或 tester 直接消费的交付契约。
-      - 每个 artifact 末尾的 `## Trace Appendix` 是审计平面，承载覆盖映射、baseline/source trace、runtime projection、reconciliation 和 alignment gate。
-      - 下游 artifacts 可以读取上游 `Trace Appendix` 建立 coverage；implementation worker 默认不把 `Trace Appendix` 表格行当作 executable work。
-      - `Trace Appendix` 不得新增 scope 外行为、测试计划、测试执行状态、evidence path、deposit status 或实现需求。
-      - Proposal 和 design 的 Delivery Plane 主体不得承载 exhaustive `SI-###` coverage list、`Scope Items:`、source coverage suffix、projection 或 alignment gate；这些内容只允许出现在 `Trace Appendix`。
+      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
 
-      核心规则：
-      - 本 schema 用于 Greenfield 项目完成后的后续新增、修改和修复。它遵循 OpenSpec default schema 的 proposal/specs/design 心智，并新增独立 verification artifact；不消费 `openspec/orchestrate`、change plan、final change packet、全局编号表或 capability anchor packet。
-      - proposal 的主要输入是用户请求、现有 `openspec/specs/`、现有代码、当前产品行为，以及用户显式提供的 issue、设计稿、外部文档或调研结论。不得要求创建 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 artifact。
-      - 若用户请求本身足够明确，优先用它定义 change boundary；若请求含糊，先读取现有 specs/code 建立 baseline，并在仍无法安全判断时只提出必要澄清。
-      - 若 change 修改 existing capability，读取对应 `openspec/specs/<capability>/spec.md`。若新增 capability，使用 kebab-case capability 名称。
-      - Proposal 的 `Trace Appendix` 必须包含 `Change Scope Coverage`，用 change-local `SI-###` 标识 material scope item。`SI-###` 只在本 change 内有效，不是全局编号。
-      - `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`spec` 表示应进入 requirement/scenario；`guard` 表示 non-goal、MUST NOT、preserve 或明确负向边界；`design` 表示主要由 design 决定实现形态；`proof` 表示主要由 verification/runtime proof 验证；`context` 只提供背景，不生成实现范围。
-      - 下游 artifacts 必须引用 exact `SI-###`，不得使用 ranges。每个 material scope item 必须在 `Trace Appendix` 中有 downstream coverage expectation。
-      - Proposal 可以保留 open design decisions，但不得把尚未确认的实现选择伪装成用户已要求的产品范围。
-      - 当用户请求描述可见操作或控件能力时，proposal 必须保留具体 operation verb 和可观察结果：触发入口、作用对象、相关 API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
-      - Proposal Delivery Plane 的 `Why`、`What Changes`、`Capabilities`、`Non-Goals` 只写业务边界、行为承诺、影响面和 readiness；不得在主体列 exhaustive `SI-###`、`Scope Items:` 或“覆盖 SI...”类 coverage suffix。
+      - openspec/schemas/_production-contracts/common/chinese.md
+      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
+      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
+      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
+      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
+      - openspec/schemas/_production-contracts/profiles/production-default-acceptance-driven.md
+      - openspec/schemas/_production-contracts/artifacts/proposal.md
+      - openspec/schemas/_production-contracts/overlays/production-default-acceptance-driven/proposal.md
 
-      写入前：
-      - 读取现有 `openspec/specs/` 中相关 capability spec。没有相关 spec 时记录为 new capability。
-      - 按需读取现有代码、测试、配置和路由，确认 baseline 与影响面；不要做无边界的全仓库探索。
-      - 若用户提供外部输入，读取相关片段并记录到 `Trace Appendix` 的 `Baseline / Input Read Set`。
-      - 建立 scope item list，并为每个 material item 分配 `SI-###`。
+      本 schema 使用用户请求、现有 specs、现有代码/current behavior 和显式外部输入作为 proposal 权威输入。
+      所有 scope trace 使用 change-local `SI-###`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 
-      阻断条件：
-      - 用户请求与现有 spec 或代码 baseline 冲突，且无法通过 proposal 里的 open question 安全表达。
-      - 无法判断 change 是新增 capability、修改 existing capability、还是只属于实现/测试/运维修复。
-      - 发现本 change 会破坏已归档或现有 specs 的明确 MUST/MUST NOT，且用户没有要求修改该 capability。
-      - scope item 缺少 artifact handling 或 downstream coverage expectation。
-      - `## Trace Appendix` 之前的 proposal 主体出现 exhaustive `SI-###` coverage、`Scope Items:`、scope coverage suffix 或 alignment gate。
+      生成规则：
+      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
+      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
+      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
+      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `proposal-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
-      必需章节：
-      - **Why**
-      - **What Changes**
-      - **Capabilities**
-      - **Non-Goals**
-      - **Impact**
-      - **Rollout / Readiness**
-      - **Open Questions**
-      - **Trace Appendix**，其中包含 **Baseline / Input Read Set**、**Change Scope Coverage** 和 **Proposal Alignment Gate**
+      最终检查：
+      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
+      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires: []
 
   - id: specs
@@ -57,33 +42,34 @@ artifacts:
     description: default OpenSpec delta specs
     template: spec.md
     instruction: |
-      创建 OpenSpec delta specification files，定义 production system 应该做什么。
+      创建或维护 specs/**/*.md。
 
-      写入前：
-      - 读取 `proposal.md`，使用 `Trace Appendix` 的 `Change Scope Coverage` 作为 scope-reading interface。
-      - 只为有 `Artifact Handling: spec` 或 `Artifact Handling: guard` 的 capability 创建 delta spec。只有 `design`、`proof` 或 `context` scope item 时不得创建空 spec。
-      - 修改 existing capability 前，读取 `openspec/specs/<capability>/spec.md` 并保持 capability folder name。
-      - 建立 capability-to-scope map。每个 `spec` scope item 必须落到 requirement/scenario；每个 `guard` scope item 必须落到 guard、MUST NOT、non-goal 或 Production Alignment Gate。
+      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
 
-      Delta operations：
-      - 新行为使用 `## ADDED Requirements`。
-      - 变化行为使用 `## MODIFIED Requirements`，修改前必须复制完整 existing requirement block。
-      - 删除行为只在有 **Reason** 和 **Migration** 时使用 `## REMOVED Requirements`。
-      - 重命名只在有 `FROM:` / `TO:` 时使用 `## RENAMED Requirements`。
+      - openspec/schemas/_production-contracts/common/chinese.md
+      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
+      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
+      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
+      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
+      - openspec/schemas/_production-contracts/profiles/production-default-acceptance-driven.md
+      - openspec/schemas/_production-contracts/artifacts/specs.md
+      - openspec/schemas/_production-contracts/overlays/production-default-acceptance-driven/specs.md
 
-      Format requirements：
-      - 每个 requirement 使用 `### Requirement: <name>`。
-      - Requirement names 和 scenario names 由 agent 拟定时优先中文；只有 existing requirement name、API/DB/package identifiers 或稳定技术术语才保留英文。
-      - Requirement 正文使用 SHALL / MUST / MUST NOT 表达规范行为。
-      - `Trace Appendix` 必须包含 requirement scope trace 表，列出 requirement、scenario、exact `SI-###` 和用户输入、existing spec、代码路径、路由/API、数据表、配置、测试或外部输入来源；没有外部来源时说明来自用户请求。
-      - 每个 scenario 使用 `#### Scenario: <name>`，且必须使用 exactly 4 hashtags。
-      - 每个 requirement 必须至少有一个 scenario。
-      - 若 requirement 包含多个用户可见操作，scenario 必须逐项枚举或拆分；每个操作要定义触发、预期 UI/API/data 后果、持久化或 reload 后结果，以及适用的 disabled/failure/recovery 行为。
+      本 schema 使用用户请求、现有 specs、现有代码/current behavior 和显式外部输入作为 proposal 权威输入。
+      所有 scope trace 使用 change-local `SI-###`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 
-      Final alignment gate：
-      - 每个 spec file 必须以 `## Trace Appendix` 结束。
-      - `Trace Appendix` 的 Gate 必须列出 covered scope items、artifact handling、baseline/input consumed、product workflow coverage、architecture/module coverage、data/API/backend coverage、auth/security/privacy coverage、async/realtime/worker coverage、storage/asset coverage、observability/ops/deployment coverage、verification coverage 和明确边界/负向行为 coverage。
-      - 如果任何 spec-relevant scope item 未被 requirement/scenario 或 guard 表示，停止并修订 proposal/specs。
+      生成规则：
+      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
+      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
+      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
+      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `specs-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
+
+      最终检查：
+      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
+      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
       - proposal
 
@@ -92,46 +78,33 @@ artifacts:
     description: production design for the accepted spec delta
     template: design.md
     instruction: |
-      创建设计文档，说明 HOW to implement the production change。
+      创建或维护 design.md。
 
-      写入前：
-      - 读取 proposal 和所有实际生成的 delta specs；不要期待纯 design/proof-only capability 有 spec file。
-      - 使用 proposal `Trace Appendix` 的 `Change Scope Coverage`、spec `Trace Appendix` 的 scope trace 作为 scope-reading interface。
-      - 按需读取现有代码、测试、配置、数据库 schema、路由/API 和相关 specs，确认 design 能落到真实 production boundary。
-      - 起草前建立 design coverage map。每个 spec requirement/scenario、每个 `Artifact Handling: design` item、每个 `guard` item，以及每个需要 implementation placement 的 material scope item 都必须映射到 design decision、guard handling 或 explicit blocker。
+      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
 
-      Design-specific constraints：
-      - Design 必须追溯到 proposal/specs、用户输入或现有 baseline。无法追溯的设计选择必须删除或记录为 open question。
-      - 当 scope 定义行为但未定义实现形态时，design 必须选择最小 production-compatible technical shape，并说明为什么不扩大到更大的产品范围。
-      - Design 不得把生产行为替换成 placeholder、diagnostic、mock-only、static-only、fixture-only 或 sandbox-only 行为，除非 proposal 明确标记为 deferred、non-goal、context 或 proof-only。
-      - Design 必须说明 change 如何处理 architecture/runtime/module boundaries、routing/navigation、data ownership、transactions、auth/security、async processing、realtime streams、storage、provider boundaries、rendering chain、deployment 和 verification strategy；canonical RS-/OP-/ST-/CH- runtime row registry 不写入 design，必须由后续 `runtime-acceptance.md` 承载。
-      - Design Delivery Plane 主体不得把 `Satisfies`、`SI-###` 列表、source/scope coverage 列或 alignment gate 放入设计表。`Decisions` 的最小形态为 `Decision`、`Source Gap`、`Minimal Shape`、`Rejected Expansion`；exact scope/source mapping 只写入 `Trace Appendix`。
-      - 对每个会改变数据、状态、route 或用户可见结果的 UI control，Frontend / UX Design 必须定义 owner component、runtime/client-server boundary、event trigger、handler/action/API route、request payload、response merge 或 reload persistence、submitting/disabled/error/retry behavior。
+      - openspec/schemas/_production-contracts/common/chinese.md
+      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
+      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
+      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
+      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
+      - openspec/schemas/_production-contracts/profiles/production-default-acceptance-driven.md
+      - openspec/schemas/_production-contracts/artifacts/design.md
 
-      必需章节：
-      - **Context**
-      - **Goals / Non-Goals**
-      - **Decisions**
-      - **Architecture / Module Boundary Design**
-      - **Domain / Data / Migration Design**
-      - **API / Auth / Security Design**
-      - **Async / Realtime / AI / Worker Design**
-      - **Frontend / UX Design**
-      - **Observability / Ops / Deployment Design**
-      - **Verification Design**
-      - **Rollout / Compatibility**
-      - **Risks / Trade-offs**
-      - **Open Questions**
-      - **Trace Appendix**，其中包含 **Baseline / Scope Map** 和 **Production Alignment Gate**
+      本 schema 使用用户请求、现有 specs、现有代码/current behavior 和显式外部输入作为 proposal 权威输入。
+      所有 scope trace 使用 change-local `SI-###`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 
-      `Trace Appendix` 的 `Production Alignment Gate` 必须回答：
-      - 哪些 `SI-###` 被 implemented、preserved、deferred 或作为明确边界/负向 guard。
-      - 每个 artifact handling 是否被正确消费，尤其是 `design`、`proof` 和 `guard` 是否没有被伪装成 spec requirement。
-      - 每个 spec scenario 是否有 design 中对应的 implementation contract。
-      - 每个 data mutation 是否在适用时有 table/column/constraint/transaction/idempotency details。
-      - 每个 route/API/auth path 是否在适用时有 request/session/response/error handling details。
-      - 每个 UI state 是否在适用时有 owner component、transition trigger、disabled/failure/recovery behavior 和 responsive handling。
-      - 是否仍有需要 implementer 从 proposal/spec/design 外部推断的行为。
+      生成规则：
+      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
+      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
+      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
+      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `design-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
+
+      最终检查：
+      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
+      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
       - proposal
       - specs
@@ -141,51 +114,34 @@ artifacts:
     description: canonical runtime coverage registry，定义供 tasks.md 与 verification.md 共同引用的 RS/OP/ST/CH rows
     template: runtime-acceptance.md
     instruction: |
-      创建 runtime-acceptance.md，定义本 change 的 canonical runtime acceptance coverage model。
+      创建或维护 runtime-acceptance.md。
 
-      目的：
-      - `runtime-acceptance.md` 是 tasks.md 和 verification.md 的共同 runtime coverage source。
-      - 它只定义 RS-/OP-/ST-/CH- runtime rows、scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
-      - `Owner Candidate` 是 runtime row 的 advisory primary owner，不是 verification `Production Owner` 列表；多模块参与时只写最主要提供该 row 的 owner，其余协作边界写入 `External Boundary` 或 `Default Path Policy`。
-      - 它不是 implementation task list、测试计划、执行证据总账、AC checkbox、Proof Slice 状态或 regression deposit。
-      - 后续 `tasks.md` 只能引用本 artifact 中已定义的 runtime rows 来分配 AC/proof ownership；后续 `verification.md` 只能引用本 artifact 中已定义的 runtime rows 来分配 Proof Slice coverage。
+      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
 
-      写入前：
-      - 读取 proposal、所有实际生成的 delta specs 和 design。
-      - 建立 proposal `SI-###` rows、artifact handling map、spec scenarios、design decisions 和 proof handling items 的索引。
-      - 建立 upstream runtime obligation inventory：每个非 context material `SI-###`、每个 in-scope spec scenario、每个 material design decision、每个 guard 和每个 proof handling item 都必须成为一条 inventory item；纯背景、重复说明或非 runtime 的 item 也必须记录 scope-backed not-applicable reason。
-      - 从 proposal/spec/design 中抽取 runtime surfaces、operations、states/branches、async/realtime chains，以及 explicit no-async/no-worker/no-queue 等 preserve boundary。
-      - 对每个候选 runtime row，确认它有 scope basis、runtime obligation、public/runtime observable fact、default path policy、external boundary、scope role 和 no-scope-expansion check。
-      - 对每个 upstream inventory item 分配一个或多个具体 RS-/OP-/ST-/CH- row IDs；不得只用主题汇总行、closure checklist 或 `Scope closure` 一类聚合行表示覆盖。
-      - 不从 tasks.md、verification.md、当前实现细节、测试文件结构、evidence/deposit 结构或 OpenSpec artifact 文本结构推导 runtime rows。
+      - openspec/schemas/_production-contracts/common/chinese.md
+      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
+      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
+      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
+      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
+      - openspec/schemas/_production-contracts/profiles/production-default-acceptance-driven.md
+      - openspec/schemas/_production-contracts/artifacts/runtime-acceptance.md
+      - openspec/schemas/_production-contracts/overlays/production-default-acceptance-driven/runtime-acceptance.md
 
-      必需章节：
-      - `## Runtime Acceptance Intent`
-      - `## Runtime Surface Inventory`
-      - `## Operation Coverage Matrix`
-      - `## State / Branch Coverage Matrix`
-      - `## Async / Realtime Chain Matrix`
-      - `## Trace Appendix`，其中包含 `Runtime Upstream Coverage Map`、`Runtime Coverage Source Map` 和 `Coverage Closure Checklist`
+      本 schema 使用用户请求、现有 specs、现有代码/current behavior 和显式外部输入作为 proposal 权威输入。
+      所有 scope trace 使用 change-local `SI-###`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 
-      内容约束：
-      - Runtime row ID 必须全局唯一，并且只使用 `RS-###`、`OP-###`、`ST-###`、`CH-###` 格式。
-      - 每个 runtime row 必须包含 scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
-      - `Owner Candidate` 必须表示单一 primary runtime owner candidate；不得用逗号、斜杠、`+`、`and`、`和`、`与` 写 owner list，也不得机械复制为 verification Proof Slice `Production Owner`。
-      - `Runtime Surface Inventory` 只定义 surface rows；`Operation Coverage Matrix` 只定义 operation rows；`State / Branch Coverage Matrix` 只定义 state/branch rows；`Async / Realtime Chain Matrix` 只定义 async/realtime 或 explicit no-async boundary rows。
-      - 若 change 不触及某类 runtime row，保留最小 `Not applicable` 行并给出 scope-backed 理由。
-      - `Runtime Upstream Coverage Map` 必须逐项列出 upstream inventory item，并包含 exact upstream ID/name、upstream type、artifact handling、runtime row IDs、coverage mode 和 not-applicable reason；covered item 的 runtime row IDs 必须全部存在于主体 canonical rows。
-      - 每个非 context material `SI-###` 不得只出现在 `Runtime Coverage Source Map` 的聚合行或 closure checklist 中；每个 `SI-###` 必须在至少一个主体 row 的 `Scope Basis` 中出现，或在 `Runtime Upstream Coverage Map` 中映射到具体 row IDs。若该 scope item 非 runtime-applicable，必须写 scope-backed not-applicable reason。
-      - spec scenario、material design decision、guard 和 proof handling item 若未作为 exact ID/name 出现在主体 row 的 `Scope Basis`，必须在 `Runtime Upstream Coverage Map` 中映射到具体 row IDs 或 not-applicable reason。
-      - 如果一个 upstream item 包含多个独立 verb、state、failure class、fixture variant、viewport、安全分支或日志类别，runtime row 的 `Runtime Obligation`、failure/branch/default/no-scope 字段必须保留这些可失败分支名称；不得用“支持操作”“覆盖失败”等泛化措辞吞并分支。
-      - `Runtime Coverage Source Map` 可以保留主题汇总，但不得作为 upstream item 的唯一覆盖证明；禁止用 `Scope closure`、`All source closure` 或类似聚合行替代逐项 upstream coverage。
-      - 不得包含 AC checkbox、implementation task IDs、Proof Slice、测试文件、固定命令、runner selector、evidence path、执行状态或 deposit status。
+      生成规则：
+      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
+      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
+      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
+      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `runtime-acceptance-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
-      Final check：
-      - 每个非 context material `SI-###`、in-scope requirement scenario、material design decision、guard 和 proof handling item 都映射到至少一个具体 runtime row，或有 scope-backed not-applicable reason。
-      - 没有 upstream item 只通过聚合 closure 行、主题 source map 行或 checklist 覆盖；每个 upstream item 的 row IDs 都能解析到主体 canonical rows。
-      - 没有 orphan scope item、orphan scenario、orphan design decision 或 orphan proof handling item。
-      - 没有 scope 外 runtime behavior、无 SI ranges、无 duplicate runtime row IDs。
-      - 每个 runtime row 都能被后续 tasks 和 verification 投影引用，不需要 implementer 或 test agent 从 proposal/spec/design 外部重新发明 row；source map 和 closure checklist 只放在 `Trace Appendix`。
+      最终检查：
+      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
+      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
       - proposal
       - specs
@@ -196,69 +152,33 @@ artifacts:
     description: slice-only 独立测试意图、Proof Slice 原子测试义务和测试前一致性预检 artifact
     template: verification.md
     instruction: |
-      创建 verification.md，定义从 runtime-acceptance.md canonical rows 推导的 slice-only test intent and oracle artifact。
+      创建或维护 verification.md。
 
-      目的：
-      - `verification.md` 是 independent test intent and oracle artifact，不是测试实现清单、执行证据总账或回归沉淀表。
-      - Proof Slice 是唯一测试义务单位；不生成、不引用任何额外业务 oracle 分组 ID。
-      - `runtime-acceptance.md` 是唯一 scope-backed runtime/scope registry；`verification.md` 不重复 `scope basis`，也不重新解释 source/scope。
-      - `verification.md` 不依赖 `tasks.md`，不得从 `tasks.md` 推导测试目标，也不得为实现任务补造新行为。
-      - `verification.md` 只能引用 runtime-acceptance.md 中已定义的 Runtime Row IDs，并证明 required/preserve/proof-only runtime rows 均有 Proof Slice coverage 或 scope-backed manual/not-applicable reason。
-      - Proof Slice 的语义只能摘取或细分 runtime-acceptance canonical row 的 runtime obligation、observable fact、failure/branch/default/no-scope 字段，不得新增 source/scope 外 oracle。
-      - oracle 必须描述 public/runtime observable behavior，不能来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
-      - Runtime Acceptance 名称只表示真实运行边界可观察验收；`runtime` 不是测试层级、测试类型或默认目录。
+      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
 
-      写入前：
-      - 读取 runtime-acceptance.md 的 canonical rows；必要时只为一致性核对读取 proposal、所有实际生成的 delta specs 和 design，不得用它们在 verification.md 中重新建立 source/scope mapping。
-      - 索引每个 RS-/OP-/ST-/CH- row 的 row type、scope role、runtime obligation、observable fact、default path policy、external boundary 和 no-scope boundary。
-      - 对每个 required / preserve / proof-only runtime row，抽取所有独立可失败分支；每个分支生成一个 Proof Slice。
-      - 如果同一 runtime row 有多个操作、状态、失败类、fixture variant、viewport、日志类别、安全分支或 redaction 类别，必须拆成多个 slice。
-      - 不允许用一个 slice 覆盖多个独立分支；典型必须拆分模式包括 edit/add/delete、success/retryable failure/non-retryable failure/empty result、hit/mismatch、unauthenticated/foreign/deleted、desktop/notebook/mobile、started/succeeded/failed/retried、多个日志类别、多个敏感字段 redaction 类别、多个 auth/security negative branch。
-      - 每个 Proof Slice 只能有一个 `Primary Runtime Row ID`、一个 `Primitive Type`、一个 `Branch / Variant`、一个 `Primary Layer` 和一个 `Production Owner`。
-      - `Primary Runtime Row ID` 必须是该 slice `Runtime Row IDs` 中的一个已定义 row，并作为该 Proof Slice 的 coverage/trace anchor；`Runtime Row IDs` 可包含必要 supporting rows。
-      - `Primitive Type` 只能是：`operation`、`state`、`failure`、`negative-boundary`、`layout`、`observability`、`fixture-variant`、`authorization`。
-      - `Branch / Variant` 必须写单一分支，例如 `add item`、`empty result`、`idempotency_mismatch`、`mobile viewport`。
-      - `Primary Layer` 只能是：`unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
-      - `Oracle Fragment` 只能表达一个 verb、state、failure class、negative guard、layout condition 或 observability fact；`Failure Signal` 必须说明该原子断言失败时的可观察偏差。
-      - `Primary Assertion Shape` 必须对应一个清晰失败定位点。
-      - `Production Owner` 写 owner 边界，例如 `packages/domain`、`packages/db`、`apps/web`、`apps/worker`，不写具体测试文件路径。
-      - `Production Owner` 必须是 exactly one production code boundary token，例如 `apps/web` 或 `packages/domain`；不得包含逗号、多个反引号 owner、`+`、`/` owner list、`and`、`和`、`与` 或任何 owner list。
-      - 如果一个 oracle fragment 需要多个 production boundaries 才能证明，必须拆成多个 Proof Slice；若选择 public entrypoint owner，则下游真实边界只能写入 `Fixture / Mock Boundary`、`Manual / Environment Gate`、default-path 说明或 compensating proof，不能写进 `Production Owner`。
-      - `security/negative` 的 `Production Owner` 是单一被测拒绝、授权或脱敏 contract owner；跨页面或跨系统安全流程归单一 `apps/web` e2e owner，不写多 owner。
-      - `Manual / Environment Gate` 无门禁时写 `None`；有门禁时必须能通过对应 runtime row 的 scope-backed scope role、default path、external boundary 或 no-scope boundary 解释。
-      - Proof Slice Matrix 不写固定命令、runner selector、evidence path、deposit status、执行状态或具体测试文件名。
+      - openspec/schemas/_production-contracts/common/chinese.md
+      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
+      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
+      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
+      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
+      - openspec/schemas/_production-contracts/profiles/production-default-acceptance-driven.md
+      - openspec/schemas/_production-contracts/artifacts/verification.md
 
-      必需章节：
-      - `## Verification Intent`
-      - `## Proof Slice Matrix`
-      - `## Layer / Harness / Fixture Notes`
-      - `## Do Not Test`
-      - `## Trace Appendix`，其中包含 `Runtime Coverage Reconciliation` 和 `Slice Consistency Checklist`
+      本 schema 使用用户请求、现有 specs、现有代码/current behavior 和显式外部输入作为 proposal 权威输入。
+      所有 scope trace 使用 change-local `SI-###`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 
-      内容约束：
-      - `Proof Slice Matrix` columns 必须包含：`Slice ID`、`Runtime Row IDs`、`Primary Runtime Row ID`、`Primitive Type`、`Branch / Variant`、`Observable Surface`、`Oracle Fragment`、`Failure Signal`、`Primary Layer`、`Production Owner`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Regression Intent`、`Manual / Environment Gate`。
-      - `Slice ID` 使用 `PS-###`，文件内唯一。
-      - `Runtime Row IDs` 只能引用 runtime-acceptance.md 中已定义 rows；`Primary Runtime Row ID` 必须存在于同一行 `Runtime Row IDs` 中。
-      - `Layer / Harness / Fixture Notes` 只能按 `Slice ID` 或 `Slice ID Set` 补充跨 slice 的 layer、harness、fixture 说明，不得定义新的测试义务。
-      - `Do Not Test` 必须明确禁止私有 helper、调用次数、DOM 层级、className、快照全文、当前实现分支、OpenSpec artifact 文本结构、change slug、执行产物布局，以及 artifact/config/text scan 作为产品行为 primary proof。
-      - `Do Not Test` 必须明确 `tests/runtime` 不是新业务测试默认目标；repo-wide env/ops/workspace/forbidden-drift 测试不属于后续 production schema 默认要求，除非 proposal/spec/design 明确 scope-backed 且能归入被测 production owner。
-      - `Trace Appendix` 的 `Runtime Coverage Reconciliation` columns 必须包含：`Runtime Row ID`、`Row Type`、`Scope Role`、`Expected Proof Slice IDs`、`Missing Proof Slice IDs`、`Coverage Status`、`Gap / Not-Covered Reason`。
-      - 每个 required / preserve / proof-only runtime row 必须列出 expected Proof Slice IDs；`Coverage Status = covered` 仅当 `Missing Proof Slice IDs = None`。
-      - `manual` / `not-applicable` 必须通过对应 runtime row 的 scope-backed scope role、default path、external boundary 或 no-scope boundary 解释。
+      生成规则：
+      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
+      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
+      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
+      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `verification-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
-      Final check：
-      - 每个 Proof Slice 都只引用 runtime-acceptance.md 中已定义的 Runtime Row IDs。
-      - 每个 Proof Slice 都有 atomic oracle fragment、Failure Signal、单一 primary runtime row anchor、单一 primitive type、单一 branch/variant、单一 primary layer、production owner、primary assertion shape、fixture/mock boundary 和 regression intent。
-      - 每个 Proof Slice 的 `Primary Runtime Row ID` 存在于该 slice 的 `Runtime Row IDs` 中，并作为 coverage/trace anchor。
-      - 每个 Proof Slice 的 `Production Owner` 单元格不含 owner list、复合 owner 或协作边界列表。
-      - Proof Slice 没有混合多个测试层或多个原子断言，没有把多个独立可失败分支写入同一 `Branch / Variant`、`Oracle Fragment` 或 `Primary Assertion Shape`。
-      - Proof Slice 没有把 `runtime` 当测试层级，也没有把 `tests/runtime` 当默认落位。
-      - 每个 required / preserve / proof-only runtime row 的所有独立分支都有 expected Proof Slice，或有 scope-backed manual/not-applicable reason。
-      - Runtime Coverage Reconciliation 中 `covered` 行的 `Missing Proof Slice IDs` 必须为 `None`。
-      - 没有从 `tasks.md`、当前实现细节、测试文件结构或 evidence/deposit 结构推导 Proof Slice。
-      - 没有在 verification.md 中新增 `scope basis` 或重新解释 source/scope。
-      - 没有具体测试路径、固定测试命令、evidence directory 或 deposit status。
-      - `Trace Appendix` 的 Slice Consistency Checklist 能支持 test agent 在写测试前输出 `Artifact Consistency Blocker`。
+      最终检查：
+      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
+      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
       - proposal
       - specs
@@ -270,92 +190,34 @@ artifacts:
     description: 生产实现计划与运行时验收覆盖模型
     template: tasks.md
     instruction: |
-      创建 task list，将 production implementation work 拆成以 acceptance 为完成标准的执行清单，并建立 runtime acceptance model。
+      创建或维护 tasks.md。
 
-      目的：
-      - `tasks.md` 主体是 apply-ready production implementation Delivery Plane，AC sections 是 implementation worker 的默认入口。
-      - `tasks.md` 的 `Trace Appendix` 保留 proposal/spec/design coverage、AC-local runtime ownership、provider/consumer graph 和 runtime proof 摘要，供主 agent、archive、stabilizer 和 final reviewer 审计。
-      - canonical runtime rows 只来自 `runtime-acceptance.md`；`tasks.md` 不再独立定义 RS-/OP-/ST-/CH- rows。
-      - Runtime Acceptance 只表示真实运行边界可观察验收；`runtime` 不是测试层级、测试类型或默认测试目录。
-      - `tasks.md` 不包含测试计划、测试编号、测试文件、固定测试命令、evidence directory、evidence status 或 Regression Deposit。
-      - `tasks.md` 不消费 `verification.md` 来制造实现需求；两者都只能从 proposal、specs 和 design 推导。
+      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
 
-      写入前：
-      - 读取 proposal、所有实际生成的 delta specs、design 和 runtime-acceptance.md。
-      - 建立 proposal `SI-###` rows、artifact handling map、spec scenarios、design decisions、AC sections、checkbox task IDs 和 `Trace Appendix` coverage table references 的索引。
-      - 索引 runtime-acceptance.md 中的 canonical runtime rows：runtime surface、operation、state/branch、async/realtime chain、default path policy、external boundary 和 no-scope boundary。
-      - 建立 runtime provision graph：每个 runtime row 由 baseline、current-change AC、future change 或 explicit negative boundary 提供；AC sections 必须按该 graph 拓扑排序。
-      - 区分 Scope/Artifact Owner AC 与 Runtime Acceptance Owner AC。跨 AC handoff 只能写在 coverage/proof 摘要中，不得把测试编号或测试执行细节塞进 owner AC。
+      - openspec/schemas/_production-contracts/common/chinese.md
+      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
+      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
+      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
+      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
+      - openspec/schemas/_production-contracts/profiles/production-default-acceptance-driven.md
+      - openspec/schemas/_production-contracts/artifacts/tasks.md
+      - openspec/schemas/_production-contracts/overlays/production-default-acceptance-driven/tasks.md
 
-      Task Eligibility Gate：
-      - Delivery Plane checkbox task 必须代表 production implementation work：代码、schema、migration、API、domain behavior、UI behavior、auth/security guard、config、provider contract、observability、deployment 或 runtime boundary preservation。
-      - checkbox task 不得只为了 proof、verification、test、evidence、fixture replay、截图、coverage closure、acceptance closure 或 artifact closure 而存在。
-      - `Proof:` 只描述生产任务完成后的可观察完成标准；它不是独立 executable task。
-      - 如果 `Artifact Handling: proof` 的 scope item 只证明前置 AC 已交付的行为，必须在 `Trace Appendix` coverage tables 中映射到已有 implementation task IDs，不得为了承载该证明新增 proof-only checkbox。
-      - task-level `Runtime Rows:` 只能列该 checkbox 实现、实质修改或保留的 runtime rows；仅在 proof/readback 中被观察的 supporting rows 不得列入该 task 的 `Runtime Rows:`。
+      本 schema 使用用户请求、现有 specs、现有代码/current behavior 和显式外部输入作为 proposal 权威输入。
+      所有 scope trace 使用 change-local `SI-###`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 
-      必需结构：
-      - 文件开头必须是 `## AC-### <中文验收切片名称>` Delivery Plane sections。
-      - 文件末尾必须是 `## Trace Appendix`。
-      - `Trace Appendix` 必须包含 `Acceptance-Driven Coverage`、`Runtime Acceptance Index` 和 `Runtime Acceptance Projection`。
+      生成规则：
+      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
+      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
+      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
+      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `tasks-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
-      Trace Appendix / Acceptance-Driven Coverage：
-      - 必须包含 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage` 三张表。
-      - `Scope Item Coverage` 每行只能有一个 exact `SI-###`，不得使用 ranges、aggregate rows 或多 ID 单元格。
-      - coverage 表必须包含 `Acceptance Slice IDs`、`Implementation Task IDs` 和 `Acceptance Proof`。
-      - `Acceptance Proof` 是 runtime proof 摘要，不是 checkbox、测试编号、执行状态或 artifact closure 工作。
-      - `Implementation Task IDs` 必须引用交付或实质保留 source/scope behavior 的生产任务；`Artifact Handling: proof` rows 应引用被证明的底层生产任务，不得创建 proof-only task ID 以方便 coverage。
-      - coverage 表不得出现测试文件、测试命令、evidence path、deposit status 或测试编号。
-
-      Trace Appendix / Runtime Acceptance Index：
-      - 必须包含 `AC Runtime Ownership Index` table。
-      - columns 至少包含：`AC ID`、`Scope Basis`、`Runtime Surface Rows`、`Operation Rows`、`State / Branch Rows`、`Async / Realtime Rows`、`Provides Rows`、`Consumes Rows`、`Depends On AC IDs`、`Prerequisite Runtime Facts`、`Start Gate`、`Scope Role`、`No-Scope-Expansion Check`、`Detail Matrix Rows`、`Runtime Proof Summary`。
-      - Runtime Acceptance Index 只作为主 agent preflight 路由表，不是测试计划来源。
-      - 所有 RS-/OP-/ST-/CH- row ID 必须已在 runtime-acceptance.md 中定义；不得在 tasks.md 新增 canonical runtime row。
-
-      AC Creation Gate：
-      - 只有当一个 AC section 提供或实质修改 current-change production runtime behavior，或提供必须由本 change 交付的 preserve boundary 时，才允许创建该 AC。
-      - 不得创建名称或 scope 仅为 proof closure、verification closure、evidence closure、coverage closure、acceptance proof closure 的 AC。
-      - 如果某 AC 只包含 proof-only rows，且 `Implementation Scope` 只是 proof/evidence/test/coverage，则该 AC 无效；这些 proof-only rows 必须投影到已有生产 AC/task。
-      - 如果 proof-only row 确实需要生产 runtime work，AC 名称必须描述该生产工作，例如“响应式布局和安全运行日志”，不得命名为“验收证明收束”。
-
-      AC section：
-      - 每个 AC section 必须按 worker-first 顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
-      - `Outcome:` 描述该 AC 完成后用户/系统可观察的结果，不写 coverage ID list。
-      - `Start Gate:` 只写启动前置 AC、baseline/runtime facts 或 `None`；provider/consumer graph 只写在 `Trace Appendix`。
-      - `Runtime Rows:` 只列 runtime-acceptance.md 主体已定义的 RS-/OP-/ST-/CH- row IDs；无 runtime 行为时写 `Not applicable` 并给出 scope-backed 理由。
-      - `Resolved Runtime Contract:` 是 AC 主体必填表，固定 columns 为 `Row`、`Worker-facing obligation`、`Observable proof`、`Default / no-scope boundary`。
-      - `Resolved Runtime Contract` 只能摘录 runtime-acceptance.md 已定义 row 的 worker-facing 语义；不得新增 canonical runtime row，不得包含 `SI-###`、source/scope trace、projection、Proof Slice、测试路径、固定命令或 evidence path。
-      - `Resolved Runtime Contract` 的 row IDs 必须与本 AC `Runtime Rows:` 列表一致，并且不得与 runtime-acceptance.md canonical row 的 runtime obligation、observable fact、default path policy 或 no-scope boundary 冲突。
-      - `Implementation Scope:` 描述 worker 可执行的实现范围；`Preserve:` 描述必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints；`Proof Contract:` 描述可观察 proof 类别，不写测试实现。
-      - `Provides:`、`Consumes:`、`Depends On:`、`Prerequisite Runtime Facts:` 和 `Detail Matrix Rows:` 不得作为 AC 主体必填字段；这些 provider/consumer graph 信息只保留在 `Trace Appendix` 的 `Runtime Acceptance Index` / `Runtime Acceptance Projection`。
-      - 每个 checkbox task 必须包含 `Runtime Rows:`、`Acceptance:`、`Preserve:`、`Proof:`、`Mock / Default Path Policy:` 字段。
-      - `Runtime Rows:` 必须列该 task 实现、实质修改或保留的 RS-/OP-/ST-/CH- rows；无 runtime 行为时写 `Not applicable` 并给出 scope-backed 理由。
-      - 仅作为 proof/readback/supporting facts 被观察的 runtime rows 不得放入 task-level `Runtime Rows:`；可在 `Proof:` 文字或 `Trace Appendix` provider/consumer projection 中说明。
-      - `Acceptance:` 必须描述 task 贡献证明的具体行为，而不是 file-edit summary。
-      - `Preserve:` 必须说明必须保留的 module/data/API/auth/worker/UI/responsive/privacy/ops constraints。
-      - `Proof:` 必须说明可观察 proof；用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback。
-      - `Mock / Default Path Policy:` 必须说明 mock/sandbox/default path 规则；不得用 mock 替代 required runtime boundary。
-      Trace Appendix / Runtime Acceptance Projection：
-      - 只保留 runtime-acceptance.md 到 AC/implementation checkbox 的 projection tables：`Runtime Row Ownership Projection`、`Provider / Consumer Projection`。
-      - projection tables 必须包含 runtime row ID、row type、owner AC、implementation task IDs、provides/consumes rows、depends-on AC、start gate、projection status 和 blocker/not-applicable reason。
-      - required / preserve runtime rows 必须有 owner AC、provider/consumer relationship、implementation task projection 和 runtime proof summary。
-      - proof-only runtime rows 必须先分类再投影：`production-work-required` 表示该 row 需要生产 UI/config/log/security/runtime changes，因此必须有 owner AC 和 implementation task projection；`proof-projection-only` 表示该 row 只声明对既有生产行为的 proof expectation，因此不得创建新 AC 或 checkbox，只能映射到已有 AC/task IDs 和 runtime proof summary。
-      - 为了给 proof-only runtime row 分配 implementation task ID 而创建 checkbox 是无效投影。
-      - 本节不得重新定义 canonical runtime row 详情；runtime detail 只允许存在于 runtime-acceptance.md。
-      - 不得包含测试层计划、测试证据矩阵、回归沉淀表、测试编号、固定命令、测试文件、evidence directory、CI runnable 或 deposit status。
-
-      Final check：
-      - 每个 material scope item 的 `Artifact Handling` 在 proposal、specs、design、AC sections、task overrides 与 `Trace Appendix` coverage tables 中一致或有明确 handoff 理由。
-      - 每个 in-scope requirement scenario 和 material design decision 都映射到 AC section 或 explicit blocker。
-      - 每个 runtime-acceptance.md 中 required / preserve runtime row 都有 owner AC、provider/consumer relationship、implementation task projection 和 runtime proof summary，或 explicit blocker/not-applicable reason。
-      - 每个 proof-only runtime row 都被分类为 `production-work-required` 或 `proof-projection-only`；前者必须有生产 task projection，后者不得创建 proof-only AC/checkbox，必须投影到已有生产 task IDs 和 runtime proof summary。
-      - 每个 AC 主体都有 `Resolved Runtime Contract`，其 row IDs 与 `Runtime Rows:` 一致，并且全部存在于 runtime-acceptance.md canonical rows。
-      - tasks.md 没有引用 runtime-acceptance.md 中不存在的 runtime row，也没有定义新的 canonical runtime row。
-      - AC section 输出顺序满足 runtime provision graph；没有后置 provider dependency、循环依赖或 hidden runtime dependency。
-      - tasks.md 不得包含只执行 proof、verification、test、fixture、screenshot、evidence、coverage closure 或 acceptance closure 的 checkbox；若存在必须视为 `Artifact Consistency Blocker`。
-      - task-level `Runtime Rows:` 不得列入仅由 proof/readback 观察、但该 task 不实现或实质保留的 supporting rows。
-      - `tasks.md` 不得出现 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
+      最终检查：
+      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
+      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
       - proposal
       - specs
@@ -369,6 +231,7 @@ apply:
     本 schema 的 apply instruction 只定义 schema-local artifact 语义；执行顺序、subagent 编排、测试质量门禁、evidence 输出和 ready-for-archive 判定必须遵守 `openspec/agent-runtime/openspec-apply-change.md`。
 
     Apply 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
+    Apply Phase 0 必须运行 `node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`；validator hard error 必须作为实现前 `Artifact Consistency Blocker`，不得启动 implementation-worker。
 
     `runtime-acceptance.md` 是 canonical runtime coverage registry：
     - 它定义 RS-/OP-/ST-/CH- runtime rows、scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
@@ -399,6 +262,7 @@ apply:
     - apply 阶段不得为了适配当前实现静默修改 `verification.md`。
 
     Artifact integrity blockers：
+    - 静态 artifact validator 返回 hard error，必须报告 `Artifact Consistency Blocker`。
     - `runtime-acceptance.md` 缺失、runtime row ID 重复、runtime row 缺少 scope basis/default path/no-scope boundary、或包含测试/任务/evidence/deposit 字段，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` 或 `verification.md` 引用了 runtime-acceptance.md 中不存在的 runtime row，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` AC 主体缺少 `Resolved Runtime Contract`，或该表 row IDs 与 AC `Runtime Rows:` 不一致，或与 runtime-acceptance.md canonical row 语义冲突，必须报告 `Artifact Consistency Blocker`。

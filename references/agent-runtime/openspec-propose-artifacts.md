@@ -214,21 +214,71 @@
 17. `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
 18. artifact 生成后自查必须确认没有 orphan scope item、SI range、后置 provider dependency、scope 外行为、runtime row orphan、未定义 row 引用；`Runtime Upstream Coverage Map` 没有仅由 closure 聚合兜底的上游项；每个 required/preserve runtime row 都有 tasks projection 和 verification projection；每个 proof-only runtime row 都已分类并按 `production-work-required` 或 `proof-projection-only` 正确投影；不存在 proof-only AC/checkbox 或 task-level supporting row 误列。
 
+## 统一静态校验与分阶段 Writer/Reviewer
+
+本节适用于 `openspec-propose`、`openspec-ff-change`、`openspec-continue-change` 和任何会创建或继续生成 production schema artifacts 的流程；三者使用同一门禁逻辑，不得因为入口不同而跳过。
+
+### Contract Bundle Resolution
+
+1. 生成或复核任一 artifact 前，主 Agent 必须解析并读取该 artifact 的 contract bundle。bundle 顺序固定为：
+   - `openspec/schemas/_production-contracts/common/chinese.md`
+   - `openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md`
+   - `openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md`
+   - `openspec/schemas/_production-contracts/common/source-scope-boundary.md`
+   - `openspec/schemas/_production-contracts/common/reviewer-output-protocol.md`
+   - `openspec/schemas/_production-contracts/profiles/<schema-name>.md`
+   - `openspec/schemas/_production-contracts/artifacts/<artifact-id>.md`
+   - `openspec/schemas/_production-contracts/overlays/<schema-name>/<artifact-id>.md`，仅在文件存在时读取。
+2. Artifact id 到 contract 文件名的映射固定为：`proposal -> proposal.md`、`specs -> specs.md`、`design -> design.md`、`runtime-acceptance -> runtime-acceptance.md`、`verification -> verification.md`、`tasks -> tasks.md`。
+3. 如果任一 required contract 文件缺失，必须停止并报告 `Artifact Consistency Blocker`；不得降级为只读 schema instruction 或主 Agent 自检。
+4. `schema.yaml` 仍是 OpenSpec 默认生成入口；contract bundle 是 writer/reviewer 的共同强制约束来源。不得把 contract 文本复制进 artifact 正文。
+
+### Artifact Writer / Reviewer Loop
+
+1. Artifact 必须按 schema dependency graph 顺序处理：`proposal`、`specs`、`design`、`runtime-acceptance`、`verification`、`tasks`。
+2. 每个 artifact 必须使用一组独立 subagents：
+   - `proposal-writer` 后接 `proposal-reviewer`
+   - `specs-writer` 后接 `specs-reviewer`
+   - `design-writer` 后接 `design-reviewer`
+   - `runtime-acceptance-writer` 后接 `runtime-acceptance-reviewer`
+   - `verification-writer` 后接聚焦 `verification-reviewer`
+   - `tasks-writer` 后接 `tasks-reviewer`
+3. Writer 和 reviewer 都必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建对应 subagent，必须停止并报告 blocker，不得降级为主 Agent 自检或低配模型。
+4. Writer 输入必须包含：change 名称、schema 名称、`openspec instructions <artifact-id> --change "<change-slug>" --json` 的完整输出、已完成 dependency artifact 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set。Writer 只能写当前 artifact。
+5. Writer 写入 artifact 后，主 Agent 必须运行 partial static validator：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。Hard error 必须由主 Agent 修复并重新运行到 hard pass；warning 必须传给 artifact reviewer。
+6. Artifact reviewer 输入必须包含：change 名称、schema 名称、当前 artifact 路径和内容、必要 upstream dependency artifact、contract bundle 路径和内容、partial validator 报告。Reviewer 不得读取当前实现、测试文件、`openspec-results/**`、evidence、apply-result 或 apply 阶段产物来推导 oracle。
+7. Reviewer 只读复核，不得直接修订 artifact。Reviewer 只能输出 `Pass` 或 `Blocker`。Blocker 必须包含 artifact path、artifact anchor、contract source path + section heading、问题描述和修复方向；`verification.md` blocker 还必须列出 runtime row、现有或缺失 Proof Slice、被合并或遗漏的分支。
+8. 主 Agent 负责根据 reviewer blocker 修复 artifact，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续生成依赖该 artifact 的下游 artifact。
+9. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、contract section、heading/table row、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。
+
+### Complete Validation / Integration Reviewer
+
+1. 当 apply-required artifacts 全部完成并且每个 artifact reviewer pass 后，必须运行全量静态校验：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。
+2. Full validator hard error 阻断 integration reviewer 和 apply-ready 声明；主 Agent 必须修复并重新运行到 hard pass。Warning 必须进入 integration reviewer 输入。
+3. Full validator hard pass 后，必须启动一次且仅一次 `artifact-integration-reviewer` subagent。
+4. `artifact-integration-reviewer` 必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建该 reviewer，必须停止并报告 blocker，不得降级为主 Agent 自检。
+5. Integration reviewer 输入必须包含：change 名称、schema 名称、完整 static validator 报告、所有 artifact reviewer 输出、proposal/specs/design/runtime-acceptance/verification/tasks 路径和内容、所有相关 contract bundle 路径。它不重新替代每个 artifact 的专项 reviewer。
+6. Integration reviewer 只检查跨 artifact reconciliation：source/scope projection 是否漂移、runtime rows 是否同时被 `tasks.md` 和 `verification.md` 正确投影、未关闭 reviewer blocker 是否存在、validator warning 是否处理、proposal/spec/design/runtime/verification/tasks 是否存在互相发明新行为。
+7. Integration reviewer 只读复核，不得直接修订 artifact。输出只能是 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、artifact anchor、contract source heading、问题和修复方向。主 Agent 修复后必须重新运行 full validator，并按受影响 artifact 重新运行相应 artifact reviewer，再重新启动 integration reviewer。
+8. 未满足所有 artifact reviewer pass、full validator hard pass 和 integration reviewer pass 前，不得声称 artifacts apply-ready，不得建议进入 apply，不得把 `Coverage Status = covered`、checklist 勾选或 validator PASS 当作最终质量证明。
+
+### Validator / Reviewer 分工
+
+- 静态 validator 负责机械门禁和启发式风险标记。
+- Artifact reviewer 负责 artifact-local contract compliance。
+- `verification-reviewer` 必须特别聚焦 Proof Slice 粒度、runtime row 分支枚举和 reconciliation 真实性。
+- Integration reviewer 负责跨 artifact reconciliation。
+- 三者都不得把 artifact/process、测试文件结构或 apply evidence 当作产品行为 oracle。
+
 ## Artifact 生成自查
 
-每个 artifact 写入后，必须执行对应的结构自查，而不是只依赖 OpenSpec CLI 格式校验：
+每个 artifact 写入后必须按其 contract bundle 做结构自查，而不是只依赖 OpenSpec CLI 格式校验。
 
-1. 全部 artifacts：按“Artifact 中文约束”做内部语言检查；忽略反引号中的标识后，不得存在英文主导的解释性句子；checkbox task description 必须中文；不得把语言检查结果写入 artifact。
-2. `production-obligation-atom-driven` / `proposal.md`：Delivery Plane 主体无 exhaustive `GA-####` coverage、`Direct atoms`、`Projection mix`、`Global Atoms:` 或“覆盖 GA...”类 suffix；`Trace Appendix` 中 packet direct atom 数量 = proposal register row 数量；每行有 `Artifact Projection` 和 `Projection Source`；direct atoms 均已出现在 `Source Window Read Set`；无 orphan direct `GA-####`；无 GA ranges。
-3. `production-default-acceptance-driven` / `proposal.md`：Delivery Plane 主体无 exhaustive `SI-###` coverage、`Scope Items:` 或“覆盖 SI...”类 suffix；`Trace Appendix` 中 `Change Scope Coverage` 覆盖每个 material scope item；每个非 context `SI-###` 有 `Artifact Handling` 和 downstream coverage expectation；无 `GA-####` register、无 orchestrate 依赖、无 SI ranges。
-4. specs：只为有 OpenSpec delta 的 capability 生成 spec file；每个 generated spec 至少包含一个 `### Requirement:`；无 spec-level orphan GA/SI；无 ranges。
-5. design：Delivery Plane 主体无 `Satisfies` coverage column、exhaustive GA/SI list 或 source/scope coverage suffix；每个 in-scope scenario、design obligation/decision、guard item 和需要 implementation placement 的 material source/scope item 有 design decision、guard handling 或 explicit blocker；无需要 implementer 猜测的行为。
-6. `runtime-acceptance.md`：每个 canonical runtime row 有 source/scope basis、runtime obligation、observable fact、default path policy、external boundary、scope role 和 no-scope-expansion check；`Runtime Upstream Coverage Map` 逐项覆盖所有 direct GA / material SI、in-scope spec scenario、material design obligation/decision、guard 和 proof obligation/handling item，且每个 covered item 映射到主体 canonical row；无 duplicate row IDs、无测试/任务/evidence/deposit 字段。
-7. `verification.md`：每个 Proof Slice 有 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、Observable Surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent 和 Manual / Environment Gate；每个 required / preserve / proof-only runtime row 的 expected/missing slice reconciliation 闭合。
-8. `verification.md` 不得包含具体测试路径、固定命令、evidence directory、deposit status，且不得把 artifact/process 当作产品行为 oracle。
-9. `tasks.md`：Delivery Plane 必须以 AC sections 开始；每个 AC 有 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract`；`Resolved Runtime Contract` row IDs 与 AC `Runtime Rows` 一致，且全部存在于 runtime-acceptance.md；`Trace Appendix` 三张 coverage 表完整；GA/SI 单行单 ID；所有 implementation task ID 引用都能解析到生产 checkbox；AC section 顺序满足 runtime provision graph；无 orphan rows、无 ranges、无后置 provider dependency；无只执行 proof、verification、test、fixture、screenshot、evidence 或 coverage closure 的 checkbox；task-level `Runtime Rows` 不包含仅由 proof/readback 观察的 supporting rows。
-10. `tasks.md` 的 `Trace Appendix` 保留 `Runtime Acceptance Index` 和 `Runtime Acceptance Projection`；不得出现测试矩阵、测试执行证据或回归沉淀字段。
-11. propose 完成后必须确认 `runtime-acceptance.md`、`tasks.md` 和 `verification.md` 都没有 source/scope 外新增行为，且 verification/tasks 没有互相作为新增需求来源。
+1. 全部 artifacts 必须执行 common contract 自查：中文约束、Delivery Plane / Trace Appendix、禁止测试执行/evidence 字段、source/scope boundary 和 reviewer 输出协议。
+2. Profile-specific 自查必须来自 `openspec/schemas/_production-contracts/profiles/<schema-name>.md`：obligation schema 使用 final packet、global atom index 和 exact `GA-####`；default schema 使用用户输入、baseline/spec/code read set 和 change-local `SI-###`。
+3. Artifact-specific 自查必须来自 `openspec/schemas/_production-contracts/artifacts/<artifact-id>.md` 和存在时的 overlay contract。
+4. 自查结果不得写入 artifact 正文；若发现无法满足 contract，必须作为 writer blocker 或 reviewer blocker 处理。
+5. Propose 完成后必须确认 `runtime-acceptance.md`、`tasks.md` 和 `verification.md` 都没有 source/scope 外新增行为，且 verification/tasks 没有互相作为新增需求来源。
 
 ## No Backward Compatibility
 

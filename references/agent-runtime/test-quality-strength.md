@@ -39,16 +39,25 @@
 
 ## Test Placement Routing
 
-1. test agent 必须根据 Proof Slice 的单一 `Production Owner + Primary Layer` 决定测试落位；owner 是 production code 边界，不是测试目录、协作边界列表或 evidence 目录。
-2. `unit` / `contract` / domain contract 优先放 `packages/<pkg>/src/__tests__` 或 `packages/<pkg>/tests`。
-3. `DB/integration` 优先放 `packages/db/tests`。
-4. `route/API`、web integration、component 优先放 `apps/web/tests/api`、`apps/web/tests/integration` 或 `apps/web/tests/component`。
-5. `browser/e2e`、`visual/responsive` 优先放 `apps/web/tests/e2e`。
-6. `worker/job` 优先放 `apps/worker/tests`。
-7. `security/negative` 优先归单一被测 production owner；跨页面或跨系统安全流程才归单一 e2e app owner。不得用多个 owner 表示跨边界协作。
-8. `tests/runtime/**` 不作为新业务测试目标；只保留历史测试或 source/scope-backed 手动迁移对象。
-9. 如果 owner-near tests 不被 root/package/CI entry 触达，test agent 必须修 runner include 或 package scripts，或报告 `Execution Failure`；不得为了通过 runner discovery 把 owner-near 测试移动到 `tests/runtime/**`。
-10. broad workspace command 只能作为补充，不能替代 owner-near 测试命令和 slice 级覆盖。
+1. test agent 必须根据 Proof Slice 的单一 `Production Owner + Primary Layer` 选择 placement policy compliant test location；`Production Owner` 只用于 proof trace，是 production code boundary，不是测试目录、协作边界列表、runner selector 或 evidence 目录，也不得直接推导物理测试路径。
+2. 新增或修改的测试必须写入外置 `tests/**` placement；不得写入 production source tree。除非本节明确允许，任何其它测试落位都必须报告 `Execution Failure` 或 `Authoring Blocker`，不得自行放宽。
+3. `apps/web + component` 必须放 `apps/web/tests/component/**`。
+4. `apps/web + route/API` 必须放 `apps/web/tests/api/**`。
+5. `apps/web + web integration` 必须放 `apps/web/tests/integration/**`。
+6. `apps/web + browser/e2e` 或 `apps/web + visual/responsive` 必须放 `apps/web/tests/e2e/**`。
+7. `apps/web` 测试支撑代码、fixture、seed helper、readback helper 和 Playwright helper 必须放 `apps/web/tests/support/**` 或对应测试文件同目录的 test-only helper；不得进入 `apps/web/app/**`。
+8. `packages/<pkg> + unit/contract` 必须放 `packages/<pkg>/tests/unit/**` 或 `packages/<pkg>/tests/contract/**`。
+9. `packages/db + DB/integration` 必须放 `packages/db/tests/integration/**`。
+10. `packages/ai + provider contract` 必须放 `packages/ai/tests/contract/**`。
+11. `apps/worker + worker/job` 必须放 `apps/worker/tests/**`。
+12. `security/negative` 优先归单一被测 production owner，并按该 owner 与 primary layer 的 placement policy 落位；跨页面或跨系统安全流程才归单一 e2e app owner。不得用多个 owner 表示跨边界协作。
+13. `tests/runtime/**` 不作为新业务测试目标；只保留历史测试或 source/scope-backed 手动迁移对象。
+14. 禁止新增 `apps/web/app/**/__tests__/**`、`apps/web/app/**/*.test.*`、`apps/web/app/**/*.spec.*`、`packages/*/src/__tests__/**`、`packages/*/src/**/*.test.*`、`packages/*/src/**/*.spec.*`。
+15. 禁止新增 `apps/web/app/e2e/**/route.ts`、`apps/web/app/test/**/route.ts`、`apps/web/app/**/fixtures/**`，也不得为了测试 seed、readback 或 observation 暴露产品 route handler。
+16. test-only helper 不得从 production package main entrypoint 导出。需要共享时应放入外置 `tests/**` support module 或明确的 testing-only entrypoint，且不得被 production runtime import。
+17. 如果 placement-policy compliant tests 不被 root/package/CI entry 触达，test agent 必须修 runner include 或 package scripts，或报告 `Execution Failure`；不得为了通过 runner discovery 把测试移动到 forbidden placement、`tests/runtime/**`、`openspec-results/**`、`test-results/**` 或 `openspec/changes/**`。
+18. 新增或修改 runner include 时，不得加入 `apps/**/app/**/*.test.*`、`apps/**/app/**/*.spec.*`、`packages/**/src/**/*.test.*` 或 `packages/**/src/**/*.spec.*` 来触达错误落位。
+19. broad workspace command 只能作为补充，不能替代 placement-policy compliant test command 和 slice 级覆盖。
 
 ## Harness 要求
 
@@ -77,15 +86,15 @@
 
 ## 持久测试与运行入口
 
-1. 新增或修改的测试应按单一 `Production Owner + Primary Layer` 放在对应 production owner 附近的长期 test/spec 文件中；跨页面 e2e、visual/responsive 放 app owner 的 e2e 入口。协作依赖写入 harness/mock/default-path 说明，不改变 owner。不得只放在 `tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
+1. 新增或修改的测试必须按 `Test Placement Routing` 的 placement policy 放在外置 `tests/**` 长期 test/spec 文件中。协作依赖写入 harness/mock/default-path 说明，不改变 owner。不得只放在 forbidden placement、`tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
 2. test agent 必须运行能实际触达相关测试的命令，并在 apply result 记录命令、退出状态和关键结果。
 3. broad workspace command 可以作为补充，但不能替代能定位相关 oracle 的测试命令；只执行 discovery/listing 或错误 runner 不算通过。
-4. 新增测试 runner、测试目录或 browser E2E spec 时，必须确认 root/package/CI entry 能真实触达；无法接入时不得输出 `Passed`。
+4. 新增测试 runner、测试目录或 browser E2E spec 时，必须确认 root/package/CI entry 能真实触达 placement-policy compliant tests；无法接入时不得输出 `Passed`。
 5. 修改 `process.env`、global fetch、时间、随机源、log sink、cookie/session、数据库、文件系统输出或 mock registry 时必须恢复或隔离，避免污染后续测试。
 
 ## 结果判定
 
-1. `Passed`：required atomic Proof Slice 的标准测试已生成或确认存在，满足本文档质量门禁，实际命令通过，且 runner/entry 能触达 owner-near 测试；required runtime row 的所有 expected Proof Slice 都满足后，该 row 才可汇总为 covered。
+1. `Passed`：required atomic Proof Slice 的标准测试已生成或确认存在，满足本文档质量门禁，实际命令通过，实际测试路径符合 placement policy，runner/entry 能触达 placement-policy compliant tests，且未新增 forbidden placement、错误 runner include 或 test-only production route；required runtime row 的所有 expected Proof Slice 都满足后，该 row 才可汇总为 covered。
 2. `Authoring Blocker`：无法按本文档生成标准测试，原因是生产代码缺少合适 public/runtime boundary、稳定 observable surface、可控 dependency boundary、错误信号，或只能通过 implementation-detail/static/artifact proof 覆盖。
 3. `Execution Failure`：标准测试已经能按本文档生成，oracle 表达正确，但测试命令失败、runner/entry 未触达、环境隔离失败或生产行为不满足 oracle。
 4. `Artifact Consistency Blocker` 仍只限 Phase 2 定义的 artifact/oracle 问题；当前实现不支持 oracle、测试难写或测试失败都不是 artifact consistency blocker。
