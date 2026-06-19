@@ -2,7 +2,7 @@
 
 ## 目的
 
-`tasks.md` 是 production implementation Delivery Plane and runtime acceptance audit model。AC sections 是 implementation worker 默认入口；`Trace Appendix` 供主 Agent、archive、stabilizer 和 reviewer 审计。
+`tasks.md` 是 production implementation Delivery Plane and runtime acceptance audit model。AC sections 是 implementation worker 默认入口；`trace/tasks.trace.json` 供主 Agent、archive、stabilizer 和 reviewer 审计。
 
 ## 写入前
 
@@ -32,14 +32,15 @@
 - `Acceptance:` 描述 task 贡献证明的具体行为，不写 file-edit summary。
 - `Proof:` 说明可观察 proof；用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback。
 
-## Trace Appendix
+## JSON Trace Plane
 
-- 必须包含 `Acceptance-Driven Coverage`、`Runtime Acceptance Index` 和 `Runtime Acceptance Projection`。
+- `trace/tasks.trace.json` 必须包含 `acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection`。
 - Coverage 表必须包含 acceptance slice IDs、implementation task IDs 和 acceptance proof；proof 摘要不是 checkbox、测试编号或执行状态。
-- `Runtime Acceptance Index` 只作为 preflight 路由表，不是测试计划来源。
-- `Runtime Acceptance Projection` 只保留 runtime-acceptance rows 到 AC/implementation checkbox 的 projection，不重新定义 canonical runtime row。
+- `runtime-acceptance-index` 只作为 preflight 路由表，不是测试计划来源。
+- `runtime-acceptance-projection` 只保留 runtime-acceptance rows 到 AC/implementation checkbox 的 projection，不重新定义 canonical runtime row。
 - Required / preserve rows 必须有 owner AC、provider/consumer relationship、implementation task projection 和 runtime proof summary，或 explicit blocker/not-applicable reason。
 - Proof-only rows 必须分类为 `production-work-required` 或 `proof-projection-only`；后者不得创建 proof-only AC/checkbox，只能映射到已有生产 task IDs 和 proof summary。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块。
 
 ## Reviewer Focus
 

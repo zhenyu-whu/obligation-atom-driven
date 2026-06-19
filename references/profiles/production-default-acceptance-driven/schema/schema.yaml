@@ -1,6 +1,6 @@
 name: production-default-acceptance-driven
-version: 9
-description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入末尾 Trace Appendix；tasks AC 主体包含 resolved runtime contract
+version: 10
+description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入外置 JSON Trace Plane，artifact 末尾只保留 Trace Appendix pointer；tasks AC 主体包含 resolved runtime contract
 artifacts:
   - id: proposal
     generates: proposal.md
@@ -27,12 +27,12 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `proposal-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
-      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
       - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
       - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires: []
@@ -62,12 +62,12 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `specs-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
-      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
       - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
       - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
@@ -97,12 +97,12 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `design-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
-      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
       - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
       - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
@@ -134,12 +134,12 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `runtime-acceptance-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
-      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
       - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
       - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
@@ -171,12 +171,12 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `verification-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
-      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
       - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
       - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
@@ -210,12 +210,12 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact；不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `tasks-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
-      - Delivery Plane / Trace Appendix 布局符合 common contract。
+      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
       - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
       - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
     requires:
@@ -237,13 +237,13 @@ apply:
     - 它定义 RS-/OP-/ST-/CH- runtime rows、scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
     - `tasks.md` 和 `verification.md` 只能引用其中已定义的 runtime rows，不得各自发明新的 canonical runtime row。
 
-    `tasks.md` 是 production implementation Delivery Plane and runtime acceptance audit model：
+    `tasks.md` 是 production implementation Delivery Plane；runtime acceptance audit model 位于 `trace/tasks.trace.json`：
     - 使用 change-local `SI-###` 作为 scope item ID；`SI-###` 只在本 change 内有效。
     - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 默认消费 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
     - Delivery Plane checkbox 只能代表 production implementation work；`Proof:`、`Acceptance Proof`、coverage closure、fixture execution、截图、测试执行或 evidence collection 不得单独成为 checkbox。
-    - `Trace Appendix` 的 `Acceptance-Driven Coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
-    - `Trace Appendix` 的 `Runtime Acceptance Index` 和 `Runtime Acceptance Projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
-    - `Trace Appendix` 中的 coverage tables 和 runtime projection 不是额外 executable work。
+    - `trace/tasks.trace.json` 的 `acceptance-driven-coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
+    - `trace/tasks.trace.json` 的 `runtime-acceptance-index` 和 `runtime-acceptance-projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
+    - `trace/tasks.trace.json` 中的 coverage rows 和 runtime projection 不是额外 executable work。
     - `tasks.md` 只允许更新 implementation checkbox；不得写入测试计划、测试编号、测试文件、固定命令、evidence path、执行状态或 deposit 状态。
 
     `verification.md` 是 independent test intent and oracle artifact：

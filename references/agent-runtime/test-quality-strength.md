@@ -5,7 +5,7 @@
 ## 适用边界
 
 1. test agent 必须在 Phase 2 Oracle Precheck 通过后读取本文档，再开始写测试。
-2. test agent 的测试目标只能来自 `verification.md` 的 required Proof Slice Matrix、Runtime Coverage Reconciliation，以及其引用的 runtime-acceptance canonical rows；不得从 source/scope basis 重新发明测试目标。
+2. test agent 的测试目标只能来自 `verification.md` 的 required Proof Slice Matrix、`trace/verification.trace.json` / `runtime-coverage-reconciliation`，以及其引用的 runtime-acceptance canonical rows；不得从 source/scope basis 重新发明测试目标。
 3. `tasks.md` 只能作为生产实现和 runtime acceptance projection 的上下文，不得作为测试 oracle 来源；canonical runtime row truth 来自 `runtime-acceptance.md`。
 4. Proof Slice 定义原子测试义务和 oracle，是 test agent 的测试生成和确认单位。
 5. `runtime` 是 Runtime Acceptance 的验收语义，不是测试层级、测试类型或默认测试目录。

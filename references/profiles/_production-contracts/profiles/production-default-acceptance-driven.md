@@ -9,7 +9,7 @@
 
 ## Scope Item 规则
 
-- Proposal 的 `Trace Appendix` 必须包含 `Change Scope Coverage`，用 change-local `SI-###` 标识 material scope item。
+- `trace/proposal.trace.json` 必须包含 `change-scope-coverage`，用 change-local `SI-###` 标识 material scope item。
 - `SI-###` 只在本 change 内有效，不是全局编号。
 - `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。
 - 每个 material scope item 必须有 downstream coverage expectation。

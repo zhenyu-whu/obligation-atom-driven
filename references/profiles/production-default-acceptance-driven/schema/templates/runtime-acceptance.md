@@ -36,33 +36,6 @@
 
 ## Trace Appendix
 
-<!-- 本附录是审计平面，不是 Delivery Plane。它用于确认 canonical runtime rows 的 scope 覆盖闭环；tasks.md 和 verification.md 只引用主体中已定义的 runtime rows。 -->
-
-### Runtime Upstream Coverage Map
-
-<!--
-逐项列出非 context material SI、spec scenario、material design decision、guard 和 proof handling item。
-每个 covered item 必须映射到主体中已定义的具体 RS-/OP-/ST-/CH- rows。
-不得用 Scope closure、主题汇总行或 checklist 作为唯一覆盖证明。
--->
-
-| Upstream Item | Upstream Type | Artifact Handling | Upstream Runtime Obligation | Runtime Row IDs | Coverage Mode | Not-Applicable Reason |
-| ------------- | ------------- | ----------------- | --------------------------- | --------------- | ------------- | --------------------- |
-| <!-- SI-001 / Scenario: xxx / Design: xxx --> | <!-- scope item / spec scenario / design decision / guard / proof handling --> | <!-- spec / guard / design / proof / context --> | <!-- 必须被 runtime rows 保留的可运行义务、边界或 proof expectation。 --> | <!-- RS-001, OP-001；必须来自主体 canonical rows。 --> | <!-- direct-row-scope / appendix-row-map / not-applicable --> | <!-- covered 时写 None；否则写 scope-backed reason。 --> |
-
-### Runtime Coverage Source Map
-
-| Scope Basis                                       | Artifact Handling                                | Runtime Row IDs                         | Runtime Obligation Summary                 | Observable Fact Category                                       | No-Scope-Expansion Check                    |
-| ------------------------------------------------- | ------------------------------------------------ | --------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------- |
-| <!-- SI-001 / spec scenario / design decision --> | <!-- spec / guard / design / proof / context --> | <!-- RS-001, OP-001, ST-001, CH-001 --> | <!-- scope-backed runtime obligation。 --> | <!-- rendered/API/DB/job/storage/security/log 等事实类别。 --> | <!-- 不引入 scope 外 runtime behavior。 --> |
-
-### Coverage Closure Checklist
-
-- [ ] 每个 canonical runtime row 都有 scope basis、runtime obligation、observable fact、default path policy、external boundary、scope role 和 no-scope-expansion check。
-- [ ] 每个非 context material `SI-###`、in-scope spec scenario、material design decision、guard 和 proof handling item 都在 `Runtime Upstream Coverage Map` 中映射到具体 runtime row，或有 scope-backed not-applicable reason。
-- [ ] 没有 upstream item 只通过 `Scope closure`、主题汇总行或 checklist 覆盖；每个 covered item 的 row IDs 都能解析到主体 canonical rows。
-- [ ] 每个 in-scope spec scenario、material design decision 和 proof handling item 都映射到至少一个 runtime row，或有 scope-backed not-applicable reason。
-- [ ] 每个 runtime row ID 全局唯一，且只使用 `RS-###`、`OP-###`、`ST-###`、`CH-###` 格式。
-- [ ] 本 artifact 不包含 AC checkbox、implementation task、Proof Slice 状态、测试文件、固定命令、evidence path 或 deposit status。
-- [ ] 后续 `tasks.md` 必须只引用本 artifact 中已定义的 runtime rows 并分配 AC/proof ownership。
-- [ ] 后续 `verification.md` 必须只引用本 artifact 中已定义的 runtime rows 并分配 Proof Slice coverage。
+Trace file: `trace/runtime-acceptance.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

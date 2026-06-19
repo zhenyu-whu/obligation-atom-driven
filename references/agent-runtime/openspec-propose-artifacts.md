@@ -18,18 +18,20 @@
 10. 语言检查是写入前的内部门禁，不是 artifact 内容。不得在任何 artifact 中生成独立的语言检查、自检 section 或 checklist。
 11. 若 artifact instruction 或 template 要求保留英文结构标题，不得为满足中文约束改写这些固定标题；正文用中文填充即可。
 
-## Delivery Plane / Trace Appendix
+## Delivery Plane / JSON Trace Plane
 
-1. 两个 production schema 的所有 artifact 都必须采用 Delivery Plane + Trace Appendix 布局。
+1. 两个 production schema 的所有 artifact 都必须采用 Delivery Plane + JSON Trace Plane 布局。
 2. artifact 主体是 Delivery Plane，只承载 reviewer、implementer 或 tester 直接消费的交付契约。
-3. `## Trace Appendix` 必须位于 artifact 末尾，用于覆盖映射、source/scope trace、runtime projection、reconciliation、alignment gate 和 archive/preflight 审计；不得在其后追加任何其它 artifact section。
-4. 下游 artifact 可以读取上游 `Trace Appendix` 建立 coverage；不得把 `Trace Appendix` 表格行当作新增需求、测试计划、执行状态、evidence path、deposit status 或 worker executable work。
-5. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始；`Acceptance-Driven Coverage`、`Runtime Acceptance Index` 和 `Runtime Acceptance Projection` 必须存在于末尾 `Trace Appendix`。
-6. proposal 和 design 的 Delivery Plane 主体不得出现 exhaustive `GA-####` / `SI-###` coverage list、`Direct atoms`、`Projection mix`、`Global Atoms:`、`Scope Items:`、`Satisfies` coverage column、source/scope coverage suffix 或 alignment gate；这些内容只允许出现在 `Trace Appendix`。
-7. 每个 `tasks.md` AC section 必须包含 `Resolved Runtime Contract` 表，并在主体直接展开 runtime row 的 worker-facing 语义。该表只摘录 runtime-acceptance.md canonical rows，不拥有 canonical row 定义。
-8. `runtime-acceptance.md` 主体只定义 canonical RS-/OP-/ST-/CH- rows；`Runtime Coverage Source Map` 和 `Coverage Closure Checklist` 必须在 `Trace Appendix`。
-9. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；`Runtime Coverage Reconciliation` 和 `Slice Consistency Checklist` 必须在 `Trace Appendix`。
-10. 现有 active/archive changes 不自动迁移；若旧 active change 要使用新布局，必须单独修订或重新生成 artifacts。
+3. JSON trace 是唯一 canonical trace；完整 coverage、source/scope trace、runtime projection、reconciliation、alignment gate 和 archive/preflight 审计信息必须写入 `trace/*.trace.json`，不得双写为 Markdown trace 表格。
+4. 每个 artifact 末尾必须保留短 `## Trace Appendix` pointer block，且它只能包含 `Trace file`、`Trace schema`、`Trace digest`。不得在 pointer 后追加任何其它 artifact section。
+5. `trace/manifest.json` 必须登记所有 trace 文件、artifact path、trace schema 和 digest。所有 JSON object key 必须使用 kebab-case；ID、enum、路径、heading 名称保持原有 exact value。
+6. 下游 artifact 可以读取上游 JSON trace 建立 coverage；不得把 JSON trace row 当作新增需求、测试计划、执行状态、evidence path、deposit status 或 worker executable work。
+7. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始；`acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection` 必须存在于 `trace/tasks.trace.json`。
+8. proposal 和 design 的 Delivery Plane 主体不得出现 exhaustive `GA-####` / `SI-###` coverage list、`Direct atoms`、`Projection mix`、`Global Atoms:`、`Scope Items:`、`Satisfies` coverage column、source/scope coverage suffix 或 alignment gate；这些内容只允许出现在 JSON trace。
+9. 每个 `tasks.md` AC section 必须包含 `Resolved Runtime Contract` 表，并在主体直接展开 runtime row 的 worker-facing 语义。该表只摘录 runtime-acceptance.md canonical rows，不拥有 canonical row 定义。
+10. `runtime-acceptance.md` 主体只定义 canonical RS-/OP-/ST-/CH- rows；`runtime-upstream-coverage-map`、`runtime-coverage-source-map` 和 `coverage-closure-checklist` 必须在 `trace/runtime-acceptance.trace.json`。
+11. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；`runtime-coverage-reconciliation` 和 `slice-consistency-checklist` 必须在 `trace/verification.trace.json`。
+12. 新 active production changes 必须按 JSON Trace Plane 生成。历史 archive old-layout changes 保持只读；若未来重新打开，必须按 JSON trace 契约手工迁移。
 
 ## Schema Selection Gate
 
@@ -133,44 +135,44 @@
 5. Optional grouping aids：只有当 final packet 或 schema 写作需要拆分 spec file 时，才读取当前 change 下的 `capability-anchors/<capability>.md`。这些 capability view 只能辅助 capability 分组，不得覆盖 final change packet。
 6. Audit/debug evidence：除 canonical change packet、global atom index 和必要 capability views 外，其他 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。不得从这些文件新增、删除、移动、重判 direct atom，也不得用它们扩展 final packet 之外的 scope。
 7. 若用户请求不是 final packet index 中的 change，必须报告目标超出当前 canonical change contract，而不是在 proposal 中扩展范围或要求新的 proposal 前置 source artifact。
-8. proposal 的 `Trace Appendix` 必须为 final packet 中每个 `Direct Owning Atoms` 行建立 `Change Atom Coverage Register` 行，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
+8. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 final packet 中每个 `Direct Owning Atoms` 行建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
 9. proposal 生成时必须对每个 direct atom 定点重读 `obligation-atom-index.md` 中记录的 `Source Document` + `Lines`。对 contextual、explicit-non-goal、contextual-preserve、prototype-only-not-production 等 non-direct atoms，只在需要保留精确边界、避免误扩 scope 或确认 proof 语义时定点重读。
-10. proposal 的 `Trace Appendix` 必须记录 `Source Window Read Set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。
-11. downstream artifacts 只能通过 proposal `Trace Appendix` register 中的 exact `GA-####`、source document 和 line range 定点读取原始 docs。不得重新做全量 source extraction，不得从 source line range 直接发明新的 direct atom。
+10. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。
+11. downstream artifacts 只能通过 proposal `trace/proposal.trace.json` register 中的 exact `GA-####`、source document 和 line range 定点读取原始 docs。不得重新做全量 source extraction，不得从 source line range 直接发明新的 direct atom。
 
 ## Obligation Proposal 门禁
 
-1. proposal 的 `Trace Appendix` 必须包含 `Change Atom Coverage Register`，且每个 direct atom 正好对应一个 `GA-####` register row。
-2. proposal 的 `Trace Appendix` 必须保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use` 和 `Evidence Need`。
+1. proposal 的 `trace/proposal.trace.json` 必须包含 `change-atom-coverage-register`，且每个 direct atom 正好对应一个 `GA-####` register row。
+2. `trace/proposal.trace.json` / `change-atom-coverage-register` 必须保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use` 和 `Evidence Need`。
 3. proposal 必须将 `direct`、`contextual`、`contextual-preserve`、`explicit-non-goal`、`prototype-only-not-production`、`non-production`、`blocked` 等 atom 状态分别处理，不能把上下文、排除项或 prototype-only atom 误转成实现 scope。
 4. proposal 的 `Capabilities` 必须匹配 final change packet 中的 capability atom views；除非 packet 明确记录非阻塞 gap 或 blocker。
 5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 `verification.md` 的 oracle/proof intent；所有需要生产实现、preserve boundary 或 runtime proof 的 rows 必须进入 `runtime-acceptance.md` canonical row，并由 `tasks.md` 和 `verification.md` 投影覆盖；`contextual-only` 只允许作为非 direct context/guard。final packet 的 direct row 不得使用 `contextual-only`；若出现，必须改入 context/non-direct handling 或记录 blocker。不能留下 orphan direct atom。
 6. proposal 不得因为 atom 是 direct 就自动要求 specs 生成 requirement/scenario。旧 packet 缺少 projection 时，必须按 schema 的 legacy inference 保守推断并记录 `Projection Source: inferred-from-legacy-packet`；无法推断则 blocker。
 7. proposal Delivery Plane 主体只写业务边界、行为承诺、影响面和 readiness；不得在 `## Trace Appendix` 前生成 exhaustive `GA-####` coverage list、`Direct atoms`、`Projection mix`、`Global Atoms:` 或“覆盖 GA...”类 suffix。
-8. proposal `Trace Appendix` 的 alignment gate 必须声明 proposal input mode、change slug、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
+8. `trace/proposal.trace.json` 的 `proposal-alignment-gate` 必须声明 proposal input mode、change slug、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
 
 ## Obligation Specs / Design 门禁
 
-1. specs 必须从 proposal `Trace Appendix` register 和 per-change capability atom view file 生成；每个 requirement/scenario 的 exact `GA-####` 和 concrete `Source Trace` 必须列在 spec `Trace Appendix`。
+1. specs 必须从 proposal `trace/proposal.trace.json` register 和 per-change capability atom view file 生成；每个 requirement/scenario 的 exact `GA-####` 和 concrete source trace 必须列在对应 `trace/specs/<capability>.trace.json` / `requirement-source-trace`。
 2. specs 不得使用 `GA-0001-GA-0010`、`GA-0001..GA-0010`、`GA-0001 through GA-0010` 等范围。
 3. specs 的 Requirement / Scenario 名称若非源文档固定术语，优先使用中文。
-4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 不得伪造成 scenario，也不得为了 handoff 单独创建空 spec。只有当同一 capability 已经因为 `spec-requirement` 或 `spec-guard` 生成有效 delta spec 时，才可在该 spec `Trace Appendix` 的 `Artifact Projection Notes` 或 gate 中点名 handoff；纯 design/verification-only capability 的 closure 必须在 design、runtime-acceptance、verification 和 tasks coverage 中完成。
-5. 每个 spec 的 `Trace Appendix` / Production Alignment Gate 必须列出 `Artifact Projection coverage` 和 `Orphan direct atoms: none`，或列出 blocker。
-6. design 必须把 proposal/spec 中需要设计消费的 source-backed obligations 落到可执行实现义务，包括 module、data/API、auth/security、worker/realtime、frontend/UX、ops/deployment 和 verification；exact `GA-####` 映射只写入 `Trace Appendix`。
-7. design 生成前必须建立 design atom matrix。每个 `design-obligation` direct `GA-####`、需要 design placement 的 `spec-requirement`、`spec-guard` 和每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker，但 matrix 只进入 `Trace Appendix`。
+4. specs 生成前必须建立 capability-to-atom map 和 artifact-projection map。只有 `spec-requirement` direct atom 必须落到 requirement/scenario；`spec-guard` 作为 guard/gate/non-goal；`design-obligation` 和 `verification-obligation` 不得伪造成 scenario，也不得为了 handoff 单独创建空 spec。只有当同一 capability 已经因为 `spec-requirement` 或 `spec-guard` 生成有效 delta spec 时，才可在该 spec JSON trace 的 `Artifact Projection Notes` 或 gate 中点名 handoff；纯 design/verification-only capability 的 closure 必须在 design、runtime-acceptance、verification 和 tasks coverage 中完成。
+5. 每个 spec 的 `trace/specs/<capability>.trace.json` / `production-alignment-gate` 必须列出 `Artifact Projection coverage` 和 `Orphan direct atoms: none`，或列出 blocker。
+6. design 必须把 proposal/spec 中需要设计消费的 source-backed obligations 落到可执行实现义务，包括 module、data/API、auth/security、worker/realtime、frontend/UX、ops/deployment 和 verification；exact `GA-####` 映射只写入 `trace/design.trace.json`。
+7. design 生成前必须建立 design atom matrix。每个 `design-obligation` direct `GA-####`、需要 design placement 的 `spec-requirement`、`spec-guard` 和每个 in-scope spec scenario 必须映射到至少一个 design obligation、guard handling 或 explicit blocker，但 matrix 只进入 `trace/design.trace.json`。
 8. 如果 obligation atom 只定义行为、不定义实现形态，design 可以选择最小 source-compatible 技术形态；Delivery Plane decision 只记录 `Decision`、`Source Gap`、`Minimal Shape`、`Rejected Expansion`，不得加入 `Satisfies`、GA list 或 source coverage 列。
 
 ## Obligation Runtime Acceptance / Tasks / Verification 门禁
 
-1. `runtime-acceptance.md` 是 canonical runtime coverage registry；`tasks.md` 主体是 production implementation Delivery Plane，末尾 `Trace Appendix` 是 runtime acceptance projection；`verification.md` 是 independent test intent and oracle artifact。
+1. `runtime-acceptance.md` 是 canonical runtime coverage registry；`tasks.md` 主体是 production implementation Delivery Plane，`trace/tasks.trace.json` 是 runtime acceptance projection；`verification.md` 是 independent test intent and oracle artifact。
 2. `runtime-acceptance.md` 必须在 `verification.md` 和 `tasks.md` 之前生成，依赖 proposal/specs/design；`verification.md` 和 `tasks.md` 都依赖 `runtime-acceptance.md`，但二者不得互相作为新增需求来源。
-3. `runtime-acceptance.md` 主体必须包含 `Runtime Acceptance Intent`、`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`；`Trace Appendix` 必须包含 `Runtime Upstream Coverage Map`、`Runtime Coverage Source Map` 和 `Coverage Closure Checklist`。
+3. `runtime-acceptance.md` 主体必须包含 `Runtime Acceptance Intent`、`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`；`trace/runtime-acceptance.trace.json` 必须包含 `runtime-upstream-coverage-map`、`runtime-coverage-source-map` 和 `coverage-closure-checklist`。
 4. `runtime-acceptance.md` 只定义 canonical RS-/OP-/ST-/CH- rows，不得包含 AC checkbox、implementation task IDs、Proof Slice、测试文件、固定命令、runner selector、evidence path、执行状态或 deposit status。
-5. `Runtime Upstream Coverage Map` 是 runtime-acceptance 对上游不遗漏的审计表：每个 proposal direct `GA-####`、每个 in-scope spec scenario、每个 material design obligation、每个 spec guard 和每个 verification/proof obligation 必须映射到至少一个具体 RS-/OP-/ST-/CH- row，或写 source-backed not-applicable reason。不得只用 `Direct atom closure`、主题 source map 行或 checklist 证明覆盖；每个 covered item 的 row IDs 必须解析到主体 canonical rows。
-6. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；`Trace Appendix` 必须包含 `Runtime Coverage Reconciliation` 和 `Slice Consistency Checklist`。
+5. `runtime-upstream-coverage-map` 是 runtime-acceptance 对上游不遗漏的审计表：每个 proposal direct `GA-####`、每个 in-scope spec scenario、每个 material design obligation、每个 spec guard 和每个 verification/proof obligation 必须映射到至少一个具体 RS-/OP-/ST-/CH- row，或写 source-backed not-applicable reason。不得只用 `Direct atom closure`、主题 source map 行或 checklist 证明覆盖；每个 covered item 的 row IDs 必须解析到主体 canonical rows。
+6. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；`trace/verification.trace.json` 必须包含 `runtime-coverage-reconciliation` 和 `slice-consistency-checklist`。
 7. `Proof Slice Matrix` 是唯一测试义务模型；每个 required / preserve / proof-only runtime row 必须拆出所有独立可失败分支并生成 expected Proof Slice，或有 source/scope-backed manual/not-applicable reason。每个 slice 必须有 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、Observable Surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent 和 Manual / Environment Gate。oracle 不能来自当前实现细节、`tasks.md`、测试文件结构或 evidence/deposit 结构。
 8. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
-9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`Trace Appendix` 保留 `Acceptance-Driven Coverage`、`Runtime Acceptance Index` 和 `Runtime Acceptance Projection`。
+9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`trace/tasks.trace.json` 保留 `acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection`。
 10. 每个 AC section 必须按顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
 11. `Resolved Runtime Contract` 表头固定为 `Row`、`Worker-facing obligation`、`Observable proof`、`Default / no-scope boundary`；row IDs 必须与该 AC 的 `Runtime Rows:` 列表一致，且全部存在于 runtime-acceptance.md canonical rows。
 12. `Resolved Runtime Contract` 只能摘录 canonical row 的 worker-facing 语义，不得包含 `GA-####`、source trace、projection、Proof Slice、测试路径、固定命令或 evidence path，不得新增 canonical runtime row。
@@ -179,40 +181,40 @@
     - checkbox task 不得只为了 proof、verification、test、fixture replay、截图、evidence、coverage closure、acceptance closure 或 artifact closure 而存在。
     - task-level `Runtime Rows:` 只能列该 task 实现、实质修改或保留的 rows；仅由 proof/readback 观察的 supporting rows 不得列入该 task 的 `Runtime Rows:`。
     - `Proof:` 是生产任务完成标准，不是独立 executable work。
-14. `tasks.md` 的 `Trace Appendix` / `Acceptance-Driven Coverage` 必须包含 `Obligation Atom Coverage`、`Requirement / Scenario Coverage`、`Design Obligation Coverage`；`Obligation Atom Coverage` 每行只能包含一个 exact `GA-####`。
+14. `trace/tasks.trace.json` / `acceptance-driven-coverage` 必须包含 `obligation-atom-coverage`、`requirement-scenario-coverage`、`design-obligation-coverage`；`obligation-atom-coverage` 每行只能包含一个 exact `GA-####`。
 15. coverage 表只保留 implementation task 引用和 runtime proof 摘要；proof 摘要是说明字段，不是独立 checkbox task 或测试编号。`Implementation Task IDs` 必须引用交付或实质保留 source behavior 的生产任务；`verification-obligation` rows 应映射到被证明的底层生产 task，不得为了 coverage 创建 proof-only task。
-16. `Trace Appendix` 的 `Runtime Acceptance Index` 必须建立 runtime provision graph，区分 baseline、current-change AC、future change 和 explicit negative boundary；AC sections 必须按拓扑顺序生成。`Provides / Consumes / Depends On / Prerequisite Runtime Facts / Detail Matrix Rows` 只保留在该 appendix graph/index，不作为 AC 主体必填字段。
-17. `Trace Appendix` 的 `Runtime Acceptance Projection` 只保留 runtime-acceptance.md 到 AC/implementation checkbox 的 projection rows，不得重新定义 canonical runtime row 详情。required / preserve rows 必须有 production task projection；proof-only rows 必须分类为 `production-work-required` 或 `proof-projection-only`。`production-work-required` 需要生产 UI/config/log/security/runtime changes，必须有 owner AC 和 implementation task projection；`proof-projection-only` 只声明对既有生产行为的 proof expectation，不得创建新 AC 或 checkbox，只能映射到已有 AC/task IDs 和 runtime proof summary。
+16. `trace/tasks.trace.json` 的 `runtime-acceptance-index` 必须建立 runtime provision graph，区分 baseline、current-change AC、future change 和 explicit negative boundary；AC sections 必须按拓扑顺序生成。`Provides / Consumes / Depends On / Prerequisite Runtime Facts / Detail Matrix Rows` 只保留在该 JSON trace graph/index，不作为 AC 主体必填字段。
+17. `trace/tasks.trace.json` 的 `runtime-acceptance-projection` 只保留 runtime-acceptance.md 到 AC/implementation checkbox 的 projection rows，不得重新定义 canonical runtime row 详情。required / preserve rows 必须有 production task projection；proof-only rows 必须分类为 `production-work-required` 或 `proof-projection-only`。`production-work-required` 需要生产 UI/config/log/security/runtime changes，必须有 owner AC 和 implementation task projection；`proof-projection-only` 只声明对既有生产行为的 proof expectation，不得创建新 AC 或 checkbox，只能映射到已有 AC/task IDs 和 runtime proof summary。
 18. `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
 19. Proof 必须达到生产验收强度：用户可见行为需要 rendered/readback fact；后端/data/worker/storage/security 行为需要 API、DB、job、asset、log、audit 或 authorization facts；这些是 runtime proof category，不是测试执行记录。
-20. artifact 生成后自查必须确认没有 orphan direct atom、GA range、后置 provider dependency、source 外行为、runtime row orphan、未定义 row 引用；`Runtime Upstream Coverage Map` 没有仅由 closure 聚合兜底的上游项；每个 required/preserve runtime row 都有 tasks projection 和 verification projection；每个 proof-only runtime row 都已分类并按 `production-work-required` 或 `proof-projection-only` 正确投影；不存在 proof-only AC/checkbox 或 task-level supporting row 误列。
+20. artifact 生成后自查必须确认没有 orphan direct atom、GA range、后置 provider dependency、source 外行为、runtime row orphan、未定义 row 引用；`runtime-upstream-coverage-map` 没有仅由 closure 聚合兜底的上游项；每个 required/preserve runtime row 都有 tasks projection 和 verification projection；每个 proof-only runtime row 都已分类并按 `production-work-required` 或 `proof-projection-only` 正确投影；不存在 proof-only AC/checkbox 或 task-level supporting row 误列。
 
 ## Default Acceptance 输入契约与门禁
 
 以下规则仅适用于 `production-default-acceptance-driven`。
 
-1. proposal 的 `Trace Appendix` 必须包含 `Change Scope Coverage`，并为每个 material scope item 分配 change-local `SI-###`。`SI-###` 只在本 change 内有效。
+1. proposal 的 `trace/proposal.trace.json` 必须包含 `change-scope-coverage`，并为每个 material scope item 分配 change-local `SI-###`。`SI-###` 只在本 change 内有效。
 2. `Artifact Handling` 允许值为 `spec`、`guard`、`design`、`proof`、`context`。`proof` 表示进入 `verification.md` 的测试意图或 runtime proof，不表示写入 `tasks.md` 的测试矩阵。
-3. proposal 的 `Trace Appendix` 必须记录 `Baseline / Input Read Set`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
+3. `trace/proposal.trace.json` 必须记录 `baseline-input-read-set`，不得读取或依赖 `openspec/orchestrate`、final packet、global atom index 或 capability anchor packet。
 4. specs 只为包含 `Artifact Handling: spec` 或 `guard` 的 capability 创建 delta spec；不得为 design/proof/context-only scope 创建空 spec。
-5. design 必须使用 proposal `Trace Appendix` 的 `Change Scope Coverage` 和 spec `Trace Appendix` 的 scope/baseline trace 作为 scope-reading interface。
-6. `runtime-acceptance.md` 必须在 `verification.md` 和 `tasks.md` 之前生成，依赖 proposal/specs/design，并定义 canonical RS-/OP-/ST-/CH- runtime rows。`Trace Appendix` 必须包含 `Runtime Upstream Coverage Map`，逐项把每个非 context material `SI-###`、in-scope spec scenario、material design decision、guard 和 proof handling item 映射到具体 runtime row，或写 scope-backed not-applicable reason；不得只用 `Scope closure`、主题 source map 行或 checklist 证明覆盖。
-7. `verification.md` 主体必须包含 `Proof Slice Matrix`，并在每个 slice 中定义 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、public/runtime observable surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent 和 Manual / Environment Gate；runtime coverage reconciliation 必须位于 `Trace Appendix`。
+5. design 必须使用 proposal `trace/proposal.trace.json` 的 `change-scope-coverage` 和 spec JSON trace 的 `requirement-source-trace` 作为 scope-reading interface。
+6. `runtime-acceptance.md` 必须在 `verification.md` 和 `tasks.md` 之前生成，依赖 proposal/specs/design，并定义 canonical RS-/OP-/ST-/CH- runtime rows。`trace/runtime-acceptance.trace.json` 必须包含 `runtime-upstream-coverage-map`，逐项把每个非 context material `SI-###`、in-scope spec scenario、material design decision、guard 和 proof handling item 映射到具体 runtime row，或写 scope-backed not-applicable reason；不得只用 `Scope closure`、主题 source map 行或 checklist 证明覆盖。
+7. `verification.md` 主体必须包含 `Proof Slice Matrix`，并在每个 slice 中定义 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、public/runtime observable surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent 和 Manual / Environment Gate；runtime coverage reconciliation 必须位于 `trace/verification.trace.json` / `runtime-coverage-reconciliation`。
 8. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
-9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`Trace Appendix` 保留 `Acceptance-Driven Coverage`、`Runtime Acceptance Index` 和 `Runtime Acceptance Projection`。
+9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`trace/tasks.trace.json` 保留 `acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection`。
 10. 每个 AC section 必须按顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
 11. `Resolved Runtime Contract` 表头固定为 `Row`、`Worker-facing obligation`、`Observable proof`、`Default / no-scope boundary`；row IDs 必须与该 AC 的 `Runtime Rows:` 列表一致，且全部存在于 runtime-acceptance.md canonical rows。
 12. `Resolved Runtime Contract` 只能摘录 canonical row 的 worker-facing 语义，不得包含 `SI-###`、source/scope trace、projection、Proof Slice、测试路径、固定命令或 evidence path，不得新增 canonical runtime row。
-13. `tasks.md` 的 `Trace Appendix` / `Acceptance-Driven Coverage` 必须包含 `Scope Item Coverage`、`Requirement / Scenario Coverage`、`Design Decision Coverage`；`Scope Item Coverage` 每行只能包含一个 exact `SI-###`。
+13. `trace/tasks.trace.json` / `acceptance-driven-coverage` 必须包含 `scope-item-coverage`、`requirement-scenario-coverage`、`design-decision-coverage`；`scope-item-coverage` 每行只能包含一个 exact `SI-###`。
 14. coverage 表只保留 implementation task 引用和 runtime proof 摘要；proof 摘要是说明字段，不是独立 checkbox task 或测试编号。`Implementation Task IDs` 必须引用交付或实质保留 source/scope behavior 的生产任务；`Artifact Handling: proof` rows 应映射到被证明的底层生产 task，不得为了 coverage 创建 proof-only task。
 15. default profile 的每个 checkbox task 必须包含 `Runtime Rows:`、`Acceptance:`、`Preserve:`、`Proof:`、`Mock / Default Path Policy:` 字段。
     - checkbox task 必须代表 production implementation work：代码、schema、migration、API、domain behavior、UI behavior、auth/security guard、config、provider contract、observability、deployment 或 runtime boundary preservation。
     - checkbox task 不得只为了 proof、verification、test、fixture replay、截图、evidence、coverage closure、acceptance closure 或 artifact closure 而存在。
     - task-level `Runtime Rows:` 只能列该 task 实现、实质修改或保留的 rows；仅由 proof/readback 观察的 supporting rows 不得列入该 task 的 `Runtime Rows:`。
     - `Proof:` 是生产任务完成标准，不是独立 executable work。
-16. `Trace Appendix` 的 `Runtime Acceptance Index` / `Runtime Acceptance Projection` 只保留 runtime-acceptance.md 到 AC/implementation checkbox 的 graph/projection rows，不得重新定义 canonical runtime row 详情。`Provides / Consumes / Depends On / Prerequisite Runtime Facts / Detail Matrix Rows` 只保留在 appendix graph/index，不作为 AC 主体必填字段。required / preserve rows 必须有 production task projection；proof-only rows 必须分类为 `production-work-required` 或 `proof-projection-only`。`production-work-required` 需要生产 UI/config/log/security/runtime changes，必须有 owner AC 和 implementation task projection；`proof-projection-only` 只声明对既有生产行为的 proof expectation，不得创建新 AC 或 checkbox，只能映射到已有 AC/task IDs 和 runtime proof summary。
+16. `trace/tasks.trace.json` 的 `runtime-acceptance-index` / `runtime-acceptance-projection` 只保留 runtime-acceptance.md 到 AC/implementation checkbox 的 graph/projection rows，不得重新定义 canonical runtime row 详情。`Provides / Consumes / Depends On / Prerequisite Runtime Facts / Detail Matrix Rows` 只保留在 JSON trace graph/index，不作为 AC 主体必填字段。required / preserve rows 必须有 production task projection；proof-only rows 必须分类为 `production-work-required` 或 `proof-projection-only`。`production-work-required` 需要生产 UI/config/log/security/runtime changes，必须有 owner AC 和 implementation task projection；`proof-projection-only` 只声明对既有生产行为的 proof expectation，不得创建新 AC 或 checkbox，只能映射到已有 AC/task IDs 和 runtime proof summary。
 17. `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
-18. artifact 生成后自查必须确认没有 orphan scope item、SI range、后置 provider dependency、scope 外行为、runtime row orphan、未定义 row 引用；`Runtime Upstream Coverage Map` 没有仅由 closure 聚合兜底的上游项；每个 required/preserve runtime row 都有 tasks projection 和 verification projection；每个 proof-only runtime row 都已分类并按 `production-work-required` 或 `proof-projection-only` 正确投影；不存在 proof-only AC/checkbox 或 task-level supporting row 误列。
+18. artifact 生成后自查必须确认没有 orphan scope item、SI range、后置 provider dependency、scope 外行为、runtime row orphan、未定义 row 引用；`runtime-upstream-coverage-map` 没有仅由 closure 聚合兜底的上游项；每个 required/preserve runtime row 都有 tasks projection 和 verification projection；每个 proof-only runtime row 都已分类并按 `production-work-required` 或 `proof-projection-only` 正确投影；不存在 proof-only AC/checkbox 或 task-level supporting row 误列。
 
 ## 统一静态校验与分阶段 Writer/Reviewer
 
@@ -274,7 +276,7 @@
 
 每个 artifact 写入后必须按其 contract bundle 做结构自查，而不是只依赖 OpenSpec CLI 格式校验。
 
-1. 全部 artifacts 必须执行 common contract 自查：中文约束、Delivery Plane / Trace Appendix、禁止测试执行/evidence 字段、source/scope boundary 和 reviewer 输出协议。
+1. 全部 artifacts 必须执行 common contract 自查：中文约束、Delivery Plane / JSON Trace Plane、禁止测试执行/evidence 字段、source/scope boundary 和 reviewer 输出协议。
 2. Profile-specific 自查必须来自 `openspec/schemas/_production-contracts/profiles/<schema-name>.md`：obligation schema 使用 final packet、global atom index 和 exact `GA-####`；default schema 使用用户输入、baseline/spec/code read set 和 change-local `SI-###`。
 3. Artifact-specific 自查必须来自 `openspec/schemas/_production-contracts/artifacts/<artifact-id>.md` 和存在时的 overlay contract。
 4. 自查结果不得写入 artifact 正文；若发现无法满足 contract，必须作为 writer blocker 或 reviewer blocker 处理。
@@ -284,4 +286,4 @@
 
 1. 两个 production schema 的新格式必须生成 `runtime-acceptance.md` 和 `verification.md`，且 `tasks.md` 不允许包含旧测试矩阵。
 2. 新 schema 不实现旧 change 兼容逻辑；已有旧 change 不在本流程内自动迁移。
-3. 如果需要处理旧 change，单独制定迁移流程：从旧 `tasks.md` 抽取 canonical runtime rows 到 `runtime-acceptance.md`，抽取测试意图到 `verification.md`，保留 tasks projection 并移动到 `Trace Appendix`，删除测试/evidence/deposit section。
+3. 如果需要处理旧 change，单独制定迁移流程：从旧 `tasks.md` 抽取 canonical runtime rows 到 `runtime-acceptance.md`，抽取测试意图到 `verification.md`，将 tasks projection 手工迁入 `trace/tasks.trace.json`，删除测试/evidence/deposit section。

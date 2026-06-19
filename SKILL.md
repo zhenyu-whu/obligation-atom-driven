@@ -1,6 +1,6 @@
 ---
 name: obligation-atom-driven
-description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their Delivery Plane / Trace Appendix proposal/spec/design/runtime-acceptance/verification/tasks templates and matching OpenSpec agent-runtime constraint documents.
+description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their Delivery Plane / JSON Trace Plane proposal/spec/design/runtime-acceptance/verification/tasks templates and matching OpenSpec agent-runtime constraint documents.
 ---
 
 # Obligation Atom Driven
@@ -9,8 +9,8 @@ Use this skill to configure a repository so OpenSpec changes use one of the bund
 
 ## Profiles
 
-- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes canonical change packets and `obligation-atom-index.md` from `openspec/orchestrate`, preserves `GA-####` IDs, and uses Delivery Plane proposal/spec/design/runtime-acceptance/verification/tasks artifacts with terminal `Trace Appendix` audit sections. `runtime-acceptance.md` owns canonical runtime `RS-/OP-/ST-/CH-` rows, `verification.md` owns slice-only independent test intent and the atomic Proof Slice Matrix, and `tasks.md` starts from AC delivery sections while keeping runtime acceptance projection under `Trace Appendix`.
-- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> runtime-acceptance -> verification -> tasks model, adds independent slice-only `verification.md` with an atomic Proof Slice Matrix, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and uses lightweight `SI-###` change-local scope coverage in `Trace Appendix` plus AC delivery sections in `tasks.md`.
+- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes canonical change packets and `obligation-atom-index.md` from `openspec/orchestrate`, preserves `GA-####` IDs, and uses Delivery Plane proposal/spec/design/runtime-acceptance/verification/tasks artifacts with external JSON Trace Plane audit files plus short terminal `Trace Appendix` pointer blocks. `runtime-acceptance.md` owns canonical runtime `RS-/OP-/ST-/CH-` rows, `verification.md` owns slice-only independent test intent and the atomic Proof Slice Matrix, and `tasks.md` starts from AC delivery sections while keeping runtime acceptance projection in `trace/tasks.trace.json`.
+- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> runtime-acceptance -> verification -> tasks model, adds independent slice-only `verification.md` with an atomic Proof Slice Matrix, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and uses lightweight `SI-###` change-local scope coverage in `trace/proposal.trace.json` plus AC delivery sections in `tasks.md`.
 
 The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification for that profile must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
 

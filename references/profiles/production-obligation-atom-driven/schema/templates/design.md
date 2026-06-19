@@ -1,10 +1,10 @@
 ## Context
 
-<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 GA coverage；exact source/atom mapping 写入 Trace Appendix。 -->
+<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 GA coverage；exact source/atom mapping 写入 JSON trace。 -->
 
 ## Goals / Non-Goals
 
-<!-- Goals 和 Non-Goals 只表达设计目标、边界和 later-change exclusions；exact GA/source trace 写入 Trace Appendix。 -->
+<!-- Goals 和 Non-Goals 只表达设计目标、边界和 later-change exclusions；exact GA/source trace 写入 JSON trace。 -->
 
 ## Decisions
 
@@ -52,31 +52,6 @@
 
 ## Trace Appendix
 
-<!-- 本附录是审计平面，不是 Delivery Plane。主 agent、archive、final reviewer 可读取它确认 source/design 覆盖；implementation worker 默认不把本附录表格当作 executable work。 -->
-
-### Production Source Map
-
-<!-- 将此 change 映射到 Global Atom IDs、source files、line ranges 与 exact original sources。不要用整篇文档代替精准 line ranges。 -->
-
-| Global Atom ID | Artifact Projection                                                                                    | Source Document / Lines   | Design Consumption                    | Implementation Boundary                         |
-| -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------- | ----------------------------------------------- |
-| `GA-0001`      | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- exact path Lx-Ly --> | <!-- 此 atom 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
-
-### Production Alignment Gate
-
-- Global Atom IDs implemented / preserved / deferred: <!-- GA-0001 implemented, GA-0002 preserved, GA-0003 deferred；逐个枚举 exact IDs，不使用 ranges -->
-- Artifact Projection handling: <!-- design-obligation 已进入 design；verification-obligation 已进入 Verification Design/tasks handoff；spec-guard 已体现 preserve / stable negative behavior；无 projection mismatch -->
-- Spec scenarios covered by design: <!-- requirement/scenario names -->
-- Orphan direct atoms: <!-- none / exact GA blockers -->
-- Source-backed implementation decisions minimal: <!-- 是 / blocker；列出关键 decision 与 rejected expansion -->
-- Source-defined identifiers used: <!-- workflows/routes/states/data keys/tables/commands/APIs/jobs/events/object keys/entitlements/environments/lifecycle terms -->
-- Source trace complete: <!-- 是 / blocker -->
-- New identifiers introduced: <!-- 无，或列出并说明 source-backed implementation decision -->
-- Interaction trace complete: <!-- 是 / blocker -->
-- Data mutation ownership complete: <!-- 是 / 不适用 / blocker -->
-- Auth/security/privacy complete: <!-- 是 / 不适用 / blocker -->
-- Async/realtime/worker complete: <!-- 是 / 不适用 / blocker -->
-- UI/prototype/responsive complete: <!-- 是 / 不适用 / blocker -->
-- Observability/ops/deployment complete: <!-- 是 / 不适用 / blocker -->
-- Later-change boundaries preserved: <!-- 是 / blocker -->
-- Implementation inference remaining: <!-- 无 / open question -->
+Trace file: `trace/design.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

@@ -7,7 +7,7 @@
 ## 写入前
 
 - 读取 proposal 和所有实际生成的 delta specs。
-- 使用 proposal/specs 的 `Trace Appendix` 作为 source/scope-reading interface。
+- 使用 proposal/specs 的 JSON trace 作为 source/scope-reading interface。
 - 当 design 需要 exact behavior、architecture/module boundary、data/API shape、auth/security、async/worker、UI/prototype fidelity、observability、deployment 或 verification detail 时，只读取已登记 source/scope window 或 baseline。
 - 起草前建立 design coverage map：每个 in-scope scenario、material design obligation、guard 和需要 implementation placement 的 source/scope item 必须映射到 design decision、guard handling 或 explicit blocker。
 
@@ -34,13 +34,14 @@
 - Rollout / Compatibility
 - Risks / Trade-offs
 - Open Questions
-- Trace Appendix
+- JSON Trace Plane pointer
 
-## Trace Appendix
+## JSON Trace Plane
 
-- 必须包含 source/scope map 和 production alignment gate。
+- 必须写入 `trace/design.trace.json`，包含 source/scope map 和 production alignment gate。
 - Gate 必须确认每个 scenario、design obligation、guard、implementation placement 和 proof expectation 都有 design handling 或 blocker。
-- Exact source/scope mapping 只写 appendix，不写 Delivery Plane coverage column。
+- Exact source/scope mapping 只写 JSON trace，不写 Delivery Plane coverage column。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块。
 
 ## Reviewer Focus
 

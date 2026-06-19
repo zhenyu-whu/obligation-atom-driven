@@ -1,6 +1,6 @@
 ## Context
 
-<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 SI coverage；exact scope/source mapping 写入 Trace Appendix。 -->
+<!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 SI coverage；exact scope/source mapping 写入 JSON trace。 -->
 
 ## Goals / Non-Goals
 
@@ -52,29 +52,6 @@
 
 ## Trace Appendix
 
-<!-- 本附录是审计平面，不是 Delivery Plane。主 agent、archive、final reviewer 可读取它确认 scope/design 覆盖；implementation worker 默认不把本附录表格当作 executable work。 -->
-
-### Baseline / Scope Map
-
-<!-- 将此 change 映射到 Scope Item IDs、existing specs、code paths、routes、data/API、tests 或外部输入。 -->
-
-| Scope Item ID | Artifact Handling                                | Baseline / Input Reference           | Design Consumption                    | Implementation Boundary                         |
-| ------------- | ------------------------------------------------ | ------------------------------------ | ------------------------------------- | ----------------------------------------------- |
-| `SI-001`      | <!-- spec / guard / design / proof / context --> | <!-- spec/code/user/design/issue --> | <!-- 此 item 在 design 中约束什么 --> | <!-- module/API/data/UI/worker/ops boundary --> |
-
-### Production Alignment Gate
-
-- Scope items implemented / preserved / deferred: <!-- SI-001 implemented, SI-002 preserved；逐个枚举 exact IDs，不使用 ranges -->
-- Artifact handling consumed: <!-- design/proof/guard 已进入正确 artifact；无 mismatch -->
-- Spec scenarios covered by design: <!-- requirement/scenario names -->
-- Scope trace complete: <!-- 是 / blocker -->
-- Implementation decisions minimal: <!-- 是 / blocker；列出关键 decision 与 rejected expansion -->
-- New identifiers introduced: <!-- 无，或列出并说明原因 -->
-- Interaction trace complete: <!-- 是 / blocker -->
-- Data mutation ownership complete: <!-- 是 / 不适用 / blocker -->
-- Auth/security/privacy complete: <!-- 是 / 不适用 / blocker -->
-- Async/realtime/worker complete: <!-- 是 / 不适用 / blocker -->
-- UI/responsive complete: <!-- 是 / 不适用 / blocker -->
-- Observability/ops/deployment complete: <!-- 是 / 不适用 / blocker -->
-- Later-change boundaries preserved: <!-- 是 / blocker -->
-- Implementation inference remaining: <!-- 无 / open question -->
+Trace file: `trace/design.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

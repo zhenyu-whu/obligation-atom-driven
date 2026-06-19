@@ -1,6 +1,6 @@
 <!--
 本文件主体是 Delivery Plane：implementation worker 默认从 AC sections 的 Resolved Runtime Contract 和 checkbox tasks 执行。
-末尾 Trace Appendix 是审计平面，只供主 agent、archive、stabilizer 和 final reviewer 做 coverage / projection 检查；appendix 表格行不是额外 executable work。
+外置 JSON trace 是审计平面，只供主 agent、archive、stabilizer 和 final reviewer 做 coverage / projection 检查；trace row 不是额外 executable work。
 每个 checkbox task block（checkbox + Runtime Rows/Acceptance/Preserve/Proof/Mock / Default Path Policy）与下一个 checkbox task block 之间必须保留一个空行。
 -->
 
@@ -12,7 +12,7 @@ Outcome:
 
 Start Gate:
 
-- <!-- 本 AC 启动前必须完成的 AC IDs、baseline/runtime facts 或 None。provider/consumer graph 只写入 Trace Appendix。 -->
+- <!-- 本 AC 启动前必须完成的 AC IDs、baseline/runtime facts 或 None。provider/consumer graph 只写入 JSON trace。 -->
 
 Runtime Rows:
 
@@ -45,62 +45,6 @@ Proof Contract:
 
 ## Trace Appendix
 
-<!--
-本附录是 source/spec/design 到 AC/task/proof 的覆盖索引，不是 executable work。
-每个 obligation atom、requirement scenario 或 material design obligation 使用一行；不要用 aggregate rows 替代底层 atoms、scenarios 或 obligations 的覆盖。
-所有 Implementation Task IDs 必须解析到上方实际 checkbox task；不要只引用 AC heading。
-本附录不得承载测试实现、执行入口、产物目录、执行状态或沉淀状态。
--->
-
-### Acceptance-Driven Coverage
-
-#### Obligation Atom Coverage
-
-| Global Atom ID                                                                                  | Artifact Projection                                                                                    | Atom Summary                                                                   | Acceptance Slice IDs | Implementation Task IDs                                   | Acceptance Proof                                                                                |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | -------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| <!-- GA-0001；每行只能有一个 ID，不使用 GA-0001-GA-0010 这类 ranges，也不把多个 GA 放一格。 --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation / contextual-only --> | <!-- 概述 source-backed obligation / preserve / forbidden-drift boundary。 --> | <!-- AC-001 -->      | <!-- AC-001.1, AC-001.2；必须是实际实现 checkbox ID。 --> | <!-- 用户交互、API/data、worker/realtime、security、rendered layout 等 runtime proof 摘要。 --> |
-
-#### Requirement / Scenario Coverage
-
-| Capability               | Requirement                     | Scenario                     | Global Atom IDs                                                | Artifact Projection Handling                                                                     | Acceptance Slice IDs | Implementation Task IDs | Acceptance Proof                                   |
-| ------------------------ | ------------------------------- | ---------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------- | ----------------------- | -------------------------------------------------- |
-| <!-- capability name --> | <!-- exact requirement name --> | <!-- exact scenario name --> | <!-- GA-0001, GA-0002；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- spec-requirement scenario；或说明 spec-guard/design/verification atom 不伪造 scenario。 --> | <!-- AC-001 -->      | <!-- AC-001.1 -->       | <!-- scenario-level observable proof summary。 --> |
-
-#### Design Obligation Coverage
-
-| Design Section                                       | Design Obligation                                                           | Global Atom IDs                                                                   | Artifact Projection Handling                                                 | Acceptance Slice IDs | Implementation Task IDs | Acceptance Proof                           |
-| ---------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------- | ----------------------- | ------------------------------------------ |
-| <!-- exact design section / decision / gate item --> | <!-- material implementation、preservation 或 verification obligation。 --> | <!-- GA-0001, GA-0002, 或 Not applicable；逐个枚举 exact IDs，不使用 ranges。 --> | <!-- design-obligation / verification-obligation / spec-guard handling。 --> | <!-- AC-001 -->      | <!-- AC-001.1 -->       | <!-- design-obligation proof summary。 --> |
-
-### Runtime Acceptance Index
-
-<!--
-本节是主 agent preflight 的轻量路由表，不是 executable work，也不是测试计划。
-它只引用 runtime-acceptance.md 主体中已定义的 canonical runtime rows，并把 AC 路由到 provider/consumer dependency graph 和 runtime proof 摘要。
-如果 change 不触及 runtime behavior，写明 Not applicable 和 source-backed 理由。
--->
-
-#### AC Runtime Ownership Index
-
-| AC ID           | Source Basis                                         | Runtime Surface Rows                                         | Operation Rows                                               | State / Branch Rows                                                  | Async / Realtime Rows                                                          | Provides Rows                                                | Consumes Rows                                                                 | Depends On AC IDs                                  | Prerequisite Runtime Facts                                | Start Gate                                               | Scope Role                                                                     | No-Scope-Expansion Check                                                                | Detail Matrix Rows                                                               | Runtime Proof Summary                                                                    |
-| --------------- | ---------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| <!-- AC-001 --> | <!-- GA-0001, spec scenario, design obligation。 --> | <!-- RS-001；必须已在 runtime-acceptance.md 主体中定义。 --> | <!-- OP-001；必须已在 runtime-acceptance.md 主体中定义。 --> | <!-- ST-001, ST-002；必须已在 runtime-acceptance.md 主体中定义。 --> | <!-- CH-001 或 Not applicable；必须已在 runtime-acceptance.md 主体中定义。 --> | <!-- 本 AC 完成后提供的 rows，例如 RS-001；没有则 None。 --> | <!-- 本 AC 消费的 baseline 或 earlier AC rows，例如 RS-003；没有则 None。 --> | <!-- AC-000 / AC-001 / None；只能引用前置 AC。 --> | <!-- baseline fact / earlier AC runtime fact / None。 --> | <!-- 可在 change 开始后执行 / 需 AC-000 完成后执行。 --> | <!-- required behavior / preserve boundary / proof-only / not applicable。 --> | <!-- 不引入 source 外 route/control/state/API/job/event/provider/storage/retry 等。 --> | <!-- RS-001, OP-001, ST-001, CH-001；必须均来自 runtime-acceptance.md 主体。 --> | <!-- 本 AC 完成后应能观察到的 runtime proof 摘要；作为说明字段，不对应单独 task ID。 --> |
-
-### Runtime Acceptance Projection
-
-<!--
-本节是 runtime-acceptance.md 到 AC/implementation checkbox 的投影，不属于 executable work section，也不是测试计划。
-canonical runtime row 详情只在 runtime-acceptance.md 主体中定义；本节只记录 owner AC、provider/consumer graph 和 start gate。
--->
-
-#### Runtime Row Ownership Projection
-
-| Runtime Row ID  | Row Type                                                           | Owner AC ID                                             | Implementation Task IDs | Provides Rows   | Consumes Rows                                    | Depends On AC IDs      | Start Gate                           | Projection Status                             | Blocker / Not-Applicable Reason                           |
-| --------------- | ------------------------------------------------------------------ | ------------------------------------------------------- | ----------------------- | --------------- | ------------------------------------------------ | ---------------------- | ------------------------------------ | --------------------------------------------- | --------------------------------------------------------- |
-| <!-- RS-001 --> | <!-- surface / operation / state-branch / async-realtime-chain --> | <!-- AC-001 / baseline / explicit-negative-boundary --> | <!-- AC-001.1 -->       | <!-- RS-001 --> | <!-- baseline 或 earlier rows；没有则 None。 --> | <!-- None / AC-001 --> | <!-- 可直接开始 / 需前置 proof。 --> | <!-- projected / not-applicable / blocker --> | <!-- projected 时写 None；否则写 source-backed 理由。 --> |
-
-#### Provider / Consumer Projection
-
-| Runtime Row ID  | Provider                                                | Consumers                         | Prerequisite Runtime Facts                                | Default Path / Mock Policy Projection                                      | No-Scope-Expansion Projection                                         |
-| --------------- | ------------------------------------------------------- | --------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| <!-- OP-001 --> | <!-- baseline / AC-001 / explicit-negative-boundary --> | <!-- AC-002, AC-003 或 None。 --> | <!-- baseline fact / earlier AC runtime fact / None。 --> | <!-- 从 runtime-acceptance.md default path policy 投影到本 AC 的约束。 --> | <!-- 从 runtime-acceptance.md no-scope check 投影到本 AC 的约束。 --> |
+Trace file: `trace/tasks.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

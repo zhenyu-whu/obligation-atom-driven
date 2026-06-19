@@ -2,7 +2,7 @@
 
 ## 目的
 
-`proposal.md` 定义 change 的 WHY、WHAT、capability boundary、non-goal、影响面和 readiness。Delivery Plane 只写 reviewer 能直接判断的产品/技术边界；source/scope coverage 和 projection 只写入末尾 `Trace Appendix`。
+`proposal.md` 定义 change 的 WHY、WHAT、capability boundary、non-goal、影响面和 readiness。Delivery Plane 只写 reviewer 能直接判断的产品/技术边界；source/scope coverage 和 projection 只写入 `trace/proposal.trace.json`。
 
 ## 写入前
 
@@ -20,12 +20,13 @@
 - `Non-Goals` 必须表达 explicit non-goal、later-change、preserve、prototype-only、superseded 或其它明确边界。
 - 主体不得包含 exhaustive source/scope coverage list、projection mix、register rows、coverage suffix 或 alignment gate。
 
-## Trace Appendix
+## JSON Trace Plane
 
-- 必须包含 source/scope coverage register、production source/baseline coverage、focused read set 和 proposal alignment gate。
+- 必须写入 source/scope coverage register、production source/baseline coverage、focused read set 和 proposal alignment gate。
 - 每个 material source/scope item 正好有一行 register，不得使用 ranges。
 - 每行必须记录 artifact projection/handling、projection source、capability、source/scope fact、propose use 和 downstream coverage expectation。
 - Focused read set 必须列出读取目的和 interpretation result。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块，完整 trace 不写入 Markdown。
 
 ## Reviewer Focus
 

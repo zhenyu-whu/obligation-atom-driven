@@ -32,12 +32,13 @@
 - Layout row 的每个页面和每个 viewport 必须拆分或有 source/scope-backed reason。
 - Fixture/provider row 的 success、retryable failure、nonretryable failure、empty result、timeout 等分支必须拆分或有 source/scope-backed reason。
 
-## Trace Appendix
+## JSON Trace Plane
 
-- `Runtime Coverage Reconciliation` 必须包含每个 required / preserve / proof-only runtime row。
+- `trace/verification.trace.json` 的 `runtime-coverage-reconciliation` 必须包含每个 required / preserve / proof-only runtime row。
 - 每行必须列出 expected Proof Slice IDs、missing Proof Slice IDs、coverage status 和 gap/not-covered reason。
 - `Coverage Status = covered` 仅当 missing 为 `None`，expected slices 全部存在且均为原子 slice。
 - `manual` / `not-applicable` 必须通过对应 runtime row 的 source/scope role、default path、external boundary 或 no-scope boundary 解释。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块。
 
 ## Reviewer Focus
 

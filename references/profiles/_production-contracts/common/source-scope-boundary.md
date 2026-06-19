@@ -4,7 +4,7 @@
 
 ## Source / Scope 权威
 
-- 下游 artifacts 必须通过 proposal `Trace Appendix` 中的 registered source/scope rows、artifact projection/handling 和 read set 建立 coverage。
+- 下游 artifacts 必须通过 `trace/proposal.trace.json` 中的 registered source/scope rows、artifact projection/handling 和 read set 建立 coverage。
 - 下游 artifacts 不得重新做全量 source discovery，不得从未登记的 source line range 直接发明新的 production behavior。
 - 如果 artifact 需要 proposal/spec/design 无法到达的 source/scope detail，必须修订上游 artifact 或报告 blocker。
 - 当前实现、测试文件、apply-result、evidence 和 `openspec-results/**` 不得作为 propose artifact 的 oracle 来源。

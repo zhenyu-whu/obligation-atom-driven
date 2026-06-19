@@ -4,7 +4,7 @@
 
 ### Requirement: <!-- requirement name，优先中文；只有 exact source-native 技术标题才保留英文 -->
 
-<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-level behavior 或 guard。Scope item 与 baseline trace 明细写入末尾 Trace Appendix。 -->
+<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-level behavior 或 guard。Scope item 与 baseline trace 明细写入 JSON trace。 -->
 
 #### Scenario: <!-- scenario name，优先中文；只有 exact source-native 名称才保留英文 -->
 
@@ -25,27 +25,6 @@
 
 ## Trace Appendix
 
-<!-- 本附录是审计平面，不是 Delivery Plane。下游 design/runtime/tasks/verification 可读取它建立 coverage；implementation worker 默认不把本附录表格当作 executable work。 -->
-
-### Requirement Scope Trace
-
-| Requirement                     | Scenario                                      | Scope Item IDs                                        | Baseline Trace                                                                                                     |
-| ------------------------------- | --------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| <!-- exact requirement name --> | <!-- exact scenario name / Not applicable --> | <!-- SI-001, SI-002；逐个枚举 ID，不使用 ranges。 --> | <!-- 用户请求、existing spec、code path、route、DTO、table、test、设计稿或 issue。没有外部来源时写“用户请求”。 --> |
-
-### Production Alignment Gate
-
-- Scope items covered: <!-- SI-001, SI-002；逐个枚举 exact IDs，不使用 ranges -->
-- Artifact handling coverage: <!-- spec items 进入 requirement/scenario；guard items 进入 MUST NOT / non-goal / gate -->
-- Proposal Change Scope Coverage consumed: <!-- 是 / blocker -->
-- Baseline/input consumed: <!-- paths / user request / none -->
-- Product workflow coverage: <!-- 说明覆盖的 workflow / route / lifecycle / object states -->
-- Architecture/module coverage: <!-- package / runtime / module boundaries -->
-- Data/API/backend coverage: <!-- tables / commands / APIs / DTOs / transactions / idempotency -->
-- Auth/security/privacy coverage: <!-- auth / authorization / privacy / asset access / redaction -->
-- Async/realtime/worker coverage: <!-- jobs / events / SSE / provider / queue / recovery -->
-- Storage/asset coverage: <!-- assets / signing / retention / cleanup -->
-- Observability/ops/deployment coverage: <!-- logs / metrics / migration / smoke / rollback -->
-- Verification coverage: <!-- scenario-level proof expectations -->
-- Forbidden drift checked: <!-- unplanned identifiers/routes/states/tables/jobs/providers/environments rejected -->
-- Blockers: <!-- 无 / 具体 blocker -->
+Trace file: `trace/specs/<capability>.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

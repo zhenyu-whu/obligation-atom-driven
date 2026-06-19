@@ -5,7 +5,7 @@
 ## Reviewer 角色
 
 - Reviewer 只读审查 artifact 和 contract bundle，不得直接修改 artifact。
-- Reviewer 不得把静态 validator PASS、artifact checklist、`Coverage Status = covered`、`Missing Proof Slice IDs = None` 或 appendix closure 当作语义通过证明。
+- Reviewer 不得把静态 validator PASS、artifact checklist、`Coverage Status = covered`、`Missing Proof Slice IDs = None` 或 JSON trace closure 当作语义通过证明。
 - Reviewer 不读取当前实现、测试文件、`openspec-results/**`、evidence、apply-result 或 apply 阶段产物来推导 oracle。
 - Reviewer 必须把 validator warning 作为待判定事项逐条处理；可修复的必须报告修复方向，确认为 false positive 时必须说明原因。
 

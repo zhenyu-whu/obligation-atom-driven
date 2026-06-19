@@ -12,13 +12,13 @@
 
 <!-- 只有新增 capability 时填写，使用 kebab-case capability name。 -->
 
-- `<name>`: <!-- capability 的交付范围、行为边界和 readiness 要求；exact scope mapping 写入 Trace Appendix -->
+- `<name>`: <!-- capability 的交付范围、行为边界和 readiness 要求；exact scope mapping 写入 JSON trace -->
 
 ### Modified Capabilities
 
 <!-- 修改 existing capability 时填写，使用 openspec/specs/ 中已有 capability name。 -->
 
-- `<existing-name>`: <!-- 变化的 requirement、guard 或 delivery boundary；exact scope mapping 写入 Trace Appendix -->
+- `<existing-name>`: <!-- 变化的 requirement、guard 或 delivery boundary；exact scope mapping 写入 JSON trace -->
 
 ## Non-Goals
 
@@ -38,33 +38,6 @@
 
 ## Trace Appendix
 
-<!-- 本附录是审计平面，不是 Delivery Plane。主 agent、archive、final reviewer 可读取它做覆盖闭环；implementation worker 默认不把本附录的表格行当作 executable work。 -->
-
-### Baseline / Input Read Set
-
-<!-- 列出本 proposal 实际读取的用户输入、existing specs、代码路径、测试、配置、设计稿、issue 或外部文档。不要填入未读取的宽泛来源。 -->
-
-| Input                                                            | Reference                                | Purpose                                       | Result                                 |
-| ---------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------- | -------------------------------------- |
-| <!-- 用户请求 / existing spec / code / test / design / issue --> | <!-- path、URL、消息摘要或 spec 名称 --> | <!-- baseline / scope / conflict / impact --> | <!-- confirmed / refined / blocker --> |
-
-### Change Scope Coverage
-
-<!-- 每个 material scope item 一行。Scope Item ID 使用 change-local SI-###，只在本 change 内有效，不使用 ranges。Artifact Handling 只能为 spec / guard / design / proof / context。 -->
-
-| Scope Item ID | Input / Baseline Source                                        | Scope Type                                           | Artifact Handling                                | Capability               | Behavior / Constraint             | Evidence Need                                                       | Downstream Coverage                              |
-| ------------- | -------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ | ------------------------ | --------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------ |
-| `SI-001`      | <!-- 用户请求 / existing spec / code path / issue / design --> | <!-- behavior / guard / design / proof / context --> | <!-- spec / guard / design / proof / context --> | <!-- capability name --> | <!-- 具体行为、边界或验证要求 --> | <!-- unit / component / API / DB / E2E / security / smoke / N/A --> | <!-- specs/design/tasks coverage expectation --> |
-
-### Proposal Alignment Gate
-
-- Existing specs read: <!-- paths / none -->
-- Baseline code or tests read: <!-- paths / none -->
-- External inputs read: <!-- issue/design/doc/URL / none -->
-- Scope items covered by proposal: <!-- SI-001, SI-002；逐个枚举，不使用 ranges -->
-- Artifact handling coverage: <!-- 每个 SI-### 的 handling 已记录并有 downstream coverage -->
-- New capabilities: <!-- names / none -->
-- Modified capabilities: <!-- names / none -->
-- Non-goals captured: <!-- summary -->
-- Open design decisions: <!-- summary / none -->
-- Blockers: <!-- 无 / 具体 blocker -->
+Trace file: `trace/proposal.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

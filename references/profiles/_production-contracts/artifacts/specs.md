@@ -6,7 +6,7 @@
 
 ## 写入前
 
-- 读取 `proposal.md`，使用 proposal `Trace Appendix` 的 source/scope coverage register 作为 scope-reading interface。
+- 读取 `proposal.md`，使用 `trace/proposal.trace.json` 的 source/scope coverage register 作为 scope-reading interface。
 - 只为存在 spec-level delta 的 capability 创建 spec file。
 - 修改 existing capability 前，读取对应 `openspec/specs/<capability>/spec.md`。
 - 建立 capability-to-source/scope map：每个 spec-relevant item 必须落到 requirement/scenario、guard 或明确 handoff。
@@ -27,11 +27,12 @@
 - Design/proof/context-only item 不得伪造成 requirement。
 - 不得创建只包含 projection notes、只写“无”或没有 requirement 的空 spec。
 
-## Trace Appendix
+## JSON Trace Plane
 
-- 必须包含 requirement source/scope trace，列出 requirement、scenario、source/scope item、concrete source/baseline path 或用户输入来源。
-- 如同一 capability 已有 delta spec 且存在 design/proof/context-only item，可在 appendix 中写 handoff notes；不得为了 notes 单独创建 spec file。
+- 必须写入 `trace/specs/<capability>.trace.json`，包含 requirement source/scope trace，列出 requirement、scenario、source/scope item、concrete source/baseline path 或用户输入来源。
+- 如同一 capability 已有 delta spec 且存在 design/proof/context-only item，可在 JSON trace 中写 handoff notes；不得为了 notes 单独创建 spec file。
 - Gate 必须确认 spec-relevant items 没有 orphan、range、source/scope 外 scenario 或 missing guard。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块。
 
 ## Reviewer Focus
 

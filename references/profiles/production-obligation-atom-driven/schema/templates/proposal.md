@@ -1,6 +1,6 @@
 ## Why
 
-<!-- 说明此 production change 的动机：它解决或解锁了哪个产品、架构、production-readiness 或 verification 缺口？不要在主体列 GA coverage；exact atom/source 映射写入 Trace Appendix。 -->
+<!-- 说明此 production change 的动机：它解决或解锁了哪个产品、架构、production-readiness 或 verification 缺口？不要在主体列 GA coverage；exact atom/source 映射写入 JSON trace。 -->
 
 ## Change Plan Boundary
 
@@ -16,13 +16,13 @@
 
 <!-- 描述新增 capabilities。将 <name> 替换为 kebab-case identifier；只有包含 spec-requirement 或 spec-guard delta 的 capability 才会创建 specs/<name>/spec.md。纯 design-obligation / verification-obligation capability 不创建空 spec。 -->
 
-- `<name>`: <概述该 capability 的交付范围、行为边界和 readiness 要求；exact atom mapping 写入 Trace Appendix>
+- `<name>`: <概述该 capability 的交付范围、行为边界和 readiness 要求；exact atom mapping 写入 JSON trace>
 
 ### Modified Capabilities
 
 <!-- 描述 REQUIREMENTS 发生变化的 existing capabilities。使用 openspec/specs/ 中已有 spec 名称；没有 requirement 变化时留空。 -->
 
-- `<existing-name>`: <说明变化的 requirement、guard 或 delivery boundary；exact atom mapping 写入 Trace Appendix>
+- `<existing-name>`: <说明变化的 requirement、guard 或 delivery boundary；exact atom mapping 写入 JSON trace>
 
 ## Non-Goals
 
@@ -38,44 +38,6 @@
 
 ## Trace Appendix
 
-<!-- 本附录是审计平面，不是 Delivery Plane。主 agent、archive、final reviewer 可读取它做覆盖闭环；implementation worker 默认不把本附录的表格行当作 executable work。 -->
-
-### Obligation Atom Preconditions
-
-<!-- 列出当前 change 使用的 change slug、final packet index、final change packet、global atom index，以及按需读取的 capability atom view files。不得创建或依赖任何 proposal 前置 source artifact。若 final packet 有 blocker，停止而不是填写后续章节。 -->
-
-### Change Atom Coverage Register
-
-<!-- 每个 final change packet 的 direct atom 一行。Global Atom ID 必须来自 `obligation-atom-index.md`，每行只能一个 GA ID，不重新编号，不使用 ranges。Direct row 的 Artifact Projection 只能使用 spec-requirement / spec-guard / design-obligation / verification-obligation；contextual-only 只用于非 direct context/boundary row，不能出现在 Direct Owning Atoms。Projection Source 写 final-packet、global-index 或 inferred-from-legacy-packet。Downstream Coverage 必须匹配 projection；后续 artifacts 必须引用这些 exact GA IDs。Direct atom 不得留下 orphan downstream coverage。 -->
-
-| Global Atom ID | Source Document            | Lines          | Atom Type          | Artifact Projection                                                                  | Projection Source                                                  | Normativity                                 | Coverage Status                                                 | Packet Capability           | Source Fact                                        | Propose Use                    | Evidence Need                                       | Downstream Coverage                                                           |
-| -------------- | -------------------------- | -------------- | ------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------- | --------------------------- | -------------------------------------------------- | ------------------------------ | --------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `GA-0001`      | <!-- exact source path --> | <!-- Lx-Ly --> | <!-- atom type --> | <!-- spec-requirement / spec-guard / design-obligation / verification-obligation --> | <!-- final-packet / global-index / inferred-from-legacy-packet --> | <!-- must / should / must-not / context --> | <!-- direct / explicit-non-goal / contextual-preserve / ... --> | <!-- planned capability --> | <!-- source fact，中文解释或精确 source phrase --> | <!-- canonical propose use --> | <!-- browser-e2e / integration / contract / ... --> | <!-- proposal/spec/design/tasks coverage expectation，必须匹配 projection --> |
-
-### Production Source Coverage
-
-<!-- 列出此 change 必须保持一致的 exact source files、line ranges 与 exact GA IDs。不要新增宽泛整篇文档读取义务。 -->
-
-### Source Window Read Set
-
-<!-- 对每个 direct atom，列出已定点重读的 original source window。Contextual、preserve、non-goal atom 只在需要精确边界时列入。不要用整篇文档代替 line ranges。 -->
-
-| Global Atom ID | Source Window                    | Re-read Purpose                                                      | Interpretation Result                                                        |
-| -------------- | -------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `GA-0001`      | <!-- exact source path Lx-Ly --> | <!-- scope / identifier / failure path / verification / boundary --> | <!-- confirmed / refined / blocker；说明是否改变 proposal interpretation --> |
-
-### Proposal Alignment Gate
-
-- Proposal input mode: <!-- canonical change packet + global atom index；不得填写任何前置 source artifact -->
-- Change slug: <!-- exact slug -->
-- Final packet index consumed: <!-- path -->
-- Global atom index consumed: <!-- path -->
-- Final change packet consumed: <!-- path -->
-- Capability atom view files consumed: <!-- paths / 未额外读取，按 final packet 分组 -->
-- Direct atoms covered by proposal: <!-- GA-0001, GA-0002, ...；逐个枚举，不使用 ranges -->
-- Artifact projection coverage: <!-- 每个 direct GA 的 projection 已记录；design/verification atoms 未被强制列为 spec requirement -->
-- Contextual / preserve / non-goal atoms captured: <!-- GA-...；逐个枚举或说明无 -->
-- Source windows re-read for direct atoms: <!-- GA-0001 -> path Lx-Ly, GA-0002 -> path Lx-Ly；无遗漏或列 blocker -->
-- Orphan direct atoms: <!-- none / 具体 GA blocker -->
-- Capability increments covered or gap-classified: <!-- 说明 -->
-- Blockers: <!-- 无 / 具体 blocker -->
+Trace file: `trace/proposal.trace.json`
+Trace schema: `openspec-trace-v1`
+Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

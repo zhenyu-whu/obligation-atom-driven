@@ -22,12 +22,13 @@
 - `Async / Realtime Chain Matrix` 只定义 async/realtime 或 explicit no-async boundary rows。
 - 如果 upstream item 包含多个独立 verb、state、failure class、fixture variant、viewport、安全分支或日志类别，row 的 runtime obligation、failure/branch/default/no-scope 字段必须保留这些可失败分支名称，不得泛化吞并。
 
-## Trace Appendix
+## JSON Trace Plane
 
-- `Runtime Upstream Coverage Map` 必须逐项列出 upstream item、type、projection/handling、runtime row IDs、coverage mode 和 not-applicable reason。
+- `trace/runtime-acceptance.trace.json` 的 `runtime-upstream-coverage-map` 必须逐项列出 upstream item、type、projection/handling、runtime row IDs、coverage mode 和 not-applicable reason。
 - Covered item 的 row IDs 必须全部存在于主体 canonical rows。
-- `Runtime Coverage Source Map` 可以保留主题汇总，但不得作为 upstream item 的唯一覆盖证明。
-- `Coverage Closure Checklist` 只是审计声明，不能替代逐项 map。
+- `runtime-coverage-source-map` 可以保留主题汇总，但不得作为 upstream item 的唯一覆盖证明。
+- `coverage-closure-checklist` 只是审计声明，不能替代逐项 map。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块。
 
 ## Reviewer Focus
 
