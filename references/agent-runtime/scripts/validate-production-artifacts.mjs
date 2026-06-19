@@ -14,6 +14,18 @@ const GA_ID_RE = /\bGA-\d{4}\b/g;
 const SI_ID_RE = /\bSI-\d{3}\b/g;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
+const SPEC_HANDLINGS = new Set([
+  "direct-spec-requirement",
+  "direct-spec-guard",
+  "derived-capability-contract-requirement",
+  "derived-capability-contract-guard",
+]);
+
+const DERIVED_SPEC_HANDLINGS = new Set([
+  "derived-capability-contract-requirement",
+  "derived-capability-contract-guard",
+]);
+
 const PRIMITIVE_TYPES = new Set([
   "operation",
   "state",
@@ -582,6 +594,7 @@ function validateSourceScopeTrace(trace, schemaKind, issues) {
   const idLabel = schemaKind === "default" ? "SI" : "GA";
   const registerKey = schemaKind === "default" ? "change-scope-coverage" : "change-atom-coverage-register";
   const registered = new Set();
+  const registeredRows = new Map();
   for (const [index, row] of asArray(proposal[registerKey]).entries()) {
     const ids = idsFromValue(schemaKind === "default" ? row["scope-item-id"] ?? row["global-atom-id"] : row["global-atom-id"], idRegex);
     if (ids.length !== 1) {
@@ -589,6 +602,7 @@ function validateSourceScopeTrace(trace, schemaKind, issues) {
       continue;
     }
     registered.add(ids[0]);
+    registeredRows.set(ids[0], row);
   }
 
   for (const [key, data] of trace.entries()) {
@@ -599,6 +613,63 @@ function validateSourceScopeTrace(trace, schemaKind, issues) {
     for (const ref of refs) {
       if (!registered.has(ref.id)) {
         addIssue(issues, "error", "VAL-SRC-002", `${key}${ref.pointer}`, `${ref.id} 未在 proposal trace register 中登记。`);
+      }
+    }
+  }
+
+  if (schemaKind === "obligation") {
+    validateObligationSpecsTraceProjection(trace, registeredRows, issues);
+  }
+}
+
+function validateObligationSpecsTraceProjection(trace, registeredRows, issues) {
+  for (const [key, data] of trace.entries()) {
+    if (!key.startsWith("specs:")) {
+      continue;
+    }
+    for (const [index, row] of asArray(data["requirement-source-trace"]).entries()) {
+      const ref = `${key}#/requirement-source-trace/${index}`;
+      const ids = idsFromValue(row["global-atom-id"] ?? row["atom-id"] ?? row["source-item-id"], GA_ID_RE);
+      if (ids.length !== 1) {
+        addIssue(issues, "error", "VAL-SP-001", ref, "requirement-source-trace 每行必须包含一个 exact GA ID。");
+        continue;
+      }
+      const globalAtomId = ids[0];
+      const proposalRow = registeredRows.get(globalAtomId);
+      if (!proposalRow) {
+        continue;
+      }
+
+      const proposalProjection = strip(proposalRow["artifact-projection"]);
+      const sourceProjection = strip(row["source-projection"] ?? row["artifact-projection"] ?? row["projection"]);
+      if (sourceProjection && sourceProjection !== proposalProjection) {
+        addIssue(issues, "error", "VAL-SP-002", ref, `${globalAtomId} source-projection 必须保留 proposal projection ${proposalProjection}。`);
+      }
+      const effectiveProjection = sourceProjection || proposalProjection;
+      const handling = strip(row["spec-handling"]);
+      if (!SPEC_HANDLINGS.has(handling)) {
+        addIssue(issues, "error", "VAL-SP-003", ref, `spec-handling 非法或缺失：${handling || "(empty)"}。`);
+        continue;
+      }
+
+      if (effectiveProjection === "spec-requirement" && handling !== "direct-spec-requirement") {
+        addIssue(issues, "error", "VAL-SP-004", ref, `${globalAtomId} 是 spec-requirement，spec-handling 必须为 direct-spec-requirement。`);
+      } else if (effectiveProjection === "spec-guard" && handling !== "direct-spec-guard") {
+        addIssue(issues, "error", "VAL-SP-005", ref, `${globalAtomId} 是 spec-guard，spec-handling 必须为 direct-spec-guard。`);
+      } else if (effectiveProjection === "design-obligation") {
+        if (!DERIVED_SPEC_HANDLINGS.has(handling)) {
+          addIssue(issues, "error", "VAL-SP-006", ref, `${globalAtomId} 是 design-obligation，写入 specs 时必须使用 derived-capability-contract-* handling。`);
+        }
+        if (!strip(row["derivation-reason"])) {
+          addIssue(issues, "error", "VAL-SP-007", ref, `${globalAtomId} 派生 specs 时必须记录 derivation-reason。`);
+        }
+        if (!strip(row["no-scope-expansion-check"])) {
+          addIssue(issues, "error", "VAL-SP-008", ref, `${globalAtomId} 派生 specs 时必须记录 no-scope-expansion-check。`);
+        }
+      } else if (effectiveProjection === "verification-obligation") {
+        addIssue(issues, "error", "VAL-SP-009", ref, `${globalAtomId} 是 verification-obligation，不得直接写入 requirement-source-trace。`);
+      } else {
+        addIssue(issues, "error", "VAL-SP-010", ref, `${globalAtomId} projection ${effectiveProjection || "(empty)"} 不能写入 specs requirement-source-trace。`);
       }
     }
   }

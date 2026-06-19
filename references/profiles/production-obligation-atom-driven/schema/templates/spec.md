@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
-<!-- 只有当本 capability 至少有一个 spec-requirement 或 spec-guard 需要形成 OpenSpec delta 时，才创建此文件。不要为了 design-obligation / verification-obligation handoff 创建空 spec；OpenSpec CLI 会拒绝空 delta spec。 -->
+<!-- 当本 capability 有 spec-requirement/spec-guard，或在没有 spec-level direct atom 时存在可派生的规范性 design-obligation capability contract，才创建此文件。不要为了 handoff、proof-only 或实现细节创建空 spec。 -->
 
 ### Requirement: <!-- requirement name，优先中文；只有 exact source-native 技术标题才保留英文 -->
 
-<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文只承载 spec-requirement atoms 或必要 spec-guard；不要把 design-obligation / verification-obligation 伪装成用户或系统行为 scenario。Source atom、source trace 和 handoff 明细写入 JSON trace。 -->
+<!-- 使用 SHALL / MUST / MUST NOT 写规范行为。Requirement 正文承载 direct spec atom，或 capability-level fallback 派生出的稳定运行/能力契约；不要把 verification-obligation、proof-only 内容或实现细节伪装成 scenario。Source atom、source projection、spec-handling 和 handoff 明细写入 JSON trace。 -->
 
 #### Scenario: <!-- scenario name，优先中文；只有 exact source-native 名称才保留英文 -->
 
