@@ -14,6 +14,116 @@ test("合法 JSON trace complete 校验通过", () => {
   assert.equal(result.warningCount, 0);
 });
 
+test("proof-slices-v1 完整 change 校验通过", () => {
+  const root = makeChange("proof-slices-change", standardFiles({ newContract: true }));
+  const result = validateChange({ root, change: "proof-slices-change", complete: true });
+  assert.equal(result.errorCount, 0);
+  assert.equal(result.warningCount, 0);
+});
+
+test("proof-slices-v1 缺少 proof slice JSON hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  delete files.traces["verification.proof-slices.json"];
+  const root = makeChange("missing-proof-slices-change", files);
+  const result = validateChange({ root, change: "missing-proof-slices-change", complete: true });
+  assertRule(result, "VAL-PST-001");
+});
+
+test("proof-slices-v1 proposal partial 不要求 future verification proof slice JSON", () => {
+  const files = standardFiles({ proposal: true });
+  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+  files.manifestTraceContractVersion = "proof-slices-v1";
+
+  const root = makeChange("proposal-only-proof-slices-change", files);
+  const result = validateChange({ root, change: "proposal-only-proof-slices-change", complete: false });
+
+  assert.equal(result.errorCount, 0);
+  assert.equal(result.warningCount, 0);
+});
+
+test("proof-slices-v1 Markdown matrix 与 JSON 漂移 hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  files.artifacts["verification.md"] = verificationBody({
+    proofRows: [
+      "| PS-001 | RS-001 | RS-001 | authorization | actor drift | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | authorization result | session fixture | high | None |",
+    ],
+  });
+  const root = makeChange("proof-slices-drift-change", files);
+  const result = validateChange({ root, change: "proof-slices-drift-change", complete: true });
+  assertRule(result, "VAL-PST-030");
+});
+
+test("proof-slices-v1 reconciliation 引用不存在 JSON slice hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  files.traces["verification.trace.json"]["runtime-coverage-reconciliation"][0]["expected-proof-slice-ids"] = ["PS-999"];
+  const root = makeChange("proof-slices-missing-expected-change", files);
+  const result = validateChange({ root, change: "proof-slices-missing-expected-change", complete: true });
+  assertRule(result, "VAL-RC-003");
+});
+
+test("proof-slices-v1 JSON slice owner list hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  files.traces["verification.proof-slices.json"]["proof-slices"][0]["production-owner"] = "apps/web, packages/domain";
+  const root = makeChange("proof-slices-bad-owner-change", files);
+  const result = validateChange({ root, change: "proof-slices-bad-owner-change", complete: true });
+  assertRule(result, "VAL-PS-008");
+  assertRule(result, "VAL-PST-030");
+});
+
+test("proof-slices-v1 自动化 slice 的 apps/web + DB/integration 无合法落点 hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/web",
+    layer: "DB/integration",
+  });
+  const root = makeChange("proof-slices-web-db-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-web-db-placement-change", complete: true });
+
+  assertRule(result, "VAL-PS-009");
+});
+
+test("proof-slices-v1 自动化 slice 的 apps/web + contract 无合法落点 hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/web",
+    layer: "contract",
+  });
+  const root = makeChange("proof-slices-web-contract-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-web-contract-placement-change", complete: true });
+
+  assertRule(result, "VAL-PS-009");
+});
+
+test("proof-slices-v1 合法 owner/layer placement 组合通过", () => {
+  const cases = [
+    { change: "proof-slices-web-route-placement-change", owner: "apps/web", layer: "route/API" },
+    { change: "proof-slices-db-integration-placement-change", owner: "packages/db", layer: "DB/integration" },
+    { change: "proof-slices-domain-contract-placement-change", owner: "packages/domain", layer: "contract" },
+  ];
+
+  for (const item of cases) {
+    const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), item);
+    const root = makeChange(item.change, files);
+    const result = validateChange({ root, change: item.change, complete: true });
+
+    assert.equal(result.errorCount, 0, `${item.owner} + ${item.layer}: ${JSON.stringify(result.issues, null, 2)}`);
+  }
+});
+
+test("proof-slices-v1 manual slice 的非法 owner/layer placement 不触发自动化落点 hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/web",
+    layer: "DB/integration",
+    manual: "需要人工环境验证。",
+  });
+  const root = makeChange("proof-slices-manual-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-manual-placement-change", complete: true });
+
+  assert.ok(
+    !result.issues.some((issue) => issue.ruleId === "VAL-PS-009"),
+    `did not expect VAL-PS-009, got ${JSON.stringify(result.issues, null, 2)}`,
+  );
+});
+
 test("非 kebab-case key hard fail", () => {
   const files = standardFiles();
   files.traces["tasks.trace.json"].badKey = true;
@@ -161,12 +271,26 @@ function makeChange(change, files) {
       "trace-digest": digest,
     });
   }
+  if (files.manifestTraceContractVersion === "proof-slices-v1") {
+    const proofSlicesPath = path.join(traceDir, "verification.proof-slices.json");
+    const digest = fs.existsSync(proofSlicesPath) ? sha256File(proofSlicesPath) : "sha256-missing";
+    traceEntries.push({
+      "artifact-id": "verification",
+      "artifact-path": "verification.md",
+      "trace-path": "trace/verification.proof-slices.json",
+      "trace-schema": "openspec-proof-slices-v1",
+      "trace-digest": digest,
+    });
+  }
   if (files.writeManifest !== false) {
     fs.writeFileSync(
       path.join(traceDir, "manifest.json"),
       `${JSON.stringify(
         {
           "trace-schema": "openspec-trace-v1",
+          ...(files.manifestTraceContractVersion
+            ? { "trace-contract-version": files.manifestTraceContractVersion }
+            : {}),
           change,
           "schema-name": "production-obligation-atom-driven",
           artifacts: traceEntries,
@@ -190,6 +314,9 @@ function standardFiles(options = {}) {
     "verification.trace.json": verificationTrace(),
     "tasks.trace.json": tasksTrace(options),
   };
+  if (options.newContract) {
+    traces["verification.proof-slices.json"] = proofSlicesTrace();
+  }
   if (options.proposal) {
     artifacts["proposal.md"] = "## Why\n\n- 测试。\n";
     traces["proposal.trace.json"] = proposalTrace();
@@ -198,7 +325,32 @@ function standardFiles(options = {}) {
     artifacts["design.md"] = "## Context\n\n- 测试。\n";
     traces["design.trace.json"] = designTrace(options.designGa ?? "GA-0001");
   }
-  return { artifacts, traces };
+  return {
+    artifacts,
+    traces,
+    ...(options.newContract ? { manifestTraceContractVersion: "proof-slices-v1" } : {}),
+  };
+}
+
+function withSingleProofSlicePlacement(files, options) {
+  const manual = options.manual ?? "None";
+  files.artifacts["verification.md"] = verificationBody({
+    proofRows: [
+      `| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | ${options.layer} | ${options.owner} | authorization result | session fixture | high | ${manual} |`,
+    ],
+  });
+
+  const proofSlice = files.traces["verification.proof-slices.json"]?.["proof-slices"]?.[0];
+  if (proofSlice) {
+    proofSlice["primary-layer"] = options.layer;
+    proofSlice["production-owner"] = options.owner;
+    proofSlice["manual-environment-gate"] = manual;
+    files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primary-layers-used"] = [
+      options.layer,
+    ];
+  }
+
+  return files;
 }
 
 function runtimeAcceptanceBody(options = {}) {
@@ -420,6 +572,52 @@ function verificationTrace() {
       },
     ],
     "slice-consistency-checklist": ["已闭合。"],
+  };
+}
+
+function proofSlicesTrace() {
+  return {
+    "trace-schema": "openspec-proof-slices-v1",
+    "artifact-id": "verification",
+    "artifact-path": "verification.md",
+    "change-name": "test-change",
+    "schema-name": "production-obligation-atom-driven",
+    "source-interface": {
+      "runtime-acceptance-artifact": "runtime-acceptance.md",
+      "runtime-acceptance-trace": "trace/runtime-acceptance.trace.json",
+      "oracle-source-policy": "Proof Slice oracle 仅来自 runtime-acceptance.md canonical rows。",
+    },
+    "proof-slice-summary": {
+      "proof-slice-count": 1,
+      "slice-id-format": "PS-###",
+      "primitive-types-used": ["authorization"],
+      "primary-layers-used": ["security/negative"],
+    },
+    "proof-slices": [
+      {
+        "slice-id": "PS-001",
+        "runtime-row-ids": ["RS-001"],
+        "primary-runtime-row-id": "RS-001",
+        "primitive-type": "authorization",
+        "branch-variant": "actor resolution",
+        "observable-surface": "auth surface",
+        "oracle-fragment": "登录态解析到内部 actor。",
+        "failure-signal": "actor 缺失。",
+        "primary-layer": "security/negative",
+        "production-owner": "apps/web",
+        "primary-assertion-shape": "authorization result",
+        "fixture-mock-boundary": "session fixture",
+        "regression-intent": "high",
+        "manual-environment-gate": "None",
+        "test-contract": {
+          "primary-test-cardinality": "exactly-one",
+          "test-title-prefix": "PS-001",
+          "allow-shared-setup": true,
+          "allow-multi-slice-primary-test": false,
+          "waiver-required-for-multi-slice": true,
+        },
+      },
+    ],
   };
 }
 

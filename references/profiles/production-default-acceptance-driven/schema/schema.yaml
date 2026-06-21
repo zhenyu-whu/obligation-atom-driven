@@ -1,5 +1,5 @@
 name: production-default-acceptance-driven
-version: 10
+version: 12
 description: 面向 Greenfield 完成后的生产演进工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入外置 JSON Trace Plane，artifact 末尾只保留 Trace Appendix pointer；tasks AC 主体包含 resolved runtime contract
 artifacts:
   - id: proposal
@@ -28,7 +28,9 @@ artifacts:
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
       - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `proposal-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
+      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
+      - Partial validator hard pass 后才启动只读 `proposal-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
@@ -63,7 +65,9 @@ artifacts:
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
       - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `specs-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
+      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
+      - Partial validator hard pass 后才启动只读 `specs-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
@@ -98,7 +102,9 @@ artifacts:
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
       - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `design-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
+      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
+      - Partial validator hard pass 后才启动只读 `design-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
@@ -135,7 +141,9 @@ artifacts:
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
       - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `runtime-acceptance-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
+      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
+      - Partial validator hard pass 后才启动只读 `runtime-acceptance-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
@@ -172,7 +180,9 @@ artifacts:
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
       - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `verification-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
+      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
+      - Partial validator hard pass 后才启动只读 `verification-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：
@@ -211,7 +221,9 @@ artifacts:
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
       - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 写入后由 Agent Runtime 运行 partial static validator，并启动只读 `tasks-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，主 Agent 负责修复。
+      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
+      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
+      - Partial validator hard pass 后才启动只读 `tasks-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
       - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
 
       最终检查：

@@ -24,13 +24,13 @@
 2. artifact 主体是 Delivery Plane，只承载 reviewer、implementer 或 tester 直接消费的交付契约。
 3. JSON trace 是唯一 canonical trace；完整 coverage、source/scope trace、runtime projection、reconciliation、alignment gate 和 archive/preflight 审计信息必须写入 `trace/*.trace.json`，不得双写为 Markdown trace 表格。
 4. 每个 artifact 末尾必须保留短 `## Trace Appendix` pointer block，且它只能包含 `Trace file`、`Trace schema`、`Trace digest`。不得在 pointer 后追加任何其它 artifact section。
-5. `trace/manifest.json` 必须登记所有 trace 文件、artifact path、trace schema 和 digest。所有 JSON object key 必须使用 kebab-case；ID、enum、路径、heading 名称保持原有 exact value。
+5. `trace/manifest.json` 必须登记当前阶段已生成的 trace 文件、artifact path、trace schema 和 digest。所有 JSON object key 必须使用 kebab-case；ID、enum、路径、heading 名称保持原有 exact value。
 6. 下游 artifact 可以读取上游 JSON trace 建立 coverage；不得把 JSON trace row 当作新增需求、测试计划、执行状态、evidence path、deposit status 或 worker executable work。
 7. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始；`acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection` 必须存在于 `trace/tasks.trace.json`。
 8. proposal 和 design 的 Delivery Plane 主体不得出现 exhaustive `GA-####` / `SI-###` coverage list、`Direct atoms`、`Projection mix`、`Global Atoms:`、`Scope Items:`、`Satisfies` coverage column、source/scope coverage suffix 或 alignment gate；这些内容只允许出现在 JSON trace。
 9. 每个 `tasks.md` AC section 必须包含 `Resolved Runtime Contract` 表，并在主体直接展开 runtime row 的 worker-facing 语义。该表只摘录 runtime-acceptance.md canonical rows，不拥有 canonical row 定义。
 10. `runtime-acceptance.md` 主体只定义 canonical RS-/OP-/ST-/CH- rows；`runtime-upstream-coverage-map`、`runtime-coverage-source-map` 和 `coverage-closure-checklist` 必须在 `trace/runtime-acceptance.trace.json`。
-11. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；`runtime-coverage-reconciliation` 和 `slice-consistency-checklist` 必须在 `trace/verification.trace.json`。
+11. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；canonical Proof Slice 模型必须写入 `trace/verification.proof-slices.json` 并在 manifest 登记 digest，`runtime-coverage-reconciliation` 和 `slice-consistency-checklist` 必须在 `trace/verification.trace.json`。
 12. 新 active production changes 必须按 JSON Trace Plane 生成。历史 archive old-layout changes 保持只读；若未来重新打开，必须按 JSON trace 契约手工迁移。
 
 ## Schema Selection Gate
@@ -169,8 +169,8 @@
 3. `runtime-acceptance.md` 主体必须包含 `Runtime Acceptance Intent`、`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`；`trace/runtime-acceptance.trace.json` 必须包含 `runtime-upstream-coverage-map`、`runtime-coverage-source-map` 和 `coverage-closure-checklist`。
 4. `runtime-acceptance.md` 只定义 canonical RS-/OP-/ST-/CH- rows，不得包含 AC checkbox、implementation task IDs、Proof Slice、测试文件、固定命令、runner selector、evidence path、执行状态或 deposit status。
 5. `runtime-upstream-coverage-map` 是 runtime-acceptance 对上游不遗漏的审计表：每个 proposal direct `GA-####`、每个 in-scope spec scenario、每个 material design obligation、每个 spec guard 和每个 verification/proof obligation 必须映射到至少一个具体 RS-/OP-/ST-/CH- row，或写 source-backed not-applicable reason。不得只用 `Direct atom closure`、主题 source map 行或 checklist 证明覆盖；每个 covered item 的 row IDs 必须解析到主体 canonical rows。
-6. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；`trace/verification.trace.json` 必须包含 `runtime-coverage-reconciliation` 和 `slice-consistency-checklist`。
-7. `Proof Slice Matrix` 是唯一测试义务模型；每个 required / preserve / proof-only runtime row 必须拆出所有独立可失败分支并生成 expected Proof Slice，或有 source/scope-backed manual/not-applicable reason。每个 slice 必须有 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、Observable Surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent 和 Manual / Environment Gate。oracle 不能来自当前实现细节、`tasks.md`、测试文件结构或 evidence/deposit 结构。
+6. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；canonical Proof Slice 模型必须写入 `trace/verification.proof-slices.json`，`trace/verification.trace.json` 必须包含 `runtime-coverage-reconciliation` 和 `slice-consistency-checklist`。
+7. `trace/verification.proof-slices.json` 是唯一测试义务模型；`Proof Slice Matrix` 必须是该 JSON 的完整镜像。每个 required / preserve / proof-only runtime row 必须拆出所有独立可失败分支并生成 expected Proof Slice，或有 source/scope-backed manual/not-applicable reason。每个 slice 必须有 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、Observable Surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent、Manual / Environment Gate 和 `test-contract`。自动化 slice 的 `Production Owner + Primary Layer` 必须存在 placement-policy compliant `tests/**` 落点；无合法落点时必须修订 owner/layer，或改为 source/scope-backed manual/not-applicable。`test-contract` 默认要求 `primary-test-cardinality: "exactly-one"`、`test-title-prefix` 等于 slice id、`allow-shared-setup: true`、`allow-multi-slice-primary-test: false`、`waiver-required-for-multi-slice: true`。oracle 不能来自当前实现细节、`tasks.md`、测试文件结构或 evidence/deposit 结构。
 8. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
 9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`trace/tasks.trace.json` 保留 `acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection`。
 10. 每个 AC section 必须按顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
@@ -199,7 +199,7 @@
 4. specs 只为包含 `Artifact Handling: spec` 或 `guard` 的 capability 创建 delta spec；不得为 design/proof/context-only scope 创建空 spec。
 5. design 必须使用 proposal `trace/proposal.trace.json` 的 `change-scope-coverage` 和 spec JSON trace 的 `requirement-source-trace` 作为 scope-reading interface。
 6. `runtime-acceptance.md` 必须在 `verification.md` 和 `tasks.md` 之前生成，依赖 proposal/specs/design，并定义 canonical RS-/OP-/ST-/CH- runtime rows。`trace/runtime-acceptance.trace.json` 必须包含 `runtime-upstream-coverage-map`，逐项把每个非 context material `SI-###`、in-scope spec scenario、material design decision、guard 和 proof handling item 映射到具体 runtime row，或写 scope-backed not-applicable reason；不得只用 `Scope closure`、主题 source map 行或 checklist 证明覆盖。
-7. `verification.md` 主体必须包含 `Proof Slice Matrix`，并在每个 slice 中定义 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、public/runtime observable surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent 和 Manual / Environment Gate；runtime coverage reconciliation 必须位于 `trace/verification.trace.json` / `runtime-coverage-reconciliation`。
+7. `trace/verification.proof-slices.json` 是唯一测试义务模型；`verification.md` 主体必须包含 `Proof Slice Matrix`，并作为该 JSON 的人类可读镜像。在每个 slice 中定义 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、public/runtime observable surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent、Manual / Environment Gate 和 `test-contract`；自动化 slice 的 `Production Owner + Primary Layer` 必须存在 placement-policy compliant `tests/**` 落点；runtime coverage reconciliation 必须位于 `trace/verification.trace.json` / `runtime-coverage-reconciliation`。
 8. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
 9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`trace/tasks.trace.json` 保留 `acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection`。
 10. 每个 AC section 必须按顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
@@ -235,6 +235,19 @@
 3. 如果任一 required contract 文件缺失，必须停止并报告 `Artifact Consistency Blocker`；不得降级为只读 schema instruction 或主 Agent 自检。
 4. `schema.yaml` 仍是 OpenSpec 默认生成入口；contract bundle 是 writer/reviewer 的共同强制约束来源。不得把 contract 文本复制进 artifact 正文。
 
+### Partial / Complete Static Validation Semantics
+
+1. Partial static validator 指不带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。它只验证当前 change 目录中已经存在的 artifacts 及其已声明 trace，不得要求尚未生成的下游 artifact、sidecar trace 或 apply-required artifact 提前存在。
+2. 每次 artifact writer 或 repair-writer 自然返回后运行 partial validator。该次 partial validator 必须检查所有已存在 artifact 的 `## Trace Appendix` 指针、对应 trace 文件、manifest entry、trace digest、JSON key 格式、当前 artifact 必需 trace sections，以及已存在 artifacts 之间可解析的 source/scope、runtime、verification、tasks 引用。
+3. Proposal 阶段 partial validator 必须校验 `proposal.md`、`trace/proposal.trace.json` 和 `trace/manifest.json` 的当前内容；不得要求 `specs/**/*.md`、`design.md`、`runtime-acceptance.md`、`verification.md`、`tasks.md` 或 `trace/verification.proof-slices.json` 已存在。
+4. Specs 阶段 partial validator 必须在 proposal 基础上校验已生成 specs 及其 trace；不得要求尚未生成的 design、runtime-acceptance、verification、tasks artifacts。
+5. Design 阶段 partial validator 必须在 proposal/specs 基础上校验 `design.md` 和 `trace/design.trace.json`；不得要求尚未生成的 runtime-acceptance、verification、tasks artifacts。
+6. Runtime-acceptance 阶段 partial validator 必须校验 `runtime-acceptance.md`、`trace/runtime-acceptance.trace.json` 和已存在上游 trace 的 runtime projection；在 `verification.md` 尚未存在时，不得要求 `trace/verification.proof-slices.json` 或 verification reconciliation。
+7. Verification 阶段 partial validator 必须校验 `verification.md`、`trace/verification.trace.json`、`trace/verification.proof-slices.json`、manifest 中 proof-slices entry/digest、Proof Slice Matrix 与 canonical JSON 的镜像一致性，以及 runtime coverage reconciliation。
+8. Tasks 阶段 partial validator 必须校验 `tasks.md`、`trace/tasks.trace.json`、AC runtime ownership/projection、task ID 解析和已存在 runtime/verification 交叉引用。
+9. `trace-contract-version: "proof-slices-v1"` 是 change-level trace contract 标识，可以从 proposal 阶段写入 manifest；它不表示 proposal/specs/design/runtime partial 阶段必须预先创建 verification sidecar trace。只有 `verification.md` 已存在或运行 complete validator 时，`trace/verification.proof-slices.json` 才成为必需文件。
+10. Complete validator 指带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。它必须要求 apply-required artifacts 全部存在，并校验完整 trace plane、verification proof-slices sidecar、runtime/verification/tasks reconciliation 和跨 artifact 闭环。
+
 ### Artifact Writer / Reviewer Loop
 
 1. Artifact 必须按 schema dependency graph 顺序处理：`proposal`、`specs`、`design`、`runtime-acceptance`、`verification`、`tasks`。
@@ -245,23 +258,26 @@
    - `runtime-acceptance-writer` 后接 `runtime-acceptance-reviewer`
    - `verification-writer` 后接聚焦 `verification-reviewer`
    - `tasks-writer` 后接 `tasks-reviewer`
-3. Writer 和 reviewer 都必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建对应 subagent，必须停止并报告 blocker，不得降级为主 Agent 自检或低配模型。
-4. Writer 输入必须包含：change 名称、schema 名称、`openspec instructions <artifact-id> --change "<change-slug>" --json` 的完整输出、已完成 dependency artifact 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set。Writer 只能写当前 artifact。
-5. Writer 写入 artifact 后，主 Agent 必须运行 partial static validator：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。Hard error 必须由主 Agent 修复并重新运行到 hard pass；warning 必须传给 artifact reviewer。
-6. Artifact reviewer 输入必须包含：change 名称、schema 名称、当前 artifact 路径和内容、必要 upstream dependency artifact、contract bundle 路径和内容、partial validator 报告。Reviewer 不得读取当前实现、测试文件、`openspec-results/**`、evidence、apply-result 或 apply 阶段产物来推导 oracle。
-7. Reviewer 只读复核，不得直接修订 artifact。Reviewer 只能输出 `Pass` 或 `Blocker`。Blocker 必须包含 artifact path、artifact anchor、contract source path + section heading、问题描述和修复方向；`verification.md` blocker 还必须列出 runtime row、现有或缺失 Proof Slice、被合并或遗漏的分支。
-8. 主 Agent 负责根据 reviewer blocker 修复 artifact，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续生成依赖该 artifact 的下游 artifact。
-9. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、contract section、heading/table row、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。
+3. 每个 artifact 的修复必须使用当前 artifact 的 `repair-writer`，例如 `proposal-repair-writer`、`specs-repair-writer`、`design-repair-writer`、`runtime-acceptance-repair-writer`、`verification-repair-writer` 或 `tasks-repair-writer`。
+4. Writer、repair-writer 和 reviewer 都必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建对应 subagent，必须停止并报告 blocker，不得降级为主 Agent 自检或低配模型。
+5. Writer 输入必须包含：change 名称、schema 名称、`openspec instructions <artifact-id> --change "<change-slug>" --json` 的完整输出、已完成 dependency artifact 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set。Writer 只能写当前 artifact。
+6. 任一 writer、repair-writer、reviewer 或 integration-reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录；不得读取当前 artifact 的中间落盘状态、审查 partial trace、运行 validator、修改 artifacts、接手修复/复核，或向正在运行的 subagent 注入中途发现。
+7. Writer 或 repair-writer 自然返回最终完成或明确 blocker 前，主 Agent 不得运行 partial static validator，不得启动 reviewer，也不得继续生成依赖该 artifact 的下游 artifact。
+8. Writer 或 repair-writer 自然返回完成后，主 Agent 必须运行 partial static validator：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。Hard error 必须由主 Agent 分派当前 artifact 的 `repair-writer` 修复；repair-writer 自然返回后重新运行 validator 到 hard pass。Warning 必须传给 artifact reviewer。
+9. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Artifact reviewer 输入必须包含：change 名称、schema 名称、当前 artifact 路径和内容、必要 upstream dependency artifact、contract bundle 路径和内容、partial validator 报告。Reviewer 不得读取当前实现、测试文件、`openspec-results/**`、evidence、apply-result 或 apply 阶段产物来推导 oracle。
+10. Reviewer 只读复核，不得直接修订 artifact。Reviewer 只能输出 `Pass` 或 `Blocker`。Blocker 必须包含 artifact path、artifact anchor、contract source path + section heading、问题描述和修复方向；`verification.md` blocker 还必须列出 runtime row、现有或缺失 Proof Slice、被合并或遗漏的分支。
+11. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 `repair-writer` 修复，等待 repair-writer 自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续生成依赖该 artifact 的下游 artifact。
+12. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、contract section、heading/table row、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。
 
 ### Complete Validation / Integration Reviewer
 
 1. 当 apply-required artifacts 全部完成并且每个 artifact reviewer pass 后，必须运行全量静态校验：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。
-2. Full validator hard error 阻断 integration reviewer 和 apply-ready 声明；主 Agent 必须修复并重新运行到 hard pass。Warning 必须进入 integration reviewer 输入。
+2. Full validator hard error 阻断 integration reviewer 和 apply-ready 声明；主 Agent 必须分派受影响 artifact 的 `repair-writer` 修复，按受影响 artifact 重新运行 partial validator 和相应 artifact reviewer，再重新运行 full validator 到 hard pass。Warning 必须进入 integration reviewer 输入。
 3. Full validator hard pass 后，必须启动一次且仅一次 `artifact-integration-reviewer` subagent。
 4. `artifact-integration-reviewer` 必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建该 reviewer，必须停止并报告 blocker，不得降级为主 Agent 自检。
 5. Integration reviewer 输入必须包含：change 名称、schema 名称、完整 static validator 报告、所有 artifact reviewer 输出、proposal/specs/design/runtime-acceptance/verification/tasks 路径和内容、所有相关 contract bundle 路径。它不重新替代每个 artifact 的专项 reviewer。
 6. Integration reviewer 只检查跨 artifact reconciliation：source/scope projection 是否漂移、runtime rows 是否同时被 `tasks.md` 和 `verification.md` 正确投影、未关闭 reviewer blocker 是否存在、validator warning 是否处理、proposal/spec/design/runtime/verification/tasks 是否存在互相发明新行为。
-7. Integration reviewer 只读复核，不得直接修订 artifact。输出只能是 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、artifact anchor、contract source heading、问题和修复方向。主 Agent 修复后必须重新运行 full validator，并按受影响 artifact 重新运行相应 artifact reviewer，再重新启动 integration reviewer。
+7. Integration reviewer 只读复核，不得直接修订 artifact。输出只能是 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、artifact anchor、contract source heading、问题和修复方向。主 Agent 收到 blocker 后必须分派受影响 artifact 的 `repair-writer` 修复，按受影响 artifact 重新运行 partial validator 和相应 artifact reviewer，再重新运行 full validator，并重新启动 integration reviewer。
 8. 未满足所有 artifact reviewer pass、full validator hard pass 和 integration reviewer pass 前，不得声称 artifacts apply-ready，不得建议进入 apply，不得把 `Coverage Status = covered`、checklist 勾选或 validator PASS 当作最终质量证明。
 
 ### Validator / Reviewer 分工

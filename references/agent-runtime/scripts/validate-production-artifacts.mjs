@@ -5,7 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  isAutomatedProofSliceRequired,
+  isProofSlicePlacementSupported,
+} from "./proof-slice-placement-policy.mjs";
+
 const TRACE_SCHEMA = "openspec-trace-v1";
+const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
+const TRACE_CONTRACT_PROOF_SLICES = "proof-slices-v1";
+const PROOF_SLICES_TRACE_PATH = "trace/verification.proof-slices.json";
 const RUNTIME_ROW_RE = /\b(?:RS|OP|ST|CH)-\d{3}\b/g;
 const PROOF_SLICE_RE = /\bPS-\d{3}\b/g;
 const AC_ID_RE = /\bAC-\d{3}\b/g;
@@ -49,6 +57,23 @@ const PRIMARY_LAYERS = new Set([
   "visual/responsive",
   "security/negative",
 ]);
+
+const PROOF_SLICE_COLUMNS = [
+  "Slice ID",
+  "Runtime Row IDs",
+  "Primary Runtime Row ID",
+  "Primitive Type",
+  "Branch / Variant",
+  "Observable Surface",
+  "Oracle Fragment",
+  "Failure Signal",
+  "Primary Layer",
+  "Production Owner",
+  "Primary Assertion Shape",
+  "Fixture / Mock Boundary",
+  "Regression Intent",
+  "Manual / Environment Gate",
+];
 
 const FORBIDDEN_ARTIFACT_FIELDS = [
   "Test Evidence Matrix",
@@ -159,7 +184,7 @@ export function validateChange(options = {}) {
   const schemaName = readSchemaName(changeDir);
   const schemaKind = schemaName === "production-default-acceptance-driven" ? "default" : "obligation";
   const files = readChangeFiles(root, changeDir);
-  const trace = loadTracePlane(root, changeDir, files, schemaKind, issues);
+  const trace = loadTracePlane(root, changeDir, files, schemaKind, issues, { complete });
 
   if (complete) {
     for (const artifact of ["runtime-acceptance.md", "verification.md", "tasks.md"]) {
@@ -174,7 +199,13 @@ export function validateChange(options = {}) {
     : new Map();
 
   const proofSlices = files.byName["verification.md"]
-    ? validateVerification(files.byName["verification.md"], runtimeRows, issues)
+    ? validateVerification(
+        files.byName["verification.md"],
+        runtimeRows,
+        issues,
+        trace.get("verification-proof-slices"),
+        trace.traceContractVersion,
+      )
     : new Map();
 
   const taskModel = files.byName["tasks.md"]
@@ -239,10 +270,11 @@ function specTraceName(relPath) {
   return relPath.replace(/^specs[\\/]/, "").replace(/[\\/]spec\.md$/, "").replace(/\.md$/, "");
 }
 
-function loadTracePlane(root, changeDir, files, schemaKind, issues) {
+function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}) {
   const traces = new Map();
   const manifestPath = path.join(changeDir, "trace", "manifest.json");
   let manifest = null;
+  let traceContractVersion = "";
   if (!fs.existsSync(manifestPath)) {
     addIssue(issues, "error", "VAL-TR-001", path.relative(root, manifestPath), "缺少 trace/manifest.json。");
   } else {
@@ -251,6 +283,16 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues) {
       validateKebabKeys(manifest, "trace/manifest.json", issues);
       if (manifest["trace-schema"] !== TRACE_SCHEMA) {
         addIssue(issues, "error", "VAL-TR-002", "trace/manifest.json", `trace-schema 必须为 ${TRACE_SCHEMA}。`);
+      }
+      traceContractVersion = strip(manifest["trace-contract-version"]);
+      if (traceContractVersion && traceContractVersion !== TRACE_CONTRACT_PROOF_SLICES) {
+        addIssue(
+          issues,
+          "error",
+          "VAL-TR-017",
+          "trace/manifest.json",
+          `trace-contract-version 不支持：${traceContractVersion}。`,
+        );
       }
     }
   }
@@ -270,7 +312,7 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues) {
     if (pointer.digest !== digest) {
       addIssue(issues, "error", "VAL-TR-004", `${file.repoRelPath}`, `Trace digest 不匹配，应为 ${digest}。`);
     }
-    const manifestEntry = findManifestEntry(manifest, file.relPath);
+    const manifestEntry = findManifestEntry(manifest, file.relPath, pointer.path);
     if (!manifestEntry) {
       addIssue(issues, "error", "VAL-TR-005", "trace/manifest.json", `manifest 缺少 artifact ${file.relPath}。`);
     } else {
@@ -295,12 +337,73 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues) {
     validateTraceSections(data, file, schemaKind, traceRel, issues);
     traces.set(file.artifactId === "specs" ? `specs:${specTraceName(file.relPath)}` : file.artifactId, data);
   }
+  const shouldLoadProofSlices =
+    traceContractVersion === TRACE_CONTRACT_PROOF_SLICES && (options.complete || Boolean(files.byName["verification.md"]));
+  if (shouldLoadProofSlices) {
+    const proofSlicesTrace = loadProofSlicesTrace(root, changeDir, manifest, issues);
+    if (proofSlicesTrace) {
+      traces.set("verification-proof-slices", proofSlicesTrace);
+    }
+  }
+  traces.traceContractVersion = traceContractVersion;
   return traces;
 }
 
-function findManifestEntry(manifest, artifactPath) {
+function findManifestEntry(manifest, artifactPath, tracePath = null) {
   const artifacts = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
-  return artifacts.find((entry) => entry?.["artifact-path"] === artifactPath);
+  return artifacts.find(
+    (entry) => entry?.["artifact-path"] === artifactPath && (!tracePath || entry?.["trace-path"] === tracePath),
+  );
+}
+
+function findManifestTraceEntry(manifest, tracePath) {
+  const artifacts = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
+  return artifacts.find((entry) => entry?.["trace-path"] === tracePath);
+}
+
+function loadProofSlicesTrace(root, changeDir, manifest, issues) {
+  const fullPath = path.join(changeDir, PROOF_SLICES_TRACE_PATH);
+  const repoRelPath = path.relative(root, fullPath);
+  if (!fs.existsSync(fullPath)) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PST-001",
+      repoRelPath,
+      "trace-contract-version=proof-slices-v1 时必须存在 verification.proof-slices.json。",
+    );
+    return null;
+  }
+  const digest = sha256File(fullPath);
+  const manifestEntry = findManifestTraceEntry(manifest, PROOF_SLICES_TRACE_PATH);
+  if (!manifestEntry) {
+    addIssue(issues, "error", "VAL-PST-002", "trace/manifest.json", `manifest 缺少 ${PROOF_SLICES_TRACE_PATH}。`);
+  } else {
+    if (manifestEntry["trace-schema"] !== PROOF_SLICES_TRACE_SCHEMA) {
+      addIssue(
+        issues,
+        "error",
+        "VAL-PST-003",
+        "trace/manifest.json",
+        `${PROOF_SLICES_TRACE_PATH} 的 trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`,
+      );
+    }
+    if (manifestEntry["trace-digest"] !== digest) {
+      addIssue(
+        issues,
+        "error",
+        "VAL-PST-004",
+        "trace/manifest.json",
+        `${PROOF_SLICES_TRACE_PATH} 的 trace-digest 与实际文件不一致。`,
+      );
+    }
+  }
+  const data = readJson(fullPath, root, issues);
+  if (!data) {
+    return null;
+  }
+  validateKebabKeys(data, repoRelPath, issues);
+  return data;
 }
 
 function parseTracePointer(file, issues) {
@@ -401,7 +504,7 @@ function validateRuntimeAcceptance(file, trace, issues) {
   return rows;
 }
 
-function validateVerification(file, runtimeRows, issues) {
+function validateVerification(file, runtimeRows, issues, proofSlicesTrace = null, traceContractVersion = "") {
   const requiredSections = [
     "## Verification Intent",
     "## Proof Slice Matrix",
@@ -430,73 +533,236 @@ function validateVerification(file, runtimeRows, issues) {
     return slices;
   }
 
-  const requiredColumns = [
-    "Slice ID",
-    "Runtime Row IDs",
-    "Primary Runtime Row ID",
-    "Primitive Type",
-    "Branch / Variant",
-    "Observable Surface",
-    "Oracle Fragment",
-    "Failure Signal",
-    "Primary Layer",
-    "Production Owner",
-    "Primary Assertion Shape",
-    "Fixture / Mock Boundary",
-    "Regression Intent",
-    "Manual / Environment Gate",
-  ];
-  const indexes = requireColumns(table, requiredColumns, file.repoRelPath, "VAL-PS-002", issues);
+  const indexes = requireColumns(table, PROOF_SLICE_COLUMNS, file.repoRelPath, "VAL-PS-002", issues);
   if (!indexes) {
     return slices;
   }
 
   for (const row of table.rows) {
-    const sliceId = strip(row.cells[indexes["Slice ID"]]);
-    if (!/^PS-\d{3}$/.test(sliceId)) {
+    const slice = proofSliceFromMarkdownRow(row, indexes);
+    if (!/^PS-\d{3}$/.test(slice.id)) {
       continue;
     }
-    if (slices.has(sliceId)) {
-      addIssue(issues, "error", "VAL-PS-003", `${file.repoRelPath}:${row.line}`, `Proof Slice ${sliceId} 重复。`);
+    if (slices.has(slice.id)) {
+      addIssue(issues, "error", "VAL-PS-003", `${file.repoRelPath}:${row.line}`, `Proof Slice ${slice.id} 重复。`);
     }
 
-    const runtimeRowIds = idsFromValue(row.cells[indexes["Runtime Row IDs"]], RUNTIME_ROW_RE);
-    const primaryRowId = strip(row.cells[indexes["Primary Runtime Row ID"]]);
-    const primitive = strip(row.cells[indexes["Primitive Type"]]);
-    const layer = strip(row.cells[indexes["Primary Layer"]]);
-    const owner = strip(row.cells[indexes["Production Owner"]]);
-    const branch = strip(row.cells[indexes["Branch / Variant"]]);
-    const oracle = strip(row.cells[indexes["Oracle Fragment"]]);
-    const assertion = strip(row.cells[indexes["Primary Assertion Shape"]]);
-
-    if (!runtimeRowIds.includes(primaryRowId)) {
-      addIssue(issues, "error", "VAL-PS-004", `${file.repoRelPath}:${row.line}`, `${sliceId} 的 Primary Runtime Row ID 不在 Runtime Row IDs 中。`);
-    }
-    for (const runtimeRowId of runtimeRowIds) {
-      if (runtimeRows.size > 0 && !runtimeRows.has(runtimeRowId)) {
-        addIssue(issues, "error", "VAL-PS-005", `${file.repoRelPath}:${row.line}`, `${sliceId} 引用未定义 runtime row ${runtimeRowId}。`);
-      }
-    }
-    if (!PRIMITIVE_TYPES.has(primitive)) {
-      addIssue(issues, "error", "VAL-PS-006", `${file.repoRelPath}:${row.line}`, `${sliceId} Primitive Type 非法：${primitive || "(empty)"}。`);
-    }
-    if (!PRIMARY_LAYERS.has(layer)) {
-      addIssue(issues, "error", "VAL-PS-007", `${file.repoRelPath}:${row.line}`, `${sliceId} Primary Layer 非法：${layer || "(empty)"}。`);
-    }
-    if (!owner || isOwnerListOrNonProduction(owner)) {
-      addIssue(issues, "error", "VAL-PS-008", `${file.repoRelPath}:${row.line}`, `${sliceId} Production Owner 必须是单一 production owner token，不能是 owner list、测试路径或 evidence 路径。`);
-    }
-
-    const combined = [branch, oracle, assertion].join(" ");
-    for (const pattern of NON_ATOMIC_PATTERNS) {
-      if (pattern.regex.test(combined)) {
-        addIssue(issues, "warning", pattern.id, `${file.repoRelPath}:${row.line}`, `${sliceId} 疑似聚合多个独立可失败分支：${pattern.label}。`);
-      }
-    }
-
-    slices.set(sliceId, { id: sliceId, runtimeRowIds, primaryRowId, primitive, layer, owner, line: row.line });
+    validateProofSliceModel(slice, `${file.repoRelPath}:${row.line}`, runtimeRows, issues);
+    slices.set(slice.id, slice);
+  }
+  if (traceContractVersion === TRACE_CONTRACT_PROOF_SLICES) {
+    const jsonSlices = validateProofSlicesTrace(proofSlicesTrace, slices, runtimeRows, issues);
+    return jsonSlices.size > 0 ? jsonSlices : slices;
   }
   return slices;
+}
+
+function proofSliceFromMarkdownRow(row, indexes) {
+  return {
+    id: strip(row.cells[indexes["Slice ID"]]),
+    runtimeRowIds: idsFromValue(row.cells[indexes["Runtime Row IDs"]], RUNTIME_ROW_RE),
+    primaryRowId: strip(row.cells[indexes["Primary Runtime Row ID"]]),
+    primitive: strip(row.cells[indexes["Primitive Type"]]),
+    branch: strip(row.cells[indexes["Branch / Variant"]]),
+    surface: strip(row.cells[indexes["Observable Surface"]]),
+    oracle: strip(row.cells[indexes["Oracle Fragment"]]),
+    failure: strip(row.cells[indexes["Failure Signal"]]),
+    layer: strip(row.cells[indexes["Primary Layer"]]),
+    owner: strip(row.cells[indexes["Production Owner"]]),
+    assertion: strip(row.cells[indexes["Primary Assertion Shape"]]),
+    fixture: strip(row.cells[indexes["Fixture / Mock Boundary"]]),
+    regression: strip(row.cells[indexes["Regression Intent"]]),
+    manual: strip(row.cells[indexes["Manual / Environment Gate"]]),
+    line: row.line,
+  };
+}
+
+function proofSliceFromTraceRow(row) {
+  return {
+    id: strip(row["slice-id"]),
+    runtimeRowIds: idsFromValue(row["runtime-row-ids"], RUNTIME_ROW_RE),
+    primaryRowId: strip(row["primary-runtime-row-id"]),
+    primitive: strip(row["primitive-type"]),
+    branch: strip(row["branch-variant"]),
+    surface: strip(row["observable-surface"]),
+    oracle: strip(row["oracle-fragment"]),
+    failure: strip(row["failure-signal"]),
+    layer: strip(row["primary-layer"]),
+    owner: strip(row["production-owner"]),
+    assertion: strip(row["primary-assertion-shape"]),
+    fixture: strip(row["fixture-mock-boundary"]),
+    regression: strip(row["regression-intent"]),
+    manual: strip(row["manual-environment-gate"]),
+  };
+}
+
+function validateProofSliceModel(slice, ref, runtimeRows, issues) {
+  if (!slice.runtimeRowIds.includes(slice.primaryRowId)) {
+    addIssue(issues, "error", "VAL-PS-004", ref, `${slice.id} 的 Primary Runtime Row ID 不在 Runtime Row IDs 中。`);
+  }
+  for (const runtimeRowId of slice.runtimeRowIds) {
+    if (runtimeRows.size > 0 && !runtimeRows.has(runtimeRowId)) {
+      addIssue(issues, "error", "VAL-PS-005", ref, `${slice.id} 引用未定义 runtime row ${runtimeRowId}。`);
+    }
+  }
+  if (!PRIMITIVE_TYPES.has(slice.primitive)) {
+    addIssue(issues, "error", "VAL-PS-006", ref, `${slice.id} Primitive Type 非法：${slice.primitive || "(empty)"}。`);
+  }
+  if (!PRIMARY_LAYERS.has(slice.layer)) {
+    addIssue(issues, "error", "VAL-PS-007", ref, `${slice.id} Primary Layer 非法：${slice.layer || "(empty)"}。`);
+  }
+  if (!slice.owner || isOwnerListOrNonProduction(slice.owner)) {
+    addIssue(issues, "error", "VAL-PS-008", ref, `${slice.id} Production Owner 必须是单一 production owner token，不能是 owner list、测试路径或 evidence 路径。`);
+  }
+  if (
+    isAutomatedProofSliceRequired(slice) &&
+    slice.owner &&
+    !isOwnerListOrNonProduction(slice.owner) &&
+    PRIMARY_LAYERS.has(slice.layer) &&
+    !isProofSlicePlacementSupported(slice)
+  ) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PS-009",
+      ref,
+      `${slice.id} Production Owner + Primary Layer 没有 placement-policy compliant tests/** 落点：${slice.owner} + ${slice.layer}。请改为合法 owner/layer 组合，或改为 source/scope-backed manual/not-applicable。`,
+    );
+  }
+
+  const combined = [slice.branch, slice.oracle, slice.assertion].join(" ");
+  for (const pattern of NON_ATOMIC_PATTERNS) {
+    if (pattern.regex.test(combined)) {
+      addIssue(issues, "warning", pattern.id, ref, `${slice.id} 疑似聚合多个独立可失败分支：${pattern.label}。`);
+    }
+  }
+}
+
+function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
+  const slices = new Map();
+  if (!trace) {
+    return slices;
+  }
+  if (trace["trace-schema"] !== PROOF_SLICES_TRACE_SCHEMA) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PST-005",
+      PROOF_SLICES_TRACE_PATH,
+      `trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`,
+    );
+  }
+  if (trace["artifact-id"] !== "verification") {
+    addIssue(issues, "error", "VAL-PST-006", PROOF_SLICES_TRACE_PATH, "artifact-id 必须为 verification。");
+  }
+  if (trace["artifact-path"] !== "verification.md") {
+    addIssue(issues, "error", "VAL-PST-007", PROOF_SLICES_TRACE_PATH, "artifact-path 必须为 verification.md。");
+  }
+
+  const rows = asArray(trace["proof-slices"]);
+  if (rows.length === 0) {
+    addIssue(issues, "error", "VAL-PST-008", PROOF_SLICES_TRACE_PATH, "proof-slices 必须至少包含一行。");
+  }
+  const summaryCount = Number(trace["proof-slice-summary"]?.["proof-slice-count"]);
+  if (Number.isFinite(summaryCount) && summaryCount !== rows.length) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PST-009",
+      PROOF_SLICES_TRACE_PATH,
+      `proof-slice-summary.proof-slice-count 必须等于 proof-slices 行数 ${rows.length}。`,
+    );
+  }
+
+  for (const [index, row] of rows.entries()) {
+    const ref = `${PROOF_SLICES_TRACE_PATH}#/proof-slices/${index}`;
+    const slice = proofSliceFromTraceRow(row);
+    if (!/^PS-\d{3}$/.test(slice.id)) {
+      addIssue(issues, "error", "VAL-PST-010", ref, `slice-id 非法：${slice.id || "(empty)"}。`);
+      continue;
+    }
+    if (slices.has(slice.id)) {
+      addIssue(issues, "error", "VAL-PST-011", ref, `Proof Slice ${slice.id} 重复。`);
+    }
+    validateProofSliceModel(slice, ref, runtimeRows, issues);
+    validateProofSliceTestContract(row["test-contract"], slice.id, ref, issues);
+    slices.set(slice.id, slice);
+
+    const markdown = markdownSlices.get(slice.id);
+    if (!markdown) {
+      addIssue(issues, "error", "VAL-PST-012", ref, `${slice.id} 缺少 verification.md 镜像行。`);
+    } else {
+      compareProofSliceMirror(slice, markdown, ref, issues);
+    }
+  }
+
+  for (const sliceId of markdownSlices.keys()) {
+    if (!slices.has(sliceId)) {
+      addIssue(issues, "error", "VAL-PST-013", PROOF_SLICES_TRACE_PATH, `${sliceId} 存在于 verification.md 但缺少 JSON canonical row。`);
+    }
+  }
+  return slices;
+}
+
+function validateProofSliceTestContract(contract, sliceId, ref, issues) {
+  if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+    addIssue(issues, "error", "VAL-PST-020", ref, `${sliceId} 缺少 test-contract。`);
+    return;
+  }
+  if (strip(contract["primary-test-cardinality"]) !== "exactly-one") {
+    addIssue(issues, "error", "VAL-PST-021", ref, `${sliceId} primary-test-cardinality 必须为 exactly-one。`);
+  }
+  if (strip(contract["test-title-prefix"]) !== sliceId) {
+    addIssue(issues, "error", "VAL-PST-022", ref, `${sliceId} test-title-prefix 必须等于 slice-id。`);
+  }
+  if (contract["allow-shared-setup"] !== true) {
+    addIssue(issues, "error", "VAL-PST-023", ref, `${sliceId} allow-shared-setup 必须为 true。`);
+  }
+  if (contract["allow-multi-slice-primary-test"] !== false) {
+    const waiver = contract["multi-slice-waiver"];
+    if (
+      contract["allow-multi-slice-primary-test"] !== true ||
+      !waiver ||
+      typeof waiver !== "object" ||
+      !idsFromValue(waiver["slice-ids"], PROOF_SLICE_RE).includes(sliceId) ||
+      !strip(waiver.reason)
+    ) {
+      addIssue(
+        issues,
+        "error",
+        "VAL-PST-024",
+        ref,
+        `${sliceId} allow-multi-slice-primary-test 只能在提供 multi-slice-waiver 时为 true。`,
+      );
+    }
+  }
+  if (contract["waiver-required-for-multi-slice"] !== true) {
+    addIssue(issues, "error", "VAL-PST-025", ref, `${sliceId} waiver-required-for-multi-slice 必须为 true。`);
+  }
+}
+
+function compareProofSliceMirror(jsonSlice, markdownSlice, ref, issues) {
+  const checks = [
+    ["runtime-row-ids", jsonSlice.runtimeRowIds, markdownSlice.runtimeRowIds],
+    ["primary-runtime-row-id", jsonSlice.primaryRowId, markdownSlice.primaryRowId],
+    ["primitive-type", jsonSlice.primitive, markdownSlice.primitive],
+    ["branch-variant", jsonSlice.branch, markdownSlice.branch],
+    ["observable-surface", jsonSlice.surface, markdownSlice.surface],
+    ["oracle-fragment", jsonSlice.oracle, markdownSlice.oracle],
+    ["failure-signal", jsonSlice.failure, markdownSlice.failure],
+    ["primary-layer", jsonSlice.layer, markdownSlice.layer],
+    ["production-owner", jsonSlice.owner, markdownSlice.owner],
+    ["primary-assertion-shape", jsonSlice.assertion, markdownSlice.assertion],
+    ["fixture-mock-boundary", jsonSlice.fixture, markdownSlice.fixture],
+    ["regression-intent", jsonSlice.regression, markdownSlice.regression],
+    ["manual-environment-gate", jsonSlice.manual, markdownSlice.manual],
+  ];
+  for (const [field, left, right] of checks) {
+    const same = Array.isArray(left) || Array.isArray(right) ? sameArray(left, right) : strip(left) === strip(right);
+    if (!same) {
+      addIssue(issues, "error", "VAL-PST-030", ref, `${jsonSlice.id} 的 ${field} 与 verification.md 镜像不一致。`);
+    }
+  }
 }
 
 function validateVerificationReconciliation(trace, proofSlices, runtimeRows, issues) {
@@ -656,6 +922,9 @@ function validateObligationSpecsTraceProjection(trace, registeredRows, issues) {
         addIssue(issues, "error", "VAL-SP-004", ref, `${globalAtomId} 是 spec-requirement，spec-handling 必须为 direct-spec-requirement。`);
       } else if (effectiveProjection === "spec-guard" && handling !== "direct-spec-guard") {
         addIssue(issues, "error", "VAL-SP-005", ref, `${globalAtomId} 是 spec-guard，spec-handling 必须为 direct-spec-guard。`);
+      } else if (effectiveProjection === "spec-requirement" || effectiveProjection === "spec-guard") {
+        // Correct direct spec projections are fully validated by the handling checks above.
+        continue;
       } else if (effectiveProjection === "design-obligation") {
         if (!DERIVED_SPEC_HANDLINGS.has(handling)) {
           addIssue(issues, "error", "VAL-SP-006", ref, `${globalAtomId} 是 design-obligation，写入 specs 时必须使用 derived-capability-contract-* handling。`);
@@ -975,6 +1244,12 @@ function sameSet(a, b) {
     if (!right.has(value)) return false;
   }
   return true;
+}
+
+function sameArray(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
 }
 
 function isOwnerListOrNonProduction(owner) {
