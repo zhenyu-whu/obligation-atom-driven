@@ -92,6 +92,80 @@ test("proposal source-window-read-set 未覆盖 direct atoms hard fail", () => {
   assertRule(result, "VAL-PR-009");
 });
 
+test("source-aligned final-packet-index 缺少目标 change hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("missing-packet-index-change", files);
+  const packetIndexPath = path.join(root, "openspec", "orchestrate", "phase-works", "phase-5", "final-packet-index.json");
+  const packetIndex = JSON.parse(fs.readFileSync(packetIndexPath, "utf8"));
+  packetIndex.packets = [];
+  fs.writeFileSync(packetIndexPath, `${JSON.stringify(packetIndex, null, 2)}\n`);
+
+  const result = validateChange({ root, change: "missing-packet-index-change", complete: false });
+  assertRule(result, "VAL-PR-014");
+});
+
+test("source-aligned atom-plan-mapping direct owner 与 packet index 不一致 hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("mapping-owner-drift-change", files);
+  const mappingPath = path.join(root, "openspec", "orchestrate", "phase-works", "phase-5", "atom-plan-mapping.json");
+  const mapping = JSON.parse(fs.readFileSync(mappingPath, "utf8"));
+  mapping.rows[0]["final-owner-change"] = "other-change";
+  fs.writeFileSync(mappingPath, `${JSON.stringify(mapping, null, 2)}\n`);
+
+  const result = validateChange({ root, change: "mapping-owner-drift-change", complete: false });
+  assertRule(result, "VAL-PR-015");
+});
+
+test("source-aligned obligation-atom-index 缺少 direct atom hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("global-index-gap-change", files);
+  const globalIndexPath = path.join(root, "openspec", "orchestrate", "change-capability-anchors", "obligation-atom-index.json");
+  const globalIndex = JSON.parse(fs.readFileSync(globalIndexPath, "utf8"));
+  globalIndex["global-atoms"] = [];
+  fs.writeFileSync(globalIndexPath, `${JSON.stringify(globalIndex, null, 2)}\n`);
+
+  const result = validateChange({ root, change: "global-index-gap-change", complete: false });
+  assertRule(result, "VAL-PR-016");
+});
+
+test("proposal register 与 source-aligned JSON handoff 字段漂移 hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("json-authority-field-drift-change", files);
+  const globalIndexPath = path.join(root, "openspec", "orchestrate", "change-capability-anchors", "obligation-atom-index.json");
+  const globalIndex = JSON.parse(fs.readFileSync(globalIndexPath, "utf8"));
+  globalIndex["global-atoms"][0]["source-fact"] = "JSON 权威事实。";
+  fs.writeFileSync(globalIndexPath, `${JSON.stringify(globalIndex, null, 2)}\n`);
+
+  const result = validateChange({ root, change: "json-authority-field-drift-change", complete: false });
+  assertRule(result, "VAL-PR-006");
+});
+
+test("final packet Markdown 缺少 JSON direct atom hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("packet-mirror-missing-change", files);
+  const packetPath = path.join(
+    root,
+    "openspec",
+    "orchestrate",
+    "change-capability-anchors",
+    "packet-mirror-missing-change",
+    "packet-mirror-missing-change.md",
+  );
+  fs.writeFileSync(packetPath, fs.readFileSync(packetPath, "utf8").replaceAll("GA-0001", "GA-9999"));
+
+  const result = validateChange({ root, change: "packet-mirror-missing-change", complete: false });
+  assertRule(result, "VAL-PR-017");
+});
+
+test("legacy Markdown-only proposal authority 仍可校验通过", () => {
+  const files = standardFiles({ proposal: true, authorityMode: "legacy" });
+  const root = makeChange("legacy-authority-change", files);
+  const result = validateChange({ root, change: "legacy-authority-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+  assert.equal(result.warningCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
 test("specs trace 与 proposal spec projection 一致时通过", () => {
   const files = standardFiles({ proposal: true, specs: true });
   const root = makeChange("specs-valid-change", files);
@@ -598,7 +672,7 @@ function makeChange(change, files) {
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, `${JSON.stringify(preparedTraces[traceName], null, 2)}\n`);
   }
-  writeProposalAuthoritySources(root, change, preparedTraces, files.writeAuthority !== false);
+  writeProposalAuthoritySources(root, change, preparedTraces, files.writeAuthority !== false, files.authorityMode ?? "json");
   for (const [artifactPath, body] of Object.entries(files.artifacts)) {
     const traceName = traceNameForArtifact(artifactPath);
     const tracePath = path.join(traceDir, traceName);
@@ -664,7 +738,7 @@ function standardFiles(options = {}) {
   }
   if (options.proposal) {
     artifacts["proposal.md"] = "## Why\n\n- 测试。\n";
-    traces["proposal.trace.json"] = proposalTrace();
+    traces["proposal.trace.json"] = proposalTrace(options);
   }
   if (options.specs) {
     artifacts["specs/capability/spec.md"] = specsBody();
@@ -677,6 +751,7 @@ function standardFiles(options = {}) {
   return {
     artifacts,
     traces,
+    ...(options.authorityMode ? { authorityMode: options.authorityMode } : {}),
     ...(options.newContract ? { manifestTraceContractVersion: "proof-slices-v1" } : {}),
   };
 }
@@ -844,7 +919,16 @@ Proof Contract:
 ${second}`;
 }
 
-function proposalTrace() {
+function proposalTrace(options = {}) {
+  const jsonPreconditions =
+    options.authorityMode === "legacy"
+      ? {}
+      : {
+          "orchestrate-manifest": "openspec/orchestrate/trace/manifest.json",
+          "global-atom-index-json": "openspec/orchestrate/change-capability-anchors/obligation-atom-index.json",
+          "atom-plan-mapping-json": "openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json",
+          "final-packet-index-json": "openspec/orchestrate/phase-works/phase-5/final-packet-index.json",
+        };
   return {
     "trace-schema": "openspec-trace-v1",
     "artifact-id": "proposal",
@@ -855,6 +939,7 @@ function proposalTrace() {
       "proposal-input-mode": "final-change-packet",
       "canonical-change-packet": "openspec/orchestrate/change-capability-anchors/%CHANGE%/%CHANGE%.md",
       "global-atom-index": "openspec/orchestrate/change-capability-anchors/obligation-atom-index.md",
+      ...jsonPreconditions,
       blockers: [],
     },
     "change-atom-coverage-register": [
@@ -1315,17 +1400,131 @@ function replaceChangePlaceholder(value, change) {
   return typeof value === "string" ? value.replaceAll("%CHANGE%", change) : value;
 }
 
-function writeProposalAuthoritySources(root, change, traces, enabled) {
+function writeProposalAuthoritySources(root, change, traces, enabled, authorityMode = "json") {
   const proposal = traces["proposal.trace.json"];
   if (!enabled || !proposal) return;
   const rows = proposal["change-atom-coverage-register"] ?? [];
   const packetDir = path.join(root, "openspec", "orchestrate", "change-capability-anchors", change);
   fs.mkdirSync(packetDir, { recursive: true });
-  fs.writeFileSync(path.join(packetDir, `${change}.md`), finalPacketFromRows(change, rows));
+  const packetPath = path.join(packetDir, `${change}.md`);
+  fs.writeFileSync(packetPath, finalPacketFromRows(change, rows));
 
   const indexDir = path.join(root, "openspec", "orchestrate", "change-capability-anchors");
   fs.mkdirSync(indexDir, { recursive: true });
   fs.writeFileSync(path.join(indexDir, "obligation-atom-index.md"), atomIndexFromRows(change, rows));
+  if (authorityMode === "legacy") {
+    return;
+  }
+
+  const workDir = path.join(root, "openspec", "orchestrate", "phase-works", "phase-5");
+  const traceDir = path.join(root, "openspec", "orchestrate", "trace");
+  fs.mkdirSync(workDir, { recursive: true });
+  fs.mkdirSync(traceDir, { recursive: true });
+
+  const globalIndexPath = path.join(indexDir, "obligation-atom-index.json");
+  const mappingPath = path.join(workDir, "atom-plan-mapping.json");
+  const packetIndexPath = path.join(workDir, "final-packet-index.json");
+  const phase5TracePath = path.join(traceDir, "phase-5.trace.json");
+  writeJson(globalIndexPath, globalAtomIndexJson(change, rows));
+  writeJson(mappingPath, atomPlanMappingJson(change, rows));
+  writeJson(packetIndexPath, finalPacketIndexJson(root, change, rows, packetPath));
+  writeJson(phase5TracePath, phase5TraceJson());
+  writeJson(
+    path.join(traceDir, "manifest.json"),
+    sourceAlignedManifest(root, [globalIndexPath, mappingPath, packetIndexPath, phase5TracePath]),
+  );
+}
+
+function writeJson(fullPath, value) {
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function globalAtomIndexJson(change, rows) {
+  return {
+    "trace-schema": "source-aligned-global-atom-index-v1",
+    "trace-contract-version": "source-aligned-trace-v1",
+    "global-atoms": rows.map((row) => ({
+      "global-atom-id": row["global-atom-id"],
+      "source-document": row["source-document"],
+      lines: row.lines,
+      "line-ranges": [{ start: 1, end: 2 }],
+      "atom-type": row["atom-type"],
+      "source-fact": row["source-fact"],
+      normativity: row.normativity,
+      "coverage-status": "direct",
+      "artifact-projection": row["artifact-projection"],
+      "owner-change": change,
+      "owner-capability": row["owner-capability"],
+      "atom-relation": row["atom-relation"],
+      "propose-use": row["propose-use"],
+      "evidence-need": row["evidence-need"],
+      origins: ["source.origin"],
+    })),
+  };
+}
+
+function atomPlanMappingJson(change, rows) {
+  return {
+    "trace-schema": "source-aligned-atom-plan-mapping-v1",
+    "trace-contract-version": "source-aligned-trace-v1",
+    rows: rows.map((row) => ({
+      "global-atom-id": row["global-atom-id"],
+      "source-document": row["source-document"],
+      lines: row.lines,
+      "line-ranges": [{ start: 1, end: 2 }],
+      "final-owner-change": change,
+      "final-owner-capability": row["owner-capability"],
+      "final-artifact-projection": row["artifact-projection"],
+      "final-relation": "direct",
+      "plan-decision": "keep",
+      reason: "测试映射。",
+    })),
+  };
+}
+
+function finalPacketIndexJson(root, change, rows, packetPath) {
+  return {
+    "trace-schema": "source-aligned-final-packet-index-v1",
+    "trace-contract-version": "source-aligned-trace-v1",
+    packets: [
+      {
+        change,
+        "packet-path": path.relative(root, packetPath).split(path.sep).join("/"),
+        "packet-digest": sha256File(packetPath),
+        "direct-atom-ids": rows.map((row) => row["global-atom-id"]),
+        "owner-scoped-non-direct-atom-ids": [],
+        "capability-view-paths": [],
+      },
+    ],
+  };
+}
+
+function phase5TraceJson() {
+  return {
+    "trace-schema": "source-aligned-phase-5-trace-v1",
+    "trace-contract-version": "source-aligned-trace-v1",
+    status: "accepted",
+  };
+}
+
+function sourceAlignedManifest(root, tracePaths) {
+  return {
+    "trace-schema": "source-aligned-orchestrate-manifest-v1",
+    "trace-contract-version": "source-aligned-trace-v1",
+    "orchestrate-dir": "openspec/orchestrate",
+    "phase-statuses": {
+      "phase-5": "accepted",
+    },
+    artifacts: tracePaths.map((fullPath) => ({
+      "artifact-path": path.relative(root, fullPath).split(path.sep).join("/"),
+      "trace-path": path.relative(root, fullPath).split(path.sep).join("/"),
+      "trace-schema": JSON.parse(fs.readFileSync(fullPath, "utf8"))["trace-schema"],
+      sha256: sha256File(fullPath),
+      phase: "phase-5",
+      role: "test",
+    })),
+  };
 }
 
 function finalPacketFromRows(change, rows) {

@@ -75,8 +75,8 @@
    - 若最早未完成项是 `active-incomplete`，继续该 change 的 artifact 生成，不创建重复目录。
    - 若最早未完成项是 `active-apply-ready`，不得自动跳到后续 change；报告该 change 已 propose 完成，下一步应 apply 或 archive。只有用户明确要求并行规划后续 change 时，才允许继续推断下一个 `not-started` change。
    - 若最早未完成项是 `not-started`，自动选择它作为本次 propose 目标，并继续后续 packet/atom 校验；只有在校验通过后才执行 `openspec new change "<change-slug>"`。
-6. 选定目标后，读取该 change 的 final packet：`openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`，确认 packet 存在且没有 blocker。
-7. 读取 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.md`，确认目标 packet 中的 direct atoms 均能回链到全局 atom 注册表，并能取得或保守推断 artifact projection；最终 direct scope 和 artifact projection 以 final packet 为准。
+6. 选定目标后，优先读取 `openspec/orchestrate/phase-works/phase-5/final-packet-index.json`，确认目标 change 存在、packet path 存在、direct atom IDs 可解析；如该 JSON sidecar 不存在且 proposal preconditions 未显式指向 JSON handoff，才允许回退读取 `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`。
+7. 优先读取 `openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json` 与 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json`，确认目标 direct atoms 均能回链到全局 atom 注册表，并能取得 final owner、final relation、source fields 与 final artifact projection；如 JSON sidecar 不存在且 proposal preconditions 未显式指向 JSON handoff，才允许回退读取 `obligation-atom-index.md`。
 8. 只有需要核对 dependencies 或 final packet index 信息不足时，才读取 `openspec/orchestrate/change-plan.md`；它不得覆盖 final packet。
 9. 如果无法可靠判断 completed / active / archive 状态，或多个候选同等合理，才向用户提出一个简短澄清问题，并列出候选 change slug、active/archive 路径与阻塞原因。
 
@@ -86,7 +86,7 @@
 - 自动推断必须先完成 active/archive inventory；未读取 archive 目录时，不得把 final packet index 中靠前的 change 判定为 `not-started`。
 - 自动推断不得跳过尚未完成的 dependency。若候选 change 的 `Dependencies:` 指向的 planned change 未完成或未归档，必须选择依赖链上最早未完成的 change，或报告 blocker。
 - 如果候选 change 缺少 `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md`，不得自动 propose，必须报告 final change packet 缺失。
-- 如果候选 packet 中存在 direct atom 但 `obligation-atom-index.md` 查不到对应 `GA-####`，不得自动 propose，必须报告 atom index 与 change packet 不一致。
+- 如果候选 JSON handoff 或 legacy packet 中存在 direct atom 但 `obligation-atom-index.json` / legacy `obligation-atom-index.md` 查不到对应 `GA-####`，不得自动 propose，必须报告 atom index 与 change packet 不一致。
 - 如果 archive 中已经存在目标 slug，绝不得再次运行 `openspec new change "<change-slug>"`；若 active 目录也存在同名 slug，先按 `state-conflict` 处理。
 
 ## Production Obligation Atom Driven 入口
@@ -126,19 +126,22 @@
 
 ## Obligation Atom 输入契约
 
-1. 不创建、不读取、不要求任何 proposal 前置 source artifact。`proposal.md` 是第一个标准 artifact，并且只能通过最小权威读集消费当前已存在的 canonical change packet 与 global atom index。
-2. Canonical change contract：当前 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 是 proposal 的唯一内容权威。它独占定义本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers。
-3. Lookup table：`openspec/orchestrate/change-capability-anchors/obligation-atom-index.md` 只用于校验 `GA-####` 存在，并按 atom id 补齐 source trace 字段、artifact projection 和 focused source-window read 所需的 `Source Document` + `Lines`。它不得覆盖 final change packet 的 direct scope、artifact projection 或 capability 归属。
-4. Discovery gates：
+1. 不创建、不读取、不要求任何 proposal 前置 source artifact。`proposal.md` 是第一个标准 artifact，并且只能通过最小权威读集消费当前已存在的 source-aligned JSON handoff、canonical change packet 与 global atom index。
+2. 不得执行、复制或依赖 `source-aligned-change-plan-coverage` 的 Python validator 或其它上游技能脚本。下游只按稳定数据契约读取 `openspec/orchestrate/**` 中自己消费的 JSON sidecar 与 Markdown mirror。
+3. Machine handoff：若存在 `openspec/orchestrate/trace/manifest.json`、`phase-works/phase-5/final-packet-index.json`、`phase-works/phase-5/atom-plan-mapping.json`、`change-capability-anchors/obligation-atom-index.json`，proposal 入口必须优先读取这些 JSON。`trace-contract-version` 必须为 `source-aligned-trace-v1`；当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。
+4. Canonical change contract：当前 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 仍是 proposal-facing 内容权威和人审镜像。它独占表达本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers；JSON sidecar 是机器 handoff 数据源。
+5. Lookup table：`obligation-atom-index.json` 优先用于校验 `GA-####` 存在，并按 atom id 补齐 source trace 字段、source fact、normativity、focused source-window read 所需的 `Source Document` + `Lines`；`atom-plan-mapping.json` 优先提供 final owner change/capability、final relation 和 final artifact projection。legacy `obligation-atom-index.md` 只在 JSON sidecar 缺失且 proposal preconditions 未显式指向 JSON handoff 时作为兼容 fallback。
+6. Discovery gates：
    - 读取 `openspec/orchestrate/change-capability-anchors/index.md`，确认目标 change 存在、packet path 存在。
    - 只有在用户未提供明确 change、需要按 roadmap 顺序自动推断、或需要核对 dependency 顺序时，才读取 `openspec/orchestrate/change-plan.md`。`change-plan.md` 不得覆盖 final change packet。
-5. Optional grouping aids：只有当 final packet 或 schema 写作需要拆分 spec file 时，才读取当前 change 下的 `capability-anchors/<capability>.md`。这些 capability view 只能辅助 capability 分组，不得覆盖 final change packet。
-6. Audit/debug evidence：除 canonical change packet、global atom index 和必要 capability views 外，其他 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。不得从这些文件新增、删除、移动、重判 direct atom，也不得用它们扩展 final packet 之外的 scope。
-7. 若用户请求不是 final packet index 中的 change，必须报告目标超出当前 canonical change contract，而不是在 proposal 中扩展范围或要求新的 proposal 前置 source artifact。
-8. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 final packet 中每个 `Direct Owning Atoms` 行建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
-9. proposal 生成时必须对每个 direct atom 定点重读 `obligation-atom-index.md` 中记录的 `Source Document` + `Lines`。对 contextual、explicit-non-goal、contextual-preserve、prototype-only-not-production 等 non-direct atoms，只在需要保留精确边界、避免误扩 scope 或确认 proof 语义时定点重读。
-10. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。
-11. downstream artifacts 只能通过 proposal `trace/proposal.trace.json` register 中的 exact `GA-####`、source document 和 line range 定点读取原始 docs。不得重新做全量 source extraction，不得从 source line range 直接发明新的 direct atom。
+7. Optional grouping aids：只有当 final packet 或 schema 写作需要拆分 spec file 时，才读取当前 change 下的 `capability-anchors/<capability>.md`。这些 capability view 只能辅助 capability 分组，不得覆盖 final change packet。
+8. Audit/debug evidence：除 canonical change packet、global atom index 和必要 capability views 外，其他 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。不得从这些文件新增、删除、移动、重判 direct atom，也不得用它们扩展 final packet 之外的 scope。
+9. 若用户请求不是 final packet index 中的 change，必须报告目标超出当前 canonical change contract，而不是在 proposal 中扩展范围或要求新的 proposal 前置 source artifact。
+10. proposal 的 `trace/proposal.trace.json` / `obligation-atom-preconditions` 可记录 `orchestrate-manifest`、`global-atom-index-json`、`atom-plan-mapping-json`、`final-packet-index-json`。这些字段出现时，对应 JSON 缺失必须视为 blocker，不得静默回退到 Markdown。
+11. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 JSON handoff 或 legacy final packet 中每个 direct atom 建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
+12. proposal 生成时必须对每个 direct atom 定点重读 JSON handoff / legacy atom index 中记录的 `Source Document` + `Lines`。对 contextual、explicit-non-goal、contextual-preserve、prototype-only-not-production 等 non-direct atoms，只在需要保留精确边界、避免误扩 scope 或确认 proof 语义时定点重读。
+13. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。
+14. downstream artifacts 只能通过 proposal `trace/proposal.trace.json` register 中的 exact `GA-####`、source document 和 line range 定点读取原始 docs。不得重新做全量 source extraction，不得从 source line range 直接发明新的 direct atom。
 
 ## Obligation Proposal 门禁
 

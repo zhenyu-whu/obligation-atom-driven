@@ -13,6 +13,12 @@ import {
 const TRACE_SCHEMA = "openspec-trace-v1";
 const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
 const TRACE_CONTRACT_PROOF_SLICES = "proof-slices-v1";
+const SOURCE_ALIGNED_TRACE_CONTRACT = "source-aligned-trace-v1";
+const SOURCE_ALIGNED_MANIFEST_SCHEMA = "source-aligned-orchestrate-manifest-v1";
+const SOURCE_ALIGNED_GLOBAL_ATOM_INDEX_SCHEMA = "source-aligned-global-atom-index-v1";
+const SOURCE_ALIGNED_ATOM_PLAN_MAPPING_SCHEMA = "source-aligned-atom-plan-mapping-v1";
+const SOURCE_ALIGNED_FINAL_PACKET_INDEX_SCHEMA = "source-aligned-final-packet-index-v1";
+const SOURCE_ALIGNED_PHASE_5_SCHEMA = "source-aligned-phase-5-trace-v1";
 const PROOF_SLICES_TRACE_PATH = "trace/verification.proof-slices.json";
 const RUNTIME_ROW_RE = /\b(?:RS|OP|ST|CH)-\d{3}\b/g;
 const PROOF_SLICE_RE = /\bPS-\d{3}\b/g;
@@ -928,6 +934,44 @@ function validateProposalAuthorityTrace(root, change, proposalFile, proposal, sc
   }
 
   const preconditions = asObject(proposal["obligation-atom-preconditions"]);
+  const jsonAuthority = loadSourceAlignedHandoffAuthority(root, change, preconditions, issues);
+  if (jsonAuthority?.invalid) {
+    return;
+  }
+  if (jsonAuthority) {
+    const registerRows = parseProposalRegister(proposal, issues);
+
+    compareIdSets(
+      [...jsonAuthority.packetRows.keys()],
+      [...registerRows.keys()],
+      "VAL-PR-005",
+      "trace/proposal.trace.json#/change-atom-coverage-register",
+      "proposal register 必须与 source-aligned JSON handoff direct atom 集合完全一致",
+      issues,
+    );
+
+    for (const [globalAtomId, expectedRow] of jsonAuthority.packetRows.entries()) {
+      const registerRow = registerRows.get(globalAtomId);
+      if (registerRow) {
+        compareProposalAuthorityFields(
+          globalAtomId,
+          expectedRow,
+          registerRow,
+          "VAL-PR-006",
+          `trace/proposal.trace.json#/change-atom-coverage-register/${globalAtomId}`,
+          "proposal register",
+          issues,
+        );
+      }
+    }
+
+    validateProposalSourceWindowReadSet(proposal, jsonAuthority.packetRows, issues);
+    validateProposalProductionSourceCoverage(proposal, jsonAuthority.packetRows, issues);
+    validateProposalAlignmentGate(proposal, jsonAuthority.packetRows, issues);
+    validateProposalDeliveryPlaneLeakage(proposalFile, issues);
+    return;
+  }
+
   const packetRelPath =
     strip(preconditions["canonical-change-packet"]) ||
     path.join("openspec", "orchestrate", "change-capability-anchors", change, `${change}.md`);
@@ -988,6 +1032,301 @@ function validateProposalAuthorityTrace(root, change, proposalFile, proposal, sc
   validateProposalProductionSourceCoverage(proposal, packetRows, issues);
   validateProposalAlignmentGate(proposal, packetRows, issues);
   validateProposalDeliveryPlaneLeakage(proposalFile, issues);
+}
+
+function loadSourceAlignedHandoffAuthority(root, change, preconditions, issues) {
+  const paths = {
+    manifest:
+      strip(preconditions["orchestrate-manifest"]) ||
+      path.join("openspec", "orchestrate", "trace", "manifest.json"),
+    globalIndex:
+      strip(preconditions["global-atom-index-json"]) ||
+      path.join("openspec", "orchestrate", "change-capability-anchors", "obligation-atom-index.json"),
+    atomPlanMapping:
+      strip(preconditions["atom-plan-mapping-json"]) ||
+      path.join("openspec", "orchestrate", "phase-works", "phase-5", "atom-plan-mapping.json"),
+    finalPacketIndex:
+      strip(preconditions["final-packet-index-json"]) ||
+      path.join("openspec", "orchestrate", "phase-works", "phase-5", "final-packet-index.json"),
+  };
+  const explicitJson = [
+    "orchestrate-manifest",
+    "global-atom-index-json",
+    "atom-plan-mapping-json",
+    "final-packet-index-json",
+  ].some((key) => Boolean(strip(preconditions[key])));
+  const fullPaths = Object.fromEntries(
+    Object.entries(paths).map(([key, relPath]) => [key, path.isAbsolute(relPath) ? relPath : path.join(root, relPath)]),
+  );
+  const existingJsonCount = Object.values(fullPaths).filter((fullPath) => fs.existsSync(fullPath)).length;
+  if (!explicitJson && existingJsonCount === 0) {
+    return null;
+  }
+
+  const missing = Object.entries(fullPaths).filter(([, fullPath]) => !fs.existsSync(fullPath));
+  if (missing.length > 0) {
+    for (const [key] of missing) {
+      addIssue(issues, "error", "VAL-PR-012", paths[key], `source-aligned JSON handoff 缺少 ${paths[key]}。`);
+    }
+    return { invalid: true };
+  }
+
+  const manifest = readJson(fullPaths.manifest, root, issues);
+  const globalIndex = readJson(fullPaths.globalIndex, root, issues);
+  const mapping = readJson(fullPaths.atomPlanMapping, root, issues);
+  const packetIndex = readJson(fullPaths.finalPacketIndex, root, issues);
+  if (!manifest || !globalIndex || !mapping || !packetIndex) {
+    return { invalid: true };
+  }
+
+  validateSourceAlignedJsonBasics(manifest, paths.manifest, SOURCE_ALIGNED_MANIFEST_SCHEMA, issues);
+  validateSourceAlignedJsonBasics(globalIndex, paths.globalIndex, SOURCE_ALIGNED_GLOBAL_ATOM_INDEX_SCHEMA, issues);
+  validateSourceAlignedJsonBasics(mapping, paths.atomPlanMapping, SOURCE_ALIGNED_ATOM_PLAN_MAPPING_SCHEMA, issues);
+  validateSourceAlignedJsonBasics(packetIndex, paths.finalPacketIndex, SOURCE_ALIGNED_FINAL_PACKET_INDEX_SCHEMA, issues);
+  validateSourceAlignedManifest(root, manifest, paths, fullPaths, issues);
+  validateSourceAlignedPhase5Trace(root, paths.manifest, issues);
+
+  const packet = asArray(packetIndex.packets).find((item) => strip(asObject(item).change) === change);
+  if (!packet) {
+    addIssue(issues, "error", "VAL-PR-014", paths.finalPacketIndex, `${change} 不存在于 final-packet-index.json。`);
+    return { invalid: true };
+  }
+
+  const packetRow = asObject(packet);
+  const packetRelPath =
+    strip(packetRow["packet-path"]) ||
+    strip(preconditions["canonical-change-packet"]) ||
+    path.join("openspec", "orchestrate", "change-capability-anchors", change, `${change}.md`);
+  const directIds = asArray(packetRow["direct-atom-ids"]).map(strip).filter(Boolean);
+  const invalidDirectIds = directIds.filter((id) => !/^GA-\d{4}$/u.test(id));
+  for (const atomId of invalidDirectIds) {
+    addIssue(issues, "error", "VAL-PR-014", paths.finalPacketIndex, `direct-atom-ids 包含非法 GA ID：${atomId}。`);
+  }
+
+  const mappingRows = new Map();
+  for (const row of asArray(mapping.rows)) {
+    const item = asObject(row);
+    const atomId = strip(item["global-atom-id"]);
+    if (atomId) {
+      mappingRows.set(atomId, item);
+    }
+  }
+  const mappingDirectIds = [];
+  for (const [atomId, row] of mappingRows.entries()) {
+    if (strip(row["final-owner-change"]) === change && strip(row["final-relation"]) === "direct") {
+      mappingDirectIds.push(atomId);
+    }
+  }
+  compareIdSets(
+    directIds,
+    mappingDirectIds,
+    "VAL-PR-015",
+    paths.atomPlanMapping,
+    "atom-plan-mapping.json direct ownership 必须与 final-packet-index.json direct-atom-ids 一致",
+    issues,
+  );
+
+  const globalRows = new Map();
+  for (const row of asArray(globalIndex["global-atoms"])) {
+    const item = asObject(row);
+    const atomId = strip(item["global-atom-id"]);
+    if (atomId) {
+      globalRows.set(atomId, item);
+    }
+  }
+
+  const packetRows = new Map();
+  for (const atomId of directIds) {
+    const globalRow = globalRows.get(atomId);
+    const mappingRow = mappingRows.get(atomId);
+    if (!globalRow) {
+      addIssue(issues, "error", "VAL-PR-016", paths.globalIndex, `${atomId} 不存在于 obligation-atom-index.json。`);
+      continue;
+    }
+    if (!mappingRow) {
+      addIssue(issues, "error", "VAL-PR-015", paths.atomPlanMapping, `${atomId} 不存在于 atom-plan-mapping.json。`);
+      continue;
+    }
+    packetRows.set(atomId, {
+      "global-atom-id": atomId,
+      "source-document": strip(globalRow["source-document"]),
+      lines: strip(globalRow.lines),
+      "atom-type": strip(globalRow["atom-type"]),
+      "source-fact": strip(globalRow["source-fact"]),
+      normativity: strip(globalRow.normativity),
+      "artifact-projection": strip(mappingRow["final-artifact-projection"]) || strip(globalRow["artifact-projection"]),
+      "owner-capability": strip(mappingRow["final-owner-capability"]) || strip(globalRow["owner-capability"]),
+      "atom-relation": strip(mappingRow["final-relation"]) || strip(globalRow["atom-relation"]),
+      "propose-use": strip(globalRow["propose-use"]),
+      "evidence-need": strip(globalRow["evidence-need"]),
+    });
+  }
+
+  validateFinalPacketMarkdownMirror(root, packetRelPath, packetRows, packetRow, issues);
+  return { packetRows };
+}
+
+function validateSourceAlignedJsonBasics(data, relPath, expectedSchema, issues) {
+  validateKebabKeys(data, relPath, issues);
+  if (data["trace-schema"] !== expectedSchema) {
+    addIssue(issues, "error", "VAL-PR-012", relPath, `trace-schema 必须为 ${expectedSchema}。`);
+  }
+  if (data["trace-contract-version"] !== SOURCE_ALIGNED_TRACE_CONTRACT) {
+    addIssue(issues, "error", "VAL-PR-013", relPath, `trace-contract-version 必须为 ${SOURCE_ALIGNED_TRACE_CONTRACT}。`);
+  }
+}
+
+function validateSourceAlignedManifest(root, manifest, paths, fullPaths, issues) {
+  const phase5Status = sourceAlignedPhaseStatus(manifest["phase-statuses"]);
+  if (phase5Status && !["accepted", "adjusted"].includes(phase5Status)) {
+    addIssue(issues, "error", "VAL-PR-013", paths.manifest, `Phase 5 status 必须为 accepted 或 adjusted，实际为 ${phase5Status}。`);
+  }
+  const artifacts = asArray(manifest.artifacts);
+  for (const fullPath of Object.values(fullPaths)) {
+    const relPath = path.relative(root, fullPath).split(path.sep).join("/");
+    const entry = artifacts.find((item) => strip(asObject(item)["trace-path"]) === relPath);
+    const digest = strip(asObject(entry).sha256);
+    if (entry && digest) {
+      const current = sha256FileCompat(fullPath);
+      if (digest !== current.hex && digest !== current.prefixed) {
+        addIssue(issues, "error", "VAL-PR-013", paths.manifest, `${relPath} 的 sha256 与实际文件不一致。`);
+      }
+    }
+  }
+}
+
+function sourceAlignedPhaseStatus(phaseStatuses) {
+  const phase5 = asObject(phaseStatuses)["phase-5"];
+  if (typeof phase5 === "string") {
+    return strip(phase5);
+  }
+  const phase5Object = asObject(phase5);
+  return strip(phase5Object.status || phase5Object.decision);
+}
+
+function validateSourceAlignedPhase5Trace(root, manifestRelPath, issues) {
+  const fullPath = path.join(root, "openspec", "orchestrate", "trace", "phase-5.trace.json");
+  if (!fs.existsSync(fullPath)) {
+    return;
+  }
+  const trace = readJson(fullPath, root, issues);
+  if (!trace) {
+    return;
+  }
+  const relPath = path.relative(root, fullPath).split(path.sep).join("/");
+  validateKebabKeys(trace, relPath, issues);
+  if (trace["trace-schema"] !== SOURCE_ALIGNED_PHASE_5_SCHEMA) {
+    addIssue(issues, "error", "VAL-PR-012", relPath, `trace-schema 必须为 ${SOURCE_ALIGNED_PHASE_5_SCHEMA}。`);
+  }
+  if (trace["trace-contract-version"] !== SOURCE_ALIGNED_TRACE_CONTRACT) {
+    addIssue(issues, "error", "VAL-PR-013", relPath, `trace-contract-version 必须为 ${SOURCE_ALIGNED_TRACE_CONTRACT}。`);
+  }
+  const status = strip(trace.status);
+  if (status && !["accepted", "adjusted"].includes(status)) {
+    addIssue(issues, "error", "VAL-PR-013", manifestRelPath, `Phase 5 status 必须为 accepted 或 adjusted，实际为 ${status}。`);
+  }
+}
+
+function validateFinalPacketMarkdownMirror(root, packetRelPath, packetRows, packetIndexRow, issues) {
+  const fullPath = path.isAbsolute(packetRelPath) ? packetRelPath : path.join(root, packetRelPath);
+  if (!fs.existsSync(fullPath)) {
+    addIssue(issues, "error", "VAL-PR-001", packetRelPath, `缺少 canonical change packet：${packetRelPath}。`);
+    return;
+  }
+  const packetText = fs.readFileSync(fullPath, "utf8");
+  const digest = strip(packetIndexRow["packet-digest"]);
+  if (digest) {
+    const current = sha256FileCompat(fullPath);
+    if (digest !== current.hex && digest !== current.prefixed) {
+      addIssue(issues, "error", "VAL-PR-017", packetRelPath, "final packet Markdown digest 与 final-packet-index.json 不一致。");
+    }
+  }
+  for (const atomId of packetRows.keys()) {
+    if (!packetText.includes(atomId)) {
+      addIssue(issues, "error", "VAL-PR-017", packetRelPath, `final packet Markdown 未包含 direct atom ${atomId}。`);
+    }
+  }
+
+  const markdownRows = parseFinalPacketDirectAtomsBestEffort(packetText);
+  if (!markdownRows) {
+    return;
+  }
+  compareIdSets(
+    [...packetRows.keys()],
+    [...markdownRows.keys()],
+    "VAL-PR-005",
+    packetRelPath,
+    "final packet Markdown direct atom mirror 必须与 source-aligned JSON handoff direct atom 集合一致",
+    issues,
+  );
+  for (const [atomId, expectedRow] of packetRows.entries()) {
+    const markdownRow = markdownRows.get(atomId);
+    if (markdownRow) {
+      compareProposalAuthorityFields(
+        atomId,
+        expectedRow,
+        markdownRow,
+        "VAL-PR-006",
+        `${packetRelPath}#${atomId}`,
+        "final packet Markdown mirror",
+        issues,
+      );
+    }
+  }
+}
+
+function parseFinalPacketDirectAtomsBestEffort(text) {
+  const table = getTableAfterMarkdownHeading(text, "## Final Direct Owner Atoms");
+  if (!table) {
+    return null;
+  }
+  const required = [
+    "Global Atom ID",
+    "Source Document",
+    "Lines",
+    "Atom Type",
+    "Source Fact",
+    "Normativity",
+    "Artifact Projection",
+    "Owner Capability",
+    "Atom Relation",
+    "Propose Use",
+    "Evidence Need",
+  ];
+  const indexes = {};
+  for (const requiredColumn of required) {
+    const found = table.headers.findIndex((header) => normalizeHeader(header) === normalizeHeader(requiredColumn));
+    if (found < 0) {
+      return null;
+    }
+    indexes[requiredColumn] = found;
+  }
+  const rows = new Map();
+  for (const row of table.rows) {
+    const ids = idsFromValue(row.cells[indexes["Global Atom ID"]], GA_ID_RE);
+    if (ids.length !== 1) {
+      continue;
+    }
+    rows.set(ids[0], {
+      "global-atom-id": ids[0],
+      "source-document": strip(row.cells[indexes["Source Document"]]),
+      lines: strip(row.cells[indexes["Lines"]]),
+      "atom-type": strip(row.cells[indexes["Atom Type"]]),
+      "source-fact": strip(row.cells[indexes["Source Fact"]]),
+      normativity: strip(row.cells[indexes["Normativity"]]),
+      "artifact-projection": strip(row.cells[indexes["Artifact Projection"]]),
+      "owner-capability": strip(row.cells[indexes["Owner Capability"]]),
+      "atom-relation": strip(row.cells[indexes["Atom Relation"]]),
+      "propose-use": strip(row.cells[indexes["Propose Use"]]),
+      "evidence-need": strip(row.cells[indexes["Evidence Need"]]),
+    });
+  }
+  return rows;
+}
+
+function sha256FileCompat(fullPath) {
+  const hex = crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex");
+  return { hex, prefixed: `sha256-${hex}` };
 }
 
 function parseFinalPacketDirectAtoms(text, relPath, issues) {
