@@ -57,11 +57,11 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 ## Subagent 分派硬约束
 
 1. 用户明确要求执行或继续执行 `openspec-apply-change` 技能时，该请求即代表用户授权并要求按本节使用 apply-stage subagent / delegation，除非用户在同一请求中明确禁止 subagent。
-2. 创建或启动任何 apply-stage `implementation-worker`、`test-worker`、`fix-worker`、`change-stabilizer` 或 `final-reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` apply-stage subagent，必须暂停 apply 并向用户报告 blocker。
-3. 所有 worker 必须串行执行。任一时刻最多只能有一个 apply-stage worker 处于运行中；implementation、test、fix、stabilizer、reviewer 不得并行。
-4. 启动任何 worker 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该 worker 必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
-5. 每个 worker 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section（含 `Resolved Runtime Contract`）或 Runtime Row/Proof Slice 范围、preflight 需要的相关 runtime-acceptance canonical row 摘录、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 JSON trace 片段传给 implementation-worker。
-6. 必须明确告知所有 worker：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户改动；遇到重叠文件或冲突风险必须适配现有改动并在最终报告说明。
+2. 创建或启动任何 apply-stage `implementation-worker`、`test-worker`、`test-proof-reviewer`、`fix-worker`、`change-stabilizer` 或 `final-reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` apply-stage subagent，必须暂停 apply 并向用户报告 blocker。
+3. 所有 apply-stage subagent 必须串行执行。任一时刻最多只能有一个 apply-stage subagent 处于运行中；implementation、test、test-proof-review、fix、stabilizer、reviewer 不得并行。
+4. 启动任何 worker/reviewer 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该 worker/reviewer 必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
+5. 每个 worker/reviewer 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section（含 `Resolved Runtime Contract`）或 Runtime Row/Proof Slice 范围、preflight 需要的相关 runtime-acceptance canonical row 摘录、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 JSON trace 片段传给 implementation-worker。
+6. 必须明确告知所有 worker/reviewer：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户改动；遇到重叠文件或冲突风险必须适配现有改动并在最终报告说明。
 
 ## Phase 1 / Production Implementation
 
@@ -111,18 +111,27 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 8. 测试断言必须来自 proposal/specs/design/runtime-acceptance/verification 的外部行为契约。不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。
 9. browser E2E 必须使用真实 browser/context/page 和 user-equivalent actions/readback；component 必须使用交互式 component harness；route/API、DB/integration、contract、worker/job、realtime/SSE、visual/responsive、security/negative 必须证明各自 production-compatible boundary。
 10. test-worker 对每个 required Proof Slice 只能输出：`Passed`、`Authoring Blocker`、`Execution Failure`、`Artifact Consistency Blocker`。
-11. `Passed` 表示标准测试已生成或确认存在，测试表达的 slice oracle 与 `verification.md` 一致，满足 `test-quality-strength.md`，实际测试路径符合 placement policy，实际命令通过，runner/entry 能真实触达 placement-policy compliant tests，且未新增 forbidden placement、错误 runner include 或 test-only production route。
+11. `Passed` 表示标准测试已生成或确认存在，测试表达的 slice oracle 与 `verification.md` 一致，满足 `test-quality-strength.md`，实际测试路径符合 placement policy，实际命令通过，runner/entry 能真实触达 placement-policy compliant tests，所需执行稳定性门禁已经通过，且未新增 forbidden placement、错误 runner include 或 test-only production route。
 12. `Authoring Blocker` 表示无法按标准测试写法覆盖 slice，原因是生产代码缺少合适 public/runtime boundary、稳定 observable surface、可控 dependency boundary、错误信号，或只能通过 implementation-detail/static/artifact proof 覆盖。
 13. `Execution Failure` 表示测试已经能按标准写法生成，测试表达的 oracle 与 `verification.md` 一致，但执行失败、runner/entry 未触达、环境隔离失败或生产行为不满足 oracle。
 14. test-worker 不得弱化 oracle、改成实现细节测试、跳过失败 slice、硬编码 change slug/AC ID/evidence path，或用 broad smoke 替代可低层稳定断言。
 
+## Phase 3.5 / Test Proof Sufficiency Review
+
+1. 每次 test-worker 自然返回后，任何 `Passed` 结果被接受、进入 fix-worker 或进入完成判断前，必须启动一个独立只读 `test-proof-reviewer` subagent 复核测试证明充分性。
+2. `test-proof-reviewer` 必须读取 verification Proof Slice、runtime-acceptance canonical row、`openspec/agent-runtime/test-quality-strength.md`、实际测试文件、实际命令结果、`proof-test-map.json` 和 `apply-result.md`；必要时可重跑只读验证命令，但不得修改代码、测试、artifacts、checkbox 或 evidence。
+3. `test-proof-reviewer` 必须逐条检查 `Passed` Proof Slice 的 primary test title 是否以 exact `PS-###` 开头，实际断言是否直接证明 `Oracle Fragment`、observable runtime fact 和 failure signal；不得用 metadata/proxy 替代 oracle，例如 `data-*` 标记、caret offset、helper/internal state、mock 调用次数、presence-only、source scan、artifact/evidence 文本，除非该 proxy 本身就是 runtime contract。
+4. 如果发现 `Passed` proof 不充分，`test-proof-reviewer` 必须输出 `Proof Sufficiency Blocker`。这不是流程级 blocker，也不得直接交给 fix-worker；必须回到 test-worker 强化或重写测试和 proof map。强化后的测试若标准执行失败，再作为 `Execution Failure` 进入 fix-worker。
+5. 如果发现 oracle 与 proposal/specs/design/runtime-acceptance 冲突，必须输出 `Artifact Consistency Blocker` 并停止 apply。
+6. 只有 test-proof-reviewer 返回 pass 后，经过复核的 `Authoring Blocker` 或 `Execution Failure` 才能进入 fix-worker；只有 test-proof-reviewer 返回 pass 且无 unresolved Proof Slice，才能进入 Phase 5、change-stabilizer 或 ready 判断。
+
 ## Phase 4 / Production Fix Loop
 
-1. `Authoring Blocker` 和 `Execution Failure` 都必须进入 fix-worker；不得由 test-worker 通过削弱 oracle、跳过 Proof Slice 或改成 implementation-detail test 消化。
+1. test-worker 结果必须先经过 Phase 3.5 test-proof-reviewer 复核；复核通过后的 `Authoring Blocker` 和 `Execution Failure` 都必须进入 fix-worker，不得由 test-worker 通过削弱 oracle、跳过 Proof Slice 或改成 implementation-detail test 消化。
 2. fix-worker 默认修改生产代码。对 `Authoring Blocker`，应改善 public/runtime boundary、稳定可观察行为、隐式全局状态、过度耦合、production-compatible dependency boundary 或错误信号。对 `Execution Failure`，应修正状态流、错误分支、API/data contract、权限、异步链路、持久化或 UI readback 偏差，使生产行为满足 verification oracle。
 3. fix-worker 不得要求 test-worker 削弱测试，不得修改 `verification.md` 来适配当前实现。只有 oracle 与 proposal/specs/design 确实冲突时，才返回 `Artifact Consistency Blocker`。
-4. fix-worker 完成后必须回到 Phase 2/3，由 test-worker 重新执行 Oracle Precheck、Test Authoring 和 Execution。
-5. 循环直到所有 required Proof Slice 都是 `Passed`、source/scope-backed `Manual / Environment Gate` 或 source/scope-backed `Not Applicable`，且 required / preserve / proof-only runtime row reconciliation 闭合，或出现真正的流程级 blocker。
+4. fix-worker 完成后必须回到 Phase 2/3/3.5，由 test-worker 重新执行 Oracle Precheck、Test Authoring 和 Execution，并由 test-proof-reviewer 重新复核证明充分性。
+5. 循环直到所有 required Proof Slice 都是经 test-proof-reviewer 复核通过的 `Passed`、source/scope-backed `Manual / Environment Gate` 或 source/scope-backed `Not Applicable`，且 required / preserve / proof-only runtime row reconciliation 闭合，或出现真正的流程级 blocker。
 
 ## Worker Blocker 语义
 
@@ -135,25 +144,28 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 1. evidence 由 apply runtime、runner、CI、worker 或 auditor 收集；不写回 `tasks.md` 或 `verification.md`，也不进入产品测试代码。
 2. apply evidence result 必须写入或更新 `openspec-results/<change-slug>/apply-result.md`。该文件是 archive 阶段读取 Proof Slice 结果、实际测试文件、实际命令、运行结果、manual/not-applicable 理由、blocker 处理和 subagent 报告摘要的事实来源。
-3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required / preserve / proof-only runtime row 的 tasks/verification 覆盖状态、每个 required Proof Slice 的最终状态、`openspec-results/<change-slug>/proof-test-map.json` 路径、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、未解决 blocker、implementation/test/fix worker 报告摘要。
+3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required / preserve / proof-only runtime row 的 tasks/verification 覆盖状态、每个 required Proof Slice 的最终状态、`openspec-results/<change-slug>/proof-test-map.json` 路径、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、未解决 blocker、implementation/test/test-proof-review/fix worker 报告摘要。
 4. 详细 `Runtime Row -> Proof Slice -> test result` 机器映射必须写入 `openspec-results/<change-slug>/proof-test-map.json`，schema 固定为 `openspec-proof-test-map-v1`。每个 required PS 必须有一条 `proof-test-results[]`，包含 `slice-id`、`status`、`runner`、`file`、`test-title`、`filter`、`command`。
-5. 测试代码不得硬编码 `openspec-results/**`、change slug、AC ID 或 evidence path。runner artifact 可通过测试框架 output directory、attachment/report 或 apply 执行方复制保存。
-6. 任一 required Proof Slice 仍是 unresolved `Authoring Blocker`、`Execution Failure` 或 `Artifact Consistency Blocker`，或 required / preserve / proof-only runtime row reconciliation 未闭合，或 `proof-test-map.json` 无法通过 audit 时，不得声称 apply 完成或 ready to archive。
+5. `browser/e2e` 和 `visual/responsive` 的 `proof-test-results[]` 还必须包含 `execution-scope`、`validation-runs[]` 和 `flake-status`。`validation-runs[]` 必须记录 containing-file / related-suite / workspace 级命令、退出状态和稳定性探测参数；focused command 不能单独作为该类 slice 的最终 `Passed` evidence。
+6. 测试代码不得硬编码 `openspec-results/**`、change slug、AC ID 或 evidence path。runner artifact 可通过测试框架 output directory、attachment/report 或 apply 执行方复制保存。
+7. 任一 required Proof Slice 仍是 unresolved `Authoring Blocker`、`Execution Failure`、`Proof Sufficiency Blocker` 或 `Artifact Consistency Blocker`，或最新 test-proof-reviewer 未 pass，或 required / preserve / proof-only runtime row reconciliation 未闭合，或 `proof-test-map.json` 无法通过 audit 时，不得声称 apply 完成或 ready to archive。
 
 ## Change Stabilizer 全局收敛
 
-1. 所有 implementation/test/fix worker 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立 `change-stabilizer` subagent 执行一次全 change 复核、修复和 apply-result 收敛。这是 final-reviewer 之前的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
-2. `change-stabilizer` 必须在所有 worker 结束后启动，且不得与 worker 或 final-reviewer 并行运行；若任一 worker 返回流程级 blocker 或仍有未完成实现/测试/fix 工作，不得启动 change-stabilizer。
+1. 所有 implementation-worker、test-worker、test-proof-reviewer、fix-worker 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立 `change-stabilizer` subagent 执行一次全 change 复核、修复和 apply-result 收敛。这是 final-reviewer 之前的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
+2. `change-stabilizer` 必须在所有 implementation-worker、test-worker、test-proof-reviewer、fix-worker 结束后启动，且不得与任何其他 apply-stage subagent 或 final-reviewer 并行运行；若任一 worker/reviewer 返回流程级 blocker 或仍有未完成实现/测试/test-proof-review/fix 工作，不得启动 change-stabilizer。
 3. `change-stabilizer` 是 read/write 的 current-change-scoped repair agent。它可以检查代码 diff、artifacts、tasks checkbox、runtime-acceptance model、verification oracle、test-quality-strength 门禁、实际测试、命令结果、apply-result 和跨 AC 集成冲突；只要修复仍在当前 change scope 内，它可以修改实现、测试、必要的 tasks checkbox、apply-result，并重跑受影响命令。
-4. `change-stabilizer` 不得扩大当前 change scope，不得削弱 proposal/spec/design/verification oracle，不得把无法证明的 Proof Slice 改写为 `Passed`。如果必要修复超出当前 change scope、工具/权限/凭证不可用、artifact 存在无法自主判定的冲突，或用户/其他 agent 改动冲突无法安全适配，必须返回流程级 blocker。
-5. 每个 apply completion cycle 最多自动运行一轮 `change-stabilizer`。如果 change-stabilizer 返回流程级 blocker，主 agent 只汇报 blocker 并停止，不得启动 final-reviewer。change-stabilizer 完成后若后续 final-reviewer 仍返回 blocker，主 agent 必须停止 apply 流程并交人工查验；不得自动启动第二轮 change-stabilizer，除非用户在 blocker 汇报后显式要求继续处理。
-6. `change-stabilizer` 不得声明 ready to archive。只有后续只读 final-reviewer 返回 pass，才可声称复核通过或 ready to archive。
+4. `change-stabilizer` 必须在 final-reviewer 前执行与 final review 同等级的完整复跑：对本 change 新增或修改过的 Playwright / browser E2E / visual responsive spec，至少重跑 containing-file 命令并满足 `test-quality-strength.md` 的稳定性门禁；对 realtime/SSE、worker/job、DB/integration 等非确定性或跨边界 proof，必须重跑能覆盖相关 integration 文件或 suite 的命令。不得只依赖 focused filter、旧 apply-result 证据或 test-worker 的单次绿色记录。
+5. 如果 change-stabilizer 复跑发现完整 spec / suite 顺序失败、repeat probe 失败、runner 未触达或证据不可复现，必须修复并更新 `proof-test-map.json` / apply-result，或把相关 Proof Slice 退回 `Execution Failure` / `flaky-reproducibility`；不得把失败留给 final-reviewer 首次发现。
+6. `change-stabilizer` 不得扩大当前 change scope，不得削弱 proposal/spec/design/verification oracle，不得把无法证明的 Proof Slice 改写为 `Passed`。如果必要修复超出当前 change scope、工具/权限/凭证不可用、artifact 存在无法自主判定的冲突，或用户/其他 agent 改动冲突无法安全适配，必须返回流程级 blocker。
+7. 每个 apply completion cycle 最多自动运行一轮 `change-stabilizer`。如果 change-stabilizer 返回流程级 blocker，主 agent 只汇报 blocker 并停止，不得启动 final-reviewer。change-stabilizer 完成后若后续 final-reviewer 仍返回 blocker，主 agent 必须停止 apply 流程并交人工查验；不得自动启动第二轮 change-stabilizer，除非用户在 blocker 汇报后显式要求继续处理。
+8. `change-stabilizer` 不得声明 ready to archive。只有后续只读 final-reviewer 返回 pass，才可声称复核通过或 ready to archive。
 
 ## Final Reviewer Subagent 复核
 
 1. `change-stabilizer` 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立只读 `final-reviewer` subagent 执行最终复核检验。这是所有自动实现和全局收敛后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
 2. `final-reviewer` 必须在 change-stabilizer 结束后启动，且不得与 worker 或 change-stabilizer 并行运行；若 change-stabilizer 返回流程级 blocker 或仍有未完成修复/证据收敛工作，不得启动 final-reviewer。
-3. 主 agent 启动 final-reviewer 时必须传入：change 名称、schema 名称、contextFiles、proposal/specs/design/runtime-acceptance/verification/tasks 路径、所有 worker 最终报告、worker 改动范围、change-stabilizer 最终报告、stabilizer 改动范围、实际测试文件、实际命令、apply-result 路径、runtime acceptance model 和 verification oracle 路径。主 agent 不得为了准备 final-reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker/stabilizer 结果是否可信。
+3. 主 agent 启动 final-reviewer 时必须传入：change 名称、schema 名称、contextFiles、proposal/specs/design/runtime-acceptance/verification/tasks 路径、所有 implementation-worker/test-worker/test-proof-reviewer/fix-worker 最终报告、worker 改动范围、change-stabilizer 最终报告、stabilizer 改动范围、实际测试文件、实际命令、apply-result 路径、runtime acceptance model 和 verification oracle 路径。主 agent 不得为了准备 final-reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker/stabilizer 结果是否可信。
 4. final-reviewer 负责独立只读复核：检查代码 diff、artifacts Delivery Plane、JSON trace coverage、tasks checkbox、runtime-acceptance model、verification Proof Slice/oracle、测试质量、实际测试文件、实际命令结果、apply-result、`proof-test-map.json`、跨 AC 集成冲突、默认路径/no-mock 约束；必要时可重跑命令。
 5. final-reviewer 只输出复核报告和 pass/blocker 结论，不得直接修改代码、artifacts、checkbox、apply-result 或测试文件。
 6. 若 final-reviewer 在 change-stabilizer 完成后仍发现 blocker，主 agent 必须汇报 final-reviewer blocker 并停止 apply 流程，状态为 blocked for human review；不得自行接手修复、替 stabilizer 补 proof、替 final-reviewer 复验或自动启动第二轮 stabilizer，除非用户在 blocker 汇报后明确要求继续处理。
@@ -161,9 +173,9 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 ## 主 Agent 职责
 
-1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、执行 preflight、按 AC 串行分派 implementation-worker、按 Runtime Row/Proof Slice test feedback 串行分派 test-worker 和 fix-worker，在所有 worker 完成后启动一次 change-stabilizer，在 change-stabilizer 完成后启动 final-reviewer，并汇总各 subagent 返回的完成状态、证据路径、命令结果和流程级 blocker。
-2. 主 agent 必须等待所有已分派 worker 自然返回最终完成或明确 blocker；若全部 worker 完成且无 blocker，必须等待 change-stabilizer 自然返回完成或 blocker；若 change-stabilizer 完成且无 blocker，必须等待 final-reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。
-3. 任一 worker、change-stabilizer 或 final-reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手修复/复核。
+1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、执行 preflight、按 AC 串行分派 implementation-worker、按 Runtime Row/Proof Slice test feedback 串行分派 test-worker、test-proof-reviewer 和 fix-worker，在所有 worker/reviewer 完成后启动一次 change-stabilizer，在 change-stabilizer 完成后启动 final-reviewer，并汇总各 subagent 返回的完成状态、证据路径、命令结果和流程级 blocker。
+2. 主 agent 必须等待所有已分派 worker/reviewer 自然返回最终完成或明确 blocker；若全部 worker/reviewer 完成且无 blocker，必须等待 change-stabilizer 自然返回完成或 blocker；若 change-stabilizer 完成且无 blocker，必须等待 final-reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。
+3. 任一 worker/reviewer、change-stabilizer 或 final-reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手修复/复核。
 4. 主 agent 不得打断、停止、关闭或要求正在运行的 subagent 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 subagent 自然返回最终完成或明确 blocker。
 5. subagent 返回完成但摘要缺少路径、命令结果或 blocker 状态等汇总必需信息时，主 agent 可以要求同一个 subagent 补充说明；这不构成主 agent 复核，主 agent 不得自行打开文件或运行命令来补齐。
 
@@ -171,7 +183,7 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 1. `tasks.md` 只更新 implementation checkbox；不得写入测试计划、测试编号、执行证据或沉淀状态。
 2. `runtime-acceptance.md` 和 `verification.md` 是 propose 阶段 artifacts；apply 不得为了适配当前实现静默修改 runtime rows 或 oracle。
-3. 如果 test-worker/fix-worker/stabilizer/final-reviewer 发现 oracle 与 proposal/specs/design/runtime-acceptance 冲突，必须停止并报告 artifact consistency blocker，由人工或新的 artifact 修订流程处理。
+3. 如果 test-worker/test-proof-reviewer/fix-worker/stabilizer/final-reviewer 发现 oracle 与 proposal/specs/design/runtime-acceptance 冲突，必须停止并报告 artifact consistency blocker，由人工或新的 artifact 修订流程处理。
 4. 不需要更新独立 acceptance status；AC 的通过状态由负责该 section 的 worker 完成声明、checkbox 更新、runtime proof 摘要、apply-result、change-stabilizer 收敛结果和 final-reviewer pass 共同表示。
 
 ## 最终汇报
@@ -183,6 +195,7 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 - `runtime-acceptance.md` 每个 required / preserve / proof-only runtime row 的 tasks/verification 覆盖状态。
 - `verification.md` 每个 required Proof Slice 的最终状态，以及 required / preserve / proof-only runtime row reconciliation 状态。
 - test-worker 输出的 Passed / Authoring Blocker / Execution Failure / Artifact Consistency Blocker 处理结果。
+- test-proof-reviewer 的 proof sufficiency 结论及 Proof Sufficiency Blocker 处理结果。
 - fix-worker 对生产代码的修复范围。
 - 实际测试文件、实际命令和运行结果。
 - `openspec-results/<change-slug>/apply-result.md` 路径。
@@ -190,4 +203,4 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 - final-reviewer 的只读复核结论、复核命令及 pass/blocker 报告。
 - 未完成、被阻塞、未验证或需要用户决策的事项。
 
-不得在 tasks checkbox 全部完成、required Proof Slice 全部通过或有 source/scope-backed manual/not-applicable 结论、runtime row reconciliation 闭合、apply-result 已写入、change-stabilizer 完成、final-reviewer 返回 pass 前声称 ready to archive。
+不得在 tasks checkbox 全部完成、required Proof Slice 全部通过 test-proof-reviewer 复核或有 source/scope-backed manual/not-applicable 结论、runtime row reconciliation 闭合、apply-result 已写入、change-stabilizer 完成、final-reviewer 返回 pass 前声称 ready to archive。

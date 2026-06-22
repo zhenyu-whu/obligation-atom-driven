@@ -13,6 +13,8 @@ import {
 const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
 const PROOF_TEST_MAP_SCHEMA = "openspec-proof-test-map-v1";
 const PROOF_SLICE_RE = /\bPS-\d{3}\b/g;
+const KNOWN_EXECUTION_SCOPES = new Set(["focused-test", "containing-file", "related-suite", "workspace"]);
+const ROBUST_EXECUTION_SCOPES = new Set(["containing-file", "related-suite", "workspace"]);
 
 export function auditProofTestMapping(options = {}) {
   const root = options.root ?? process.cwd();
@@ -109,6 +111,9 @@ export function auditProofTestMapping(options = {}) {
     if (!isDiscovered(discoveredTests, row)) {
       addIssue(issues, "error", "MAP-TM-009", ref, `${sliceId} 映射的 test-title 未被 runner list 发现。`);
     }
+    if (requiredSliceSet.has(sliceId) && requiresRobustExecution(slice) && strip(row.status).toLowerCase() === "passed") {
+      auditRobustExecutionEvidence(row, sliceId, ref, issues);
+    }
   }
 
   return summarize(issues);
@@ -204,6 +209,108 @@ function isDiscovered(discoveredTests, row) {
     const runnerMatches = !runner || strip(test.runner).toLowerCase() === runner;
     return runnerMatches && fileMatches && strip(test.title) === title;
   });
+}
+
+function auditRobustExecutionEvidence(row, sliceId, ref, issues) {
+  const executionScope = normalizeScope(row["execution-scope"]);
+  if (!KNOWN_EXECUTION_SCOPES.has(executionScope)) {
+    addIssue(
+      issues,
+      "error",
+      "MAP-TM-010",
+      ref,
+      `${sliceId} browser/visual Passed result 必须记录合法 execution-scope。`,
+    );
+  }
+
+  const runs = validationRuns(row);
+  if (!hasPassingRobustValidationRun(runs)) {
+    addIssue(
+      issues,
+      "error",
+      "MAP-TM-011",
+      ref,
+      `${sliceId} browser/visual Passed result 必须包含通过的 containing-file / related-suite / workspace validation run。`,
+    );
+  }
+
+  if (runs.some(isFailedValidationRun)) {
+    addIssue(
+      issues,
+      "error",
+      "MAP-TM-013",
+      ref,
+      `${sliceId} Passed result 的 validation-runs 不得包含失败或非零退出码记录。`,
+    );
+  }
+
+  if (strip(row["flake-status"]).toLowerCase() !== "stable" || !hasStableFlakeEvidence(runs)) {
+    addIssue(
+      issues,
+      "error",
+      "MAP-TM-012",
+      ref,
+      `${sliceId} browser/visual Passed result 缺少 stable flake-status 或完整复跑稳定性证据。`,
+    );
+  }
+}
+
+function requiresRobustExecution(slice) {
+  const layer = strip(slice["primary-layer"]).toLowerCase();
+  return layer === "browser/e2e" || layer === "visual/responsive";
+}
+
+function validationRuns(row) {
+  return asArray(row["validation-runs"]);
+}
+
+function hasPassingRobustValidationRun(runs) {
+  return runs.some((run) => ROBUST_EXECUTION_SCOPES.has(normalizeScope(run["execution-scope"])) && isPassingValidationRun(run));
+}
+
+function hasStableFlakeEvidence(runs) {
+  const passingRobustRuns = runs.filter(
+    (run) => ROBUST_EXECUTION_SCOPES.has(normalizeScope(run["execution-scope"])) && isPassingValidationRun(run),
+  );
+  if (passingRobustRuns.length >= 2) return true;
+  return passingRobustRuns.some((run) => {
+    const repeatEach = numericValue(run["repeat-each"] ?? run.repeatEach);
+    const workers = numericValue(run.workers ?? run["worker-count"]);
+    return repeatEach >= 3 && workers === 1;
+  });
+}
+
+function isPassingValidationRun(run) {
+  const status = normalizeStatus(run.status ?? run.result ?? run["command-status"]);
+  const exitStatus = exitStatusValue(run);
+  if (status && !["pass", "passed"].includes(status)) return false;
+  if (exitStatus !== null && exitStatus !== 0) return false;
+  return ["pass", "passed"].includes(status) || exitStatus === 0;
+}
+
+function isFailedValidationRun(run) {
+  const status = normalizeStatus(run.status ?? run.result ?? run["command-status"]);
+  const exitStatus = exitStatusValue(run);
+  if (exitStatus !== null && exitStatus !== 0) return true;
+  return ["fail", "failed", "failure", "error", "timed-out", "timeout", "timedout"].includes(status);
+}
+
+function exitStatusValue(run) {
+  return numericValue(run["exit-status"] ?? run["command-exit-status"] ?? run.exitCode ?? run["exit-code"]);
+}
+
+function numericValue(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeScope(value) {
+  return strip(value).toLowerCase();
+}
+
+function normalizeStatus(value) {
+  return strip(value).toLowerCase();
 }
 
 function mapRowsWithIndex(rows) {

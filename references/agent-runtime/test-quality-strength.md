@@ -94,6 +94,15 @@
 5. 修改 `process.env`、global fetch、时间、随机源、log sink、cookie/session、数据库、文件系统输出或 mock registry 时必须恢复或隔离，避免污染后续测试。
 6. test agent 必须生成或更新 `openspec-results/<change>/proof-test-map.json`，并运行 `node openspec/agent-runtime/scripts/audit-proof-test-mapping.mjs --change <change>`；audit 未通过时不得输出 `Passed`。
 
+## 执行稳定性门禁
+
+1. `browser/e2e` 和 `visual/responsive` 的 `Passed` 必须同时具备 slice 级 primary proof 命令和 containing spec / related suite / workspace 级复跑证据；如果 primary proof 使用 focused filter，必须在 `proof-test-map.json` 的 `validation-runs[]` 记录覆盖同一测试文件或相关 suite 的通过命令。
+2. 新增或修改 Playwright / visual responsive spec 时，必须完成稳定性探测：同一 containing-file / related-suite 命令连续两次通过，或一次 `repeat-each >= 3` 且 `workers=1` 的通过复跑。缺少该证据时不得输出 `Passed`，应归为 `Execution Failure`，原因标记为 `flaky-reproducibility`。
+3. `proof-test-map.json` 中的 `browser/e2e` 和 `visual/responsive` result 必须记录 `execution-scope`、`validation-runs[]` 和 `flake-status`。`execution-scope` 只能是 `focused-test`、`containing-file`、`related-suite` 或 `workspace`；`flake-status` 只有在上述稳定性探测通过后才能写 `stable`。
+4. `validation-runs[]` 是当前 evidence 的最终验收记录，不得在同一 `Passed` result 下混入非零退出码或 failed/timed-out validation run；若完整 spec 顺序复跑失败，即使 focused proof 通过，也必须把对应 slice 判为 `Execution Failure`。
+5. Playwright / visual responsive 测试不得在 UI 未稳定时直接读取 `boundingBox()`、截图或坐标。点击工具、切换模式、展开移动端 sheet、等待实时订阅恢复或等待 canvas 可交互后，必须先用 locator/state assertion 等待契约态，例如 `aria-pressed`、`data-current-tool`、`data-mobile-sheet-state`、目标 token/status/readback 或可见稳定布局，再执行坐标、drag、截图和布局断言。
+6. Playwright / visual responsive fixture 必须隔离 page/context、storage、session、service worker、DB seed、realtime subscription 和 mock registry。测试文件内的用例顺序不得依赖前一个用例留下的工具模式、viewport、localStorage、网络订阅或后台 snapshot 状态。
+
 ## 结果判定
 
 1. `Passed`：required atomic Proof Slice 的标准测试已生成或确认存在，满足本文档质量门禁，实际命令通过，实际测试路径符合 placement policy，runner/entry 能触达 placement-policy compliant tests，`proof-test-map.json` 记录 exactly-one primary test 且 mapping audit 通过，且未新增 forbidden placement、错误 runner include 或 test-only production route；required runtime row 的所有 expected Proof Slice 都满足后，该 row 才可汇总为 covered。

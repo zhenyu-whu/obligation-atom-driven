@@ -75,13 +75,89 @@ test("proof-test-map placement 错误 hard fail", () => {
   assertRule(result, "MAP-TM-008");
 });
 
+test("browser proof 缺少 containing-file validation hard fail", () => {
+  const root = makeProofMappingChange("browser-missing-validation-map", {
+    sliceOverrides: browserSliceOverrides(),
+    results: [
+      playwrightResult({
+        "validation-runs": [],
+      }),
+    ],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "browser-missing-validation-map",
+    discoveredTests: [discoveredPlaywright()],
+  });
+  assertRule(result, "MAP-TM-011");
+});
+
+test("browser proof 缺少 stable flake evidence hard fail", () => {
+  const root = makeProofMappingChange("browser-unstable-map", {
+    sliceOverrides: browserSliceOverrides(),
+    results: [
+      playwrightResult({
+        "flake-status": "unknown",
+      }),
+    ],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "browser-unstable-map",
+    discoveredTests: [discoveredPlaywright()],
+  });
+  assertRule(result, "MAP-TM-012");
+});
+
+test("browser proof validation-runs 含失败记录 hard fail", () => {
+  const root = makeProofMappingChange("browser-failed-validation-map", {
+    sliceOverrides: browserSliceOverrides(),
+    results: [
+      playwrightResult({
+        "validation-runs": [
+          passingPlaywrightValidationRun({ command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --reporter=line # first" }),
+          passingPlaywrightValidationRun({ command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --reporter=line # second" }),
+          {
+            command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --reporter=line",
+            "execution-scope": "containing-file",
+            status: "failed",
+            "exit-status": 1,
+          },
+        ],
+      }),
+    ],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "browser-failed-validation-map",
+    discoveredTests: [discoveredPlaywright()],
+  });
+  assertRule(result, "MAP-TM-013");
+});
+
+test("browser proof 两次 containing-file pass 且 stable 时通过", () => {
+  const root = makeProofMappingChange("browser-stable-map", {
+    sliceOverrides: browserSliceOverrides(),
+    results: [playwrightResult()],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "browser-stable-map",
+    discoveredTests: [discoveredPlaywright()],
+  });
+  assert.equal(result.errorCount, 0);
+});
+
 function makeProofMappingChange(change, options) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-proof-map-"));
   const changeDir = path.join(root, "openspec", "changes", change, "trace");
   const resultDir = path.join(root, "openspec-results", change);
   fs.mkdirSync(changeDir, { recursive: true });
   fs.mkdirSync(resultDir, { recursive: true });
-  fs.writeFileSync(path.join(changeDir, "verification.proof-slices.json"), `${JSON.stringify(proofSlices(), null, 2)}\n`);
+  fs.writeFileSync(
+    path.join(changeDir, "verification.proof-slices.json"),
+    `${JSON.stringify(proofSlices(options.sliceOverrides), null, 2)}\n`,
+  );
   fs.writeFileSync(
     path.join(resultDir, "proof-test-map.json"),
     `${JSON.stringify(
@@ -97,38 +173,47 @@ function makeProofMappingChange(change, options) {
   return root;
 }
 
-function proofSlices() {
+function proofSlices(sliceOverrides = {}) {
+  const baseContract = {
+    "primary-test-cardinality": "exactly-one",
+    "test-title-prefix": "PS-001",
+    "allow-shared-setup": true,
+    "allow-multi-slice-primary-test": false,
+    "waiver-required-for-multi-slice": true,
+  };
+  const baseSlice = {
+    "slice-id": "PS-001",
+    "runtime-row-ids": ["RS-001"],
+    "primary-runtime-row-id": "RS-001",
+    "primitive-type": "authorization",
+    "branch-variant": "actor denial",
+    "observable-surface": "domain command",
+    "oracle-fragment": "拒绝无效 actor。",
+    "failure-signal": "无效 actor 被接受。",
+    "primary-layer": "contract",
+    "production-owner": "packages/domain",
+    "primary-assertion-shape": "authorization denial",
+    "fixture-mock-boundary": "actor fixture",
+    "regression-intent": "high",
+    "manual-environment-gate": "None",
+    "test-contract": baseContract,
+  };
+  const testContractOverrides = sliceOverrides["test-contract"] ?? {};
+  const slice = {
+    ...baseSlice,
+    ...sliceOverrides,
+    "test-contract": {
+      ...baseContract,
+      ...testContractOverrides,
+    },
+  };
   return {
     "trace-schema": "openspec-proof-slices-v1",
     "artifact-id": "verification",
     "artifact-path": "verification.md",
     "change-name": "test",
     "schema-name": "production-obligation-atom-driven",
-    "proof-slices": [
-      {
-        "slice-id": "PS-001",
-        "runtime-row-ids": ["RS-001"],
-        "primary-runtime-row-id": "RS-001",
-        "primitive-type": "authorization",
-        "branch-variant": "actor denial",
-        "observable-surface": "domain command",
-        "oracle-fragment": "拒绝无效 actor。",
-        "failure-signal": "无效 actor 被接受。",
-        "primary-layer": "contract",
-        "production-owner": "packages/domain",
-        "primary-assertion-shape": "authorization denial",
-        "fixture-mock-boundary": "actor fixture",
-        "regression-intent": "high",
-        "manual-environment-gate": "None",
-        "test-contract": {
-          "primary-test-cardinality": "exactly-one",
-          "test-title-prefix": "PS-001",
-          "allow-shared-setup": true,
-          "allow-multi-slice-primary-test": false,
-          "waiver-required-for-multi-slice": true,
-        },
-      },
-    ],
+    "proof-slices": [slice],
   };
 }
 
@@ -149,6 +234,54 @@ function discovered(title) {
   return {
     runner: "vitest",
     file: "packages/domain/tests/contract/generate-first-draft.contract.test.ts",
+    title,
+  };
+}
+
+function browserSliceOverrides() {
+  return {
+    "primitive-type": "layout",
+    "observable-surface": "editor canvas",
+    "oracle-fragment": "移动端画布可交互。",
+    "failure-signal": "移动端画布无法插入标记。",
+    "primary-layer": "browser/e2e",
+    "production-owner": "apps/web",
+    "primary-assertion-shape": "browser readback",
+  };
+}
+
+function playwrightResult(overrides = {}) {
+  return proofResult("PS-001", {
+    runner: "playwright",
+    file: "apps/web/tests/e2e/foo.spec.ts",
+    "test-title": "PS-001 actor denial",
+    filter: "PS-001 actor denial",
+    command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --grep \"PS-001\" --reporter=line",
+    "command-exit-status": 0,
+    "execution-scope": "focused-test",
+    "flake-status": "stable",
+    "validation-runs": [
+      passingPlaywrightValidationRun({ command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --reporter=line # first" }),
+      passingPlaywrightValidationRun({ command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --reporter=line # second" }),
+    ],
+    ...overrides,
+  });
+}
+
+function passingPlaywrightValidationRun(overrides = {}) {
+  return {
+    command: "pnpm exec playwright test apps/web/tests/e2e/foo.spec.ts --reporter=line",
+    "execution-scope": "containing-file",
+    status: "passed",
+    "exit-status": 0,
+    ...overrides,
+  };
+}
+
+function discoveredPlaywright(title = "PS-001 actor denial") {
+  return {
+    runner: "playwright",
+    file: "apps/web/tests/e2e/foo.spec.ts",
     title,
   };
 }
