@@ -60,8 +60,20 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 2. 创建或启动任何 apply-stage `implementation-worker`、`test-worker`、`test-proof-reviewer`、`fix-worker`、`change-stabilizer` 或 `final-reviewer` subagent 时，必须显式指定 `model=GPT-5.5` 且 `reasoningEffort=xhigh`。这是硬性运行约束，不得因速度、成本、默认设置、模型偏好、任务规模或可用性降级。若当前运行环境无法创建 `GPT-5.5` / `xhigh` apply-stage subagent，必须暂停 apply 并向用户报告 blocker。
 3. 所有 apply-stage subagent 必须串行执行。任一时刻最多只能有一个 apply-stage subagent 处于运行中；implementation、test、test-proof-review、fix、stabilizer、reviewer 不得并行。
 4. 启动任何 worker/reviewer 时默认不要 fork 完整对话历史；使用显式任务包传递必要上下文。只有当该 worker/reviewer 必须依赖当前对话中尚未写入文件的决策时，才允许 fork。
-5. 每个 worker/reviewer 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section（含 `Resolved Runtime Contract`）或 Runtime Row/Proof Slice 范围、preflight 需要的相关 runtime-acceptance canonical row 摘录、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 JSON trace 片段传给 implementation-worker。
+5. 每个 worker/reviewer 任务包必须包含：change 名称、schema 名称、完整动态 schema apply instruction 原文、contextFiles、本文档路径、`openspec/agent-runtime/test-quality-strength.md` 路径、相关 proposal/spec/design/verification Delivery Plane 摘要、当前 AC Delivery Plane section（含 `Resolved Runtime Contract`）或 Runtime Row/Proof Slice 范围、preflight 需要的相关 runtime-acceptance canonical row 摘录、前序 checkpoint commit 摘要（commit SHA、message、agent role、AC / PS / runtime row scope、status、blocker 摘要）、允许修改范围、状态写入边界、blocker 分类和最终报告格式。只有 preflight blocker 排查或主 agent 明确摘录时，才把相关 JSON trace 片段传给 implementation-worker。
 6. 必须明确告知所有 worker/reviewer：它不是唯一开发者，不得回滚或覆盖其他 agent / 用户改动；遇到重叠文件或冲突风险必须适配现有改动并在最终报告说明。
+
+## Checkpoint Commit Policy
+
+1. Checkpoint commit 是 apply runtime 的过程性审计轨迹，不代表实现正确、测试通过、Proof Slice evidence 充分、runtime row covered、final review pass 或 ready to archive。
+2. 写入型 apply-stage agent 包括 `implementation-worker`、`test-worker`、`fix-worker`、`change-stabilizer`，以及未来明确声明为 read/write 的 apply-stage agent。只读 agent/reviewer/auditor 不得创建 checkpoint commit，包括 `test-proof-reviewer`、`final-reviewer` 和任何只读 reviewer。
+3. 主 agent 启动每个写入型 agent 前，必须记录当前 `git status --porcelain` 的路径级基线。写入型 agent 最终报告必须列出 agent identity、agent role、phase、AC / PS / runtime row scope、status、blocker 分类、实际命令摘要和 touched files；缺少这些信息时，主 agent 只能要求同一个 agent 补充，不得自行语义审查 diff 来补齐。
+4. 每个写入型 agent 自然返回后、启动下一个 apply-stage agent 前，主 agent 必须执行 checkpoint commit 处理。只要该 agent 产生了允许修改范围内的文件变更，就默认创建 checkpoint commit；无 diff 时不 commit，但必须在 apply-result 记录 `skipped: no diff`。
+5. agent 返回 `completed`、`Passed`、`Authoring Blocker`、`Execution Failure`、`Artifact Consistency Blocker`、`Proof Sufficiency Blocker` 或流程级 blocker 时，只要它自然返回且写入了文件，都必须 checkpoint commit，并在 commit message/body 与 apply-result 中明确记录状态。agent 崩溃、被中断、未自然返回时不得自动 commit，除非用户明确要求保存现场。
+6. checkpoint staging 禁止使用 `git add -A`、`git add .` 或任何会隐式纳入未报告路径的命令。主 agent 只能 stage 该 agent 最终报告中的 touched files，且这些路径必须位于该 agent 允许修改范围内。若某 touched file 在 agent 启动前已有未提交改动，agent 必须说明如何适配现有改动；无法确认安全归属或存在重叠冲突时，必须停止为 `Checkpoint Commit Blocker`，不得启动下一个 apply-stage agent。
+7. checkpoint commit 必须使用 `git commit --no-verify`，以便失败测试、blocker 状态和中间修复态也能被审计记录。commit message 格式固定为 `openspec(<change-slug>): checkpoint <agent-role> <scope> [<status>]`。commit body 必须记录 agent identity、phase、AC / PS / runtime row scope、status、changed files、命令摘要和 blocker 摘要。
+8. 如果 checkpoint commit 创建失败，必须输出 `Checkpoint Commit Blocker` 并停止 apply；除非用户明确允许跳过该 checkpoint，否则不得启动下一个 apply-stage agent。用户允许跳过时，apply-result 必须记录 skipped reason、失败命令和受影响 touched files。
+9. 每个 checkpoint commit 的 SHA、message、agent role、scope、status、changed files 和 notes 必须写入 `openspec-results/<change-slug>/apply-result.md` 的 `Checkpoint Commits` 表。后续 worker/reviewer 任务包必须包含此前 checkpoint commit 摘要；checkpoint commit 不写入 `proof-test-map.json`，也不得作为测试 oracle、Proof Slice evidence 或 runtime row covered 依据。
 
 ## Phase 1 / Production Implementation
 
@@ -144,11 +156,12 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 1. evidence 由 apply runtime、runner、CI、worker 或 auditor 收集；不写回 `tasks.md` 或 `verification.md`，也不进入产品测试代码。
 2. apply evidence result 必须写入或更新 `openspec-results/<change-slug>/apply-result.md`。该文件是 archive 阶段读取 Proof Slice 结果、实际测试文件、实际命令、运行结果、manual/not-applicable 理由、blocker 处理和 subagent 报告摘要的事实来源。
-3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required / preserve / proof-only runtime row 的 tasks/verification 覆盖状态、每个 required Proof Slice 的最终状态、`openspec-results/<change-slug>/proof-test-map.json` 路径、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、未解决 blocker、implementation/test/test-proof-review/fix worker 报告摘要。
-4. 详细 `Runtime Row -> Proof Slice -> test result` 机器映射必须写入 `openspec-results/<change-slug>/proof-test-map.json`，schema 固定为 `openspec-proof-test-map-v1`。每个 required PS 必须有一条 `proof-test-results[]`，包含 `slice-id`、`status`、`runner`、`file`、`test-title`、`filter`、`command`。
-5. `browser/e2e` 和 `visual/responsive` 的 `proof-test-results[]` 还必须包含 `execution-scope`、`validation-runs[]` 和 `flake-status`。`validation-runs[]` 必须记录 containing-file / related-suite / workspace 级命令、退出状态和稳定性探测参数；focused command 不能单独作为该类 slice 的最终 `Passed` evidence。
-6. 测试代码不得硬编码 `openspec-results/**`、change slug、AC ID 或 evidence path。runner artifact 可通过测试框架 output directory、attachment/report 或 apply 执行方复制保存。
-7. 任一 required Proof Slice 仍是 unresolved `Authoring Blocker`、`Execution Failure`、`Proof Sufficiency Blocker` 或 `Artifact Consistency Blocker`，或最新 test-proof-reviewer 未 pass，或 required / preserve / proof-only runtime row reconciliation 未闭合，或 `proof-test-map.json` 无法通过 audit 时，不得声称 apply 完成或 ready to archive。
+3. apply result 至少记录：change 名称、schema 名称、每个 AC 的完成状态、每个 required / preserve / proof-only runtime row 的 tasks/verification 覆盖状态、每个 required Proof Slice 的最终状态、`openspec-results/<change-slug>/proof-test-map.json` 路径、实际命令、退出状态或 CI result、manual/environment/not-applicable source/scope-backed reason、source/scope-compatible layer/owner 调整理由、`Checkpoint Commits` 表、未解决 blocker、implementation/test/test-proof-review/fix worker 报告摘要。
+4. `Checkpoint Commits` 表必须包含 `sequence`、`agent-role`、`agent-id`、`phase`、`scope`、`status`、`commit-sha`、`changed-files`、`notes` 字段；无 diff、跳过或失败的 checkpoint 也必须记录 sequence 和 reason。
+5. 详细 `Runtime Row -> Proof Slice -> test result` 机器映射必须写入 `openspec-results/<change-slug>/proof-test-map.json`，schema 固定为 `openspec-proof-test-map-v1`。每个 required PS 必须有一条 `proof-test-results[]`，包含 `slice-id`、`status`、`runner`、`file`、`test-title`、`filter`、`command`。
+6. `browser/e2e` 和 `visual/responsive` 的 `proof-test-results[]` 还必须包含 `execution-scope`、`validation-runs[]` 和 `flake-status`。`validation-runs[]` 必须记录 containing-file / related-suite / workspace 级命令、退出状态和稳定性探测参数；focused command 不能单独作为该类 slice 的最终 `Passed` evidence。
+7. 测试代码不得硬编码 `openspec-results/**`、change slug、AC ID 或 evidence path。runner artifact 可通过测试框架 output directory、attachment/report 或 apply 执行方复制保存。
+8. 任一 required Proof Slice 仍是 unresolved `Authoring Blocker`、`Execution Failure`、`Proof Sufficiency Blocker` 或 `Artifact Consistency Blocker`，或最新 test-proof-reviewer 未 pass，或 required / preserve / proof-only runtime row reconciliation 未闭合，或 `proof-test-map.json` 无法通过 audit 时，不得声称 apply 完成或 ready to archive。
 
 ## Change Stabilizer 全局收敛
 
@@ -165,7 +178,7 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 1. `change-stabilizer` 自然返回完成且没有明确流程级 blocker 后，必须启动一个独立只读 `final-reviewer` subagent 执行最终复核检验。这是所有自动实现和全局收敛后的固定环节，不得按任务规模、风险级别、速度、成本或主观判断跳过。
 2. `final-reviewer` 必须在 change-stabilizer 结束后启动，且不得与 worker 或 change-stabilizer 并行运行；若 change-stabilizer 返回流程级 blocker 或仍有未完成修复/证据收敛工作，不得启动 final-reviewer。
-3. 主 agent 启动 final-reviewer 时必须传入：change 名称、schema 名称、contextFiles、proposal/specs/design/runtime-acceptance/verification/tasks 路径、所有 implementation-worker/test-worker/test-proof-reviewer/fix-worker 最终报告、worker 改动范围、change-stabilizer 最终报告、stabilizer 改动范围、实际测试文件、实际命令、apply-result 路径、runtime acceptance model 和 verification oracle 路径。主 agent 不得为了准备 final-reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker/stabilizer 结果是否可信。
+3. 主 agent 启动 final-reviewer 时必须传入：change 名称、schema 名称、contextFiles、proposal/specs/design/runtime-acceptance/verification/tasks 路径、所有 implementation-worker/test-worker/test-proof-reviewer/fix-worker 最终报告、worker 改动范围、checkpoint commit 摘要、change-stabilizer 最终报告、stabilizer 改动范围、实际测试文件、实际命令、apply-result 路径、runtime acceptance model 和 verification oracle 路径。主 agent 不得为了准备 final-reviewer 输入而自行审查 diff、打开 evidence、重跑验证命令或预先判断 worker/stabilizer 结果是否可信。
 4. final-reviewer 负责独立只读复核：检查代码 diff、artifacts Delivery Plane、JSON trace coverage、tasks checkbox、runtime-acceptance model、verification Proof Slice/oracle、测试质量、实际测试文件、实际命令结果、apply-result、`proof-test-map.json`、跨 AC 集成冲突、默认路径/no-mock 约束；必要时可重跑命令。
 5. final-reviewer 只输出复核报告和 pass/blocker 结论，不得直接修改代码、artifacts、checkbox、apply-result 或测试文件。
 6. 若 final-reviewer 在 change-stabilizer 完成后仍发现 blocker，主 agent 必须汇报 final-reviewer blocker 并停止 apply 流程，状态为 blocked for human review；不得自行接手修复、替 stabilizer 补 proof、替 final-reviewer 复验或自动启动第二轮 stabilizer，除非用户在 blocker 汇报后明确要求继续处理。
@@ -173,11 +186,12 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 ## 主 Agent 职责
 
-1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、执行 preflight、按 AC 串行分派 implementation-worker、按 Runtime Row/Proof Slice test feedback 串行分派 test-worker、test-proof-reviewer 和 fix-worker，在所有 worker/reviewer 完成后启动一次 change-stabilizer，在 change-stabilizer 完成后启动 final-reviewer，并汇总各 subagent 返回的完成状态、证据路径、命令结果和流程级 blocker。
-2. 主 agent 必须等待所有已分派 worker/reviewer 自然返回最终完成或明确 blocker；若全部 worker/reviewer 完成且无 blocker，必须等待 change-stabilizer 自然返回完成或 blocker；若 change-stabilizer 完成且无 blocker，必须等待 final-reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。
+1. 主 agent 负责 orchestration：选择 change、读取 status / instructions、解析 context、执行 preflight、按 AC 串行分派 implementation-worker、按 Runtime Row/Proof Slice test feedback 串行分派 test-worker、test-proof-reviewer 和 fix-worker，在每个写入型 agent 自然返回后执行 checkpoint commit 处理，在所有 worker/reviewer 完成后启动一次 change-stabilizer，在 change-stabilizer 完成并 checkpoint 后启动 final-reviewer，并汇总各 subagent 返回的完成状态、证据路径、命令结果、checkpoint commit 和流程级 blocker。
+2. 主 agent 必须等待所有已分派 worker/reviewer 自然返回最终完成或明确 blocker，并完成对应 checkpoint commit 处理；若全部 worker/reviewer 完成且无 blocker，必须等待 change-stabilizer 自然返回完成或 blocker，并完成对应 checkpoint commit 处理；若 change-stabilizer 完成且无 blocker，必须等待 final-reviewer 自然返回 pass 或 blocker 后，才能做最终汇总。
 3. 任一 worker/reviewer、change-stabilizer 或 final-reviewer 运行期间，主 agent 只能执行必要的编排等待和状态记录；不得读取新的实现上下文、审查 diff、运行新的验证命令、修改代码、修改 artifacts、勾选任务或接手修复/复核。
 4. 主 agent 不得打断、停止、关闭或要求正在运行的 subagent 提前回报。除非用户明确要求终止当前 apply 流程，否则必须等待 subagent 自然返回最终完成或明确 blocker。
 5. subagent 返回完成但摘要缺少路径、命令结果或 blocker 状态等汇总必需信息时，主 agent 可以要求同一个 subagent 补充说明；这不构成主 agent 复核，主 agent 不得自行打开文件或运行命令来补齐。
+6. checkpoint commit 处理是主 agent 唯一允许的 post-worker git 写入动作；该动作只能按 `Checkpoint Commit Policy` 做路径级 status/staging/commit 和 apply-result 记录，不得演变为语义 diff review、代码修复、测试复跑或 artifact 修订。
 
 ## 状态更新
 
@@ -199,6 +213,7 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 - fix-worker 对生产代码的修复范围。
 - 实际测试文件、实际命令和运行结果。
 - `openspec-results/<change-slug>/apply-result.md` 路径。
+- checkpoint commit 摘要，包括写入型 agent 的 commit SHA、scope、status 和 skipped / blocker reason。
 - change-stabilizer 的全局收敛报告、修复范围、重跑命令和 blocker 状态。
 - final-reviewer 的只读复核结论、复核命令及 pass/blocker 报告。
 - 未完成、被阻塞、未验证或需要用户决策的事项。

@@ -241,6 +241,7 @@ apply:
   tracks: tasks.md
   instruction: |
     本 schema 的 apply instruction 只定义 schema-local artifact 语义；执行顺序、subagent 编排、测试质量门禁、evidence 输出和 ready-for-archive 判定必须遵守 `openspec/agent-runtime/openspec-apply-change.md`。
+    Checkpoint commit policy 也由 `openspec/agent-runtime/openspec-apply-change.md` 强制定义；checkpoint commit 只作为写入型 apply-stage agent 的过程性审计轨迹，不得作为 runtime oracle、Proof Slice evidence、verification pass、runtime row covered 或 ready-for-archive 信号。
 
     Apply 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
     Apply Phase 0 必须运行 `node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`；validator hard error 必须作为实现前 `Artifact Consistency Blocker`，不得启动 implementation-worker。

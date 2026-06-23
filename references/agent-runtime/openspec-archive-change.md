@@ -17,9 +17,10 @@
 - `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
 - `verification.md` 必须存在。新格式 change 还必须检查 `trace/manifest.json` 的 `trace-contract-version: proof-slices-v1`、`trace/verification.proof-slices.json`、主体的 `Proof Slice Matrix` 镜像和 `trace/verification.trace.json` 的 `runtime-coverage-reconciliation`：所有引用的 runtime row 都已在 `runtime-acceptance.md` 主体定义；每个 required / preserve / proof-only canonical runtime row 都有 expected Proof Slice，且 `Coverage Status = covered` 时 `Missing Proof Slice IDs = None`，或有 source/scope-backed manual/not-applicable reason。
 - `openspec-results/<change-slug>/apply-result.md` 中每个 required Proof Slice 和 required / preserve / proof-only runtime row 都必须有最终结果：`Passed`、source/scope-backed `Manual / Environment Gate` 或 source/scope-backed `Not Applicable`。
+- `openspec-results/<change-slug>/apply-result.md` 的 `Checkpoint Commits` 表只作为 apply-stage 过程审计轨迹；归档可读取 commit SHA、scope、status 和 blocker 摘要定位中间过程，但不得把 checkpoint commit 或 commit SHA 当作 Proof Slice pass、runtime row covered、manual/not-applicable reason、test-proof-reviewer pass、change-stabilizer pass 或 final-reviewer pass 的替代条件。
 - 新格式 change 必须存在 `openspec-results/<change-slug>/proof-test-map.json`，且 `node openspec/agent-runtime/scripts/audit-proof-test-mapping.mjs --change "<change-slug>"` 通过；每个 required Proof Slice 必须 exactly one primary test mapping，除非 proof slice JSON 和 proof-test-map 同时提供 explicit waiver。
-- 任一 `Authoring Blocker`、`Execution Failure` 或 `Artifact Consistency Blocker` 未解决时不得归档成功。
-- `openspec-results/<change-slug>/apply-result.md` 必须能说明实际测试摘要、实际命令、运行结果、`proof-test-map.json` 路径和 blocker 处理结果；详细 `Runtime Row -> Proof Slice -> test result` 机器映射进入 `proof-test-map.json`，evidence 不要求写回 `runtime-acceptance.md`、`tasks.md` 或 `verification.md`。
+- 任一 `Authoring Blocker`、`Execution Failure`、`Artifact Consistency Blocker` 或 `Checkpoint Commit Blocker` 未解决时不得归档成功。
+- `openspec-results/<change-slug>/apply-result.md` 必须能说明实际测试摘要、实际命令、运行结果、`proof-test-map.json` 路径、checkpoint commit 审计轨迹和 blocker 处理结果；详细 `Runtime Row -> Proof Slice -> test result` 机器映射进入 `proof-test-map.json`，evidence 不要求写回 `runtime-acceptance.md`、`tasks.md` 或 `verification.md`。
 
 ## 同步与归档
 
