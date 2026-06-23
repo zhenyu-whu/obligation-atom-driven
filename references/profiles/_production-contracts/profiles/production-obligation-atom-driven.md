@@ -3,7 +3,7 @@
 ## 输入权威
 
 - 不得执行、复制或依赖 `source-aligned-change-plan-coverage` 的 Python validator 或其它上游技能脚本。此 profile 只消费 `openspec/orchestrate/**` 中稳定的 handoff 数据契约。
-- 若存在 source-aligned JSON sidecar，proposal 入口必须优先读取 `openspec/orchestrate/trace/manifest.json`、`openspec/orchestrate/phase-works/phase-5/final-packet-index.json`、`openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json` 和 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json`。`trace-contract-version` 必须为 `source-aligned-trace-v1`；当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。
+- 若存在 source-aligned JSON sidecar，proposal 入口必须优先读取 `openspec/orchestrate/trace/manifest.json`、`openspec/orchestrate/phase-works/phase-5/final-packet-index.json`、`openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json` 和 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json`。`trace-contract-version` 必须为 `source-aligned-trace-v1`；`trace/manifest.json` 的 `phase-statuses.phase-5` 和 `trace/phase-5.trace.json.status` 必须一致，且当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。该 status 是 Phase 5 最终 handoff 决策，不是 validator/reviewer/repair 流程态。
 - 当前 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 仍是 proposal-facing canonical change contract 和人审镜像。
 - 它独占表达本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers；JSON sidecar 是机器 handoff 数据源。
 - `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json` 优先作为 `GA-####` lookup table，用于校验 atom 存在并补齐 source document、line range、source fact、normativity 和 focused source-window read 信息。

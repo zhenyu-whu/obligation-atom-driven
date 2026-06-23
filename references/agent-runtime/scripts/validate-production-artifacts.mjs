@@ -1083,8 +1083,8 @@ function loadSourceAlignedHandoffAuthority(root, change, preconditions, issues) 
   validateSourceAlignedJsonBasics(globalIndex, paths.globalIndex, SOURCE_ALIGNED_GLOBAL_ATOM_INDEX_SCHEMA, issues);
   validateSourceAlignedJsonBasics(mapping, paths.atomPlanMapping, SOURCE_ALIGNED_ATOM_PLAN_MAPPING_SCHEMA, issues);
   validateSourceAlignedJsonBasics(packetIndex, paths.finalPacketIndex, SOURCE_ALIGNED_FINAL_PACKET_INDEX_SCHEMA, issues);
-  validateSourceAlignedManifest(root, manifest, paths, fullPaths, issues);
-  validateSourceAlignedPhase5Trace(root, paths.manifest, issues);
+  const phase5TraceStatus = validateSourceAlignedPhase5Trace(root, paths.manifest, issues);
+  validateSourceAlignedManifest(root, manifest, paths, fullPaths, issues, phase5TraceStatus);
 
   const packet = asArray(packetIndex.packets).find((item) => strip(asObject(item).change) === change);
   if (!packet) {
@@ -1176,10 +1176,19 @@ function validateSourceAlignedJsonBasics(data, relPath, expectedSchema, issues) 
   }
 }
 
-function validateSourceAlignedManifest(root, manifest, paths, fullPaths, issues) {
+function validateSourceAlignedManifest(root, manifest, paths, fullPaths, issues, phase5TraceStatus = "") {
   const phase5Status = sourceAlignedPhaseStatus(manifest["phase-statuses"]);
   if (phase5Status && !["accepted", "adjusted"].includes(phase5Status)) {
     addIssue(issues, "error", "VAL-PR-013", paths.manifest, `Phase 5 status 必须为 accepted 或 adjusted，实际为 ${phase5Status}。`);
+  }
+  if (phase5Status && phase5TraceStatus && phase5Status !== phase5TraceStatus) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-013",
+      paths.manifest,
+      `manifest phase-statuses.phase-5 必须与 trace/phase-5.trace.json status 一致：manifest=${phase5Status}，trace=${phase5TraceStatus}。`,
+    );
   }
   const artifacts = asArray(manifest.artifacts);
   for (const fullPath of Object.values(fullPaths)) {
@@ -1225,6 +1234,7 @@ function validateSourceAlignedPhase5Trace(root, manifestRelPath, issues) {
   if (status && !["accepted", "adjusted"].includes(status)) {
     addIssue(issues, "error", "VAL-PR-013", manifestRelPath, `Phase 5 status 必须为 accepted 或 adjusted，实际为 ${status}。`);
   }
+  return status;
 }
 
 function validateFinalPacketMarkdownMirror(root, packetRelPath, packetRows, packetIndexRow, issues) {

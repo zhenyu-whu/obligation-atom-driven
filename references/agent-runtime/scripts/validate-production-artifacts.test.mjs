@@ -157,6 +157,18 @@ test("final packet Markdown 缺少 JSON direct atom hard fail", () => {
   assertRule(result, "VAL-PR-017");
 });
 
+test("source-aligned manifest Phase 5 status 与 trace status 漂移 hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("phase5-status-drift-change", files);
+  const manifestPath = path.join(root, "openspec", "orchestrate", "trace", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest["phase-statuses"]["phase-5"] = "adjusted";
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = validateChange({ root, change: "phase5-status-drift-change", complete: false });
+  assertRule(result, "VAL-PR-013");
+});
+
 test("legacy Markdown-only proposal authority 仍可校验通过", () => {
   const files = standardFiles({ proposal: true, authorityMode: "legacy" });
   const root = makeChange("legacy-authority-change", files);
