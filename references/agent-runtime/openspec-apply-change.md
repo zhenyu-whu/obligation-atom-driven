@@ -9,22 +9,25 @@
 - artifact 主体是 Delivery Plane，承载 worker/tester 直接消费的交付契约。
 - 外置 JSON Trace Plane 是审计平面，承载 coverage、source/scope trace、runtime projection、reconciliation 和 alignment gate；artifact 末尾 `## Trace Appendix` 只是 pointer block。
 - `contextFiles` 是主 agent / Phase 0 preflight 的 full-context envelope，不是所有 apply-stage subagent 的默认读取清单。
-- 主 agent、Phase 0 preflight、change-stabilizer 和 final-reviewer 必须读取 artifact pointer、`trace/manifest.json` 和对应 JSON trace 做 preflight/archive/复核审计。
+- JSON Trace Plane 必须由 complete validator / audit 进行全量机器校验；LLM 默认只读取 artifact Delivery Plane、artifact pointer、`trace/manifest.json` 和 validator / audit 结果。
+- 主 agent、Phase 0 preflight、change-stabilizer 和 final-reviewer 只有在 validator issue 定位、AC 拓扑调度、runtime projection、Proof Slice selection / reconciliation、blocker 排查或复核需要时，才读取对应 trace section 或 row。
 - implementation-worker、test-worker、test-proof-reviewer 和 fix-worker 默认只消费 role-specific task package；不得继承完整 `contextFiles`，除非本文件明确允许或为排查 blocker 由主 agent 传入相关摘录。
 
 ## 执行入口
 
 1. 严格先执行 `openspec-apply-change` 技能原有流程：选择 change、读取 `openspec status --change "<name>" --json`、读取 `openspec instructions apply --change "<name>" --json`，并取得 `schemaName`、`contextFiles`（主 agent full-context envelope）、进度、任务列表和动态 schema apply instruction。
 2. 对两个 production schema，apply requirements 必须包含 `runtime-acceptance`、`verification` 和 `tasks`。若动态 instruction 只包含旧的 `tasks` / `verification`，主 agent 仍必须从同一 change 目录读取 `runtime-acceptance.md` 和 `verification.md`；缺失即 blocker。
-3. 主 agent 必须读取 proposal、delta specs、design、runtime-acceptance、verification、tasks 的 Delivery Plane、短 `## Trace Appendix` pointer、`trace/manifest.json` 和对应 JSON trace，以及动态 schema apply instruction。不得读取或要求 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 source artifact。
+3. 主 agent 必须读取 proposal、delta specs、design、runtime-acceptance、verification、tasks 的 Delivery Plane、短 `## Trace Appendix` pointer、`trace/manifest.json`、complete validator / audit 结果，以及动态 schema apply instruction；JSON trace 原文默认按需 lazy-load 到 LLM 上下文。不得读取或要求 `source-truth.md`、独立 `acceptance.md`、旧版 source coverage artifact、`change-source-map.md` 或任何 proposal 前置 source artifact。
 4. 动态 schema apply instruction 只作为 schema-local adapter 使用：解释 GA/SI 术语、artifact 字段、禁止旧矩阵字段和状态写入边界。若它与本文档的执行编排、subagent 模型、质量门禁或停止条件冲突，以本文档为准。
 5. 如果 `tasks.md` 仍包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段，停止 apply，要求重新生成 artifacts。
 6. 如果 `verification.md` 包含具体测试路径、固定测试命令、runner selector、evidence directory 或 deposit status，停止 apply，要求修订 artifact。
-7. Phase 0 preflight 必须先运行全量静态 artifact validator：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。validator hard error 是实现前 `Artifact Consistency Blocker`，必须在启动任何 implementation-worker 前停止；validator warning 必须纳入 Phase 0 人工/agent preflight 判断，不得静默忽略。
+7. Phase 0 preflight 必须先运行全量静态 artifact validator：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`（建议使用 `--json` 供主 agent 消费结构化结果）。validator hard error 是实现前 `Artifact Consistency Blocker`，必须在启动任何 implementation-worker 前停止；validator warning 必须纳入 Phase 0 人工/agent preflight 判断，不得静默忽略。
 
 ## Phase 0 / Preflight
 
 Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码、测试文件或 apply evidence 就能判定的 artifact 问题，都必须在启动 implementation-worker 前阻断；不得把明显的 runtime row 引用错误、Proof Slice 非原子、owner/layer/primitive 非法、fake covered reconciliation 或 tasks projection 错误推迟到 Phase 2 test-worker 才首次发现。
+
+本节的“必须索引”是 Phase 0 一致性门禁要求，默认由 complete validator / audit 读取完整 JSON Trace Plane 并输出结果；它不要求主 agent 或 worker 把完整 JSON trace 原文加载进 LLM 上下文。主 agent 只在 validator issue 定位、AC 拓扑调度、runtime projection、Proof Slice selection / reconciliation 或 blocker 排查需要时读取相关 trace section 或 row。
 
 `production-obligation-atom-driven` 必须索引：
 
@@ -57,14 +60,15 @@ Phase 0 是实现前 artifact-only 硬门禁。任何不依赖当前实现代码
 
 ## Role-specific Context Packaging
 
-全量读取用于审计，裁剪读取用于执行。主 agent 必须从 full-context envelope 中构造 role-specific task package；apply-stage worker/reviewer 不得把 `contextFiles` 当作默认全量读取授权。
+Delivery Plane 全量读取用于审计，裁剪读取用于执行；JSON Trace Plane 全量读取用于机器校验，LLM trace 读取默认 lazy-load。主 agent 必须从 full-context envelope 中构造 role-specific task package；apply-stage worker/reviewer 不得把 `contextFiles` 当作默认全量读取授权。
 
-1. `main agent / Phase 0 preflight` 必须读取 `proposal`、delta specs、`design`、`runtime-acceptance`、`verification`、`tasks` 的 Delivery Plane、短 `## Trace Appendix` pointer、`trace/manifest.json` 和对应 JSON trace，负责 artifact consistency、coverage、projection、reconciliation 和 provider/consumer graph 审计。
-2. `implementation-worker` 只接收当前 `AC-###` 的 `tasks.md` Delivery Plane section（含 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks）、相关 runtime-acceptance canonical row 摘录、必要 proposal/spec/design Delivery Plane 摘要、前序 checkpoint 摘要、允许修改范围、状态写入边界和报告格式。默认不得传入完整 `verification.md`、`trace/verification.proof-slices.json` 或 `trace/verification.trace.json`；如需说明后续测试边界，只能由主 agent 摘录当前 AC 相关的非实现性 oracle 边界，且不得作为实现需求来源。
-3. `test-worker` 只接收目标 Proof Slice 范围、`verification.md` 中对应 Proof Slice Matrix 行、`trace/verification.proof-slices.json` 中对应 slice、`trace/verification.trace.json` / `runtime-coverage-reconciliation` 相关摘录、相关 runtime-acceptance canonical row、已实现代码范围、前序 checkpoint 摘要、允许修改范围、状态写入边界和报告格式。`tasks.md` 只能作为 AC 完成范围、runtime projection 和实现上下文，不得作为测试 oracle、测试目标或新增行为来源。
-4. `test-proof-reviewer` 只读接收待复核 Proof Slice、相关 runtime-acceptance canonical row、`openspec/agent-runtime/test-quality-strength.md`、实际测试文件、实际命令结果、`proof-test-map.json`、`apply-result.md` 和必要 checkpoint 摘要；不得修改代码、测试、artifacts、checkbox 或 evidence。
-5. `fix-worker` 接收失败或阻塞的 Proof Slice、失败命令和关键输出、相关 runtime-acceptance canonical row、相关 AC / 实现范围、相关测试文件、test-worker 与 test-proof-reviewer 报告、前序 checkpoint 摘要、允许修改范围、状态写入边界和报告格式。fix-worker 不得使用完整 `tasks.md` 重新规划实现，也不得用 verification 之外的 source/scope 扩大修复范围。
-6. `change-stabilizer` 和 `final-reviewer` 可以读取完整 `contextFiles`、artifact pointer、JSON trace、worker/reviewer 报告、checkpoint 摘要、实际测试文件、命令结果、`apply-result.md` 和 `proof-test-map.json`，因为它们负责全 change 收敛与最终复核；其中 `final-reviewer` 仍必须保持只读。
+1. `main agent / Phase 0 preflight` 必须读取 `proposal`、delta specs、`design`、`runtime-acceptance`、`verification`、`tasks` 的 Delivery Plane、短 `## Trace Appendix` pointer、`trace/manifest.json` 和 complete validator / audit 结果，负责 artifact consistency、coverage、projection、reconciliation 和 provider/consumer graph 审计。
+2. `main agent / Phase 0 preflight` 只有在 validator issue 定位、AC 拓扑调度、runtime projection、Proof Slice selection / reconciliation 或 blocker 排查需要时，才读取相关 JSON trace section 或 row；不得把完整 JSON trace 作为默认 LLM 上下文。
+3. `implementation-worker` 只接收当前 `AC-###` 的 `tasks.md` Delivery Plane section（含 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks）、相关 runtime-acceptance canonical row 摘录、必要 proposal/spec/design Delivery Plane 摘要、前序 checkpoint 摘要、允许修改范围、状态写入边界和报告格式。默认不得传入完整 `verification.md`、`trace/verification.proof-slices.json` 或 `trace/verification.trace.json`；如需说明后续测试边界，只能由主 agent 摘录当前 AC 相关的非实现性 oracle 边界，且不得作为实现需求来源。
+4. `test-worker` 只接收目标 Proof Slice 范围、`verification.md` 中对应 Proof Slice Matrix 行、`trace/verification.proof-slices.json` 中对应 slice、`trace/verification.trace.json` / `runtime-coverage-reconciliation` 相关摘录、相关 runtime-acceptance canonical row、已实现代码范围、前序 checkpoint 摘要、允许修改范围、状态写入边界和报告格式。`tasks.md` 只能作为 AC 完成范围、runtime projection 和实现上下文，不得作为测试 oracle、测试目标或新增行为来源。
+5. `test-proof-reviewer` 只读接收待复核 Proof Slice、相关 runtime-acceptance canonical row、`openspec/agent-runtime/test-quality-strength.md`、实际测试文件、实际命令结果、`proof-test-map.json`、`apply-result.md` 和必要 checkpoint 摘要；不得修改代码、测试、artifacts、checkbox 或 evidence。
+6. `fix-worker` 接收失败或阻塞的 Proof Slice、失败命令和关键输出、相关 runtime-acceptance canonical row、相关 AC / 实现范围、相关测试文件、test-worker 与 test-proof-reviewer 报告、前序 checkpoint 摘要、允许修改范围、状态写入边界和报告格式。fix-worker 不得使用完整 `tasks.md` 重新规划实现，也不得用 verification 之外的 source/scope 扩大修复范围。
+7. `change-stabilizer` 和 `final-reviewer` 可以读取完整 `contextFiles`、artifact pointer、worker/reviewer 报告、checkpoint 摘要、实际测试文件、命令结果、`apply-result.md` 和 `proof-test-map.json`，并可运行全量 validator / audit。它们默认按复核需要读取相关 trace section 或 row；只有完整复核确有需要时才读取完整 JSON trace 原文。其中 `final-reviewer` 仍必须保持只读。
 
 ## Subagent 分派硬约束
 
