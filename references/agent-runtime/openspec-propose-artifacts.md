@@ -267,10 +267,21 @@
 6. 任一 writer、repair-writer、reviewer 或 integration-reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录；不得读取当前 artifact 的中间落盘状态、审查 partial trace、运行 validator、修改 artifacts、接手修复/复核，或向正在运行的 subagent 注入中途发现。
 7. Writer 或 repair-writer 自然返回最终完成或明确 blocker 前，主 Agent 不得运行 partial static validator，不得启动 reviewer，也不得继续生成依赖该 artifact 的下游 artifact。
 8. Writer 或 repair-writer 自然返回完成后，主 Agent 必须运行 partial static validator：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。Hard error 必须由主 Agent 分派当前 artifact 的 `repair-writer` 修复；repair-writer 自然返回后重新运行 validator 到 hard pass。Warning 必须传给 artifact reviewer。
-9. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Artifact reviewer 输入必须包含：change 名称、schema 名称、当前 artifact 路径和内容、必要 upstream dependency artifact、contract bundle 路径和内容、partial validator 报告。Reviewer 不得读取当前实现、测试文件、`openspec-results/**`、evidence、apply-result 或 apply 阶段产物来推导 oracle。
+9. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Artifact reviewer 输入必须包含：change 名称、schema 名称、当前 artifact 路径和内容、必要 upstream dependency artifact、contract bundle 路径和内容、partial validator 报告。Reviewer 不得读取当前实现、测试文件、`openspec-results/**` 中的 apply evidence、`apply-result.md`、`proof-test-map.json`、evidence 或 apply 阶段产物来推导 oracle；只允许接收主 Agent 摘录的 propose-result 未关闭 blocker 摘要，并且不得把该摘要当作 coverage 或行为 oracle。
 10. Reviewer 只读复核，不得直接修订 artifact。Reviewer 只能输出 `Pass` 或 `Blocker`。Blocker 必须包含 artifact path、artifact anchor、contract source path + section heading、问题描述和修复方向；`verification.md` blocker 还必须列出 runtime row、现有或缺失 Proof Slice、被合并或遗漏的分支。
 11. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 `repair-writer` 修复，等待 repair-writer 自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续生成依赖该 artifact 的下游 artifact。
 12. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、contract section、heading/table row、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。
+
+### Propose Result Record
+
+1. Propose runtime 必须写入或更新 `openspec-results/<change-slug>/propose-result.md`。该文件是 propose 阶段过程审计记录，借鉴 apply 阶段 `apply-result.md` 的摘要模型，但不得替代 artifact、JSON trace、static validator、artifact reviewer、integration reviewer、apply evidence 或 archive proof。
+2. 主 Agent 创建 change 后必须初始化 propose result，并至少记录 change 名称、schema 名称、创建日期、选择来源、active/archive 盘点摘要、source handoff / baseline 输入摘要、direct `GA-####` 或 change-local `SI-###` 集合、artifact dependency order 和结果文件路径。
+3. 每次 writer、repair-writer、partial validator、artifact reviewer、full validator 和 integration reviewer 自然返回后，主 Agent 必须在 propose result 中追加或更新对应记录。记录不得在 subagent 运行中途读取当前 artifact 中间状态或提前审查；只能使用自然返回报告、validator 输出、reviewer 输出和最终落盘路径/digest。
+4. Propose result 至少包含 `Artifact Runs` 表，字段为 `sequence`、`artifact-id`、`agent-role`、`agent-id`、`status`、`validator`、`reviewer`、`trace-digest`、`notes`。同一 artifact 多轮 repair/review 必须保留多行或在 notes 中保留轮次，不得只留下最终 pass。
+5. Propose result 必须包含 `Blocker / Repair Log` 表，记录所有 writer blocker、validator hard error、reviewer blocker、integration blocker、修复 agent、最小修复摘要、复跑 validator 结果和复审结论。无 blocker 时也必须显式写 `None`。
+6. Propose result 必须包含 `Final Gates` 小节，记录 partial validators、full validator、artifact reviewer pass、integration reviewer pass、`openspec status --change "<change-slug>"` 摘要和是否 apply-ready。未满足所有门禁前，`apply-ready` 必须写为 `no` 并说明未满足项。
+7. Propose result 只能记录过程摘要、命令结果、agent 返回摘要、artifact path 和 trace digest；不得写入测试计划、实际测试命令、测试文件、evidence/deposit、Proof Slice 通过结果或任何 apply-stage evidence 结论。
+8. 后续 artifact reviewer 和 integration reviewer 的输入应包含此前 propose result 摘要，用于确认是否存在未关闭 blocker；但 reviewer 不得把 propose result 当作 artifact oracle 或 coverage source。若 propose result 与 artifact / trace / validator 结论冲突，必须以 artifact / trace / validator 为准并报告 `Artifact Consistency Blocker`。
 
 ### Complete Validation / Integration Reviewer
 
