@@ -243,7 +243,7 @@ apply:
     本 schema 的 apply instruction 只定义 schema-local artifact 语义；执行顺序、subagent 编排、测试质量门禁、evidence 输出和 ready-for-archive 判定必须遵守 `openspec/agent-runtime/openspec-apply-change.md`。
     Checkpoint commit policy 也由 `openspec/agent-runtime/openspec-apply-change.md` 强制定义；checkpoint commit 只作为写入型 apply-stage agent 的过程性审计轨迹，不得作为 runtime oracle、Proof Slice evidence、verification pass、runtime row covered 或 ready-for-archive 信号。
 
-    主 agent / Phase 0 preflight 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks 的 Delivery Plane 作为 full-context envelope；apply-stage worker/reviewer 必须按 `openspec/agent-runtime/openspec-apply-change.md` 的 Role-specific Context Packaging 消费裁剪输入，不得把完整 `contextFiles` 当作默认读取授权。JSON Trace Plane 必须由 complete validator 全量机器校验；LLM / worker 的 trace 消费遵守 runtime apply 文档的 lazy-loading / role-specific packaging。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
+    主 agent / Phase 0 preflight 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks 的 Delivery Plane 作为 full-context envelope；apply-stage worker/reviewer 必须按 `openspec/agent-runtime/openspec-apply-change.md` 的 Role-specific Context Packaging 消费输入。proposal、specs、design 和 `runtime-acceptance.md` Delivery Plane 是 production/test 共同上游契约，必须完整传入 implementation-worker 与 test-worker；`tasks.md`、`verification.md` 和 JSON trace 必须按角色裁剪，不得把完整 `contextFiles` 当作默认读取授权。JSON Trace Plane 必须由 complete validator 全量机器校验；LLM / worker 的 trace 消费遵守 runtime apply 文档的 lazy-loading / role-specific packaging。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
     Apply Phase 0 必须运行 `node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`；validator hard error 必须作为实现前 `Artifact Consistency Blocker`，不得启动 implementation-worker。
 
     `runtime-acceptance.md` 是 canonical runtime coverage registry：
@@ -252,8 +252,8 @@ apply:
 
     `tasks.md` 是 production implementation Delivery Plane；runtime acceptance audit model 位于 `trace/tasks.trace.json`：
     - 使用 change-local `SI-###` 作为 scope item ID；`SI-###` 只在本 change 内有效。
-    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 默认消费 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
-    - implementation-worker 的默认执行入口是当前 AC section，不继承完整 `contextFiles`；除主 agent 明确传入的当前 AC 相关摘录外，不得默认读取完整 `verification.md` 或 verification trace。
+    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 必须读取完整 proposal/specs/design 和 `runtime-acceptance.md` Delivery Plane，并默认消费当前 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
+    - implementation-worker 的默认执行入口是当前 AC section，不继承完整 `contextFiles` 中的 `tasks.md`、`verification.md` 或 JSON trace；完整 `runtime-acceptance.md` 只作为 canonical runtime registry、边界和一致性上下文，未被当前 AC `Runtime Rows` 或 checkbox 引用的 rows 不得变成额外实现工作；除主 agent 明确传入的当前 AC 相关摘录外，不得默认读取完整 `verification.md` 或 verification trace。
     - Delivery Plane checkbox 只能代表 production implementation work；`Proof:`、`Acceptance Proof`、coverage closure、fixture execution、截图、测试执行或 evidence collection 不得单独成为 checkbox。
     - `trace/tasks.trace.json` 的 `acceptance-driven-coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
     - `trace/tasks.trace.json` 的 `runtime-acceptance-index` 和 `runtime-acceptance-projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
@@ -262,7 +262,7 @@ apply:
 
     `verification.md` 是 independent test intent and oracle artifact：
     - Proof Slice Matrix 是唯一测试义务模型，不是执行清单；不生成、不引用任何额外业务 oracle 分组 ID。
-    - test-worker 的默认 oracle 入口是目标 Proof Slice 范围、`verification.md` 对应矩阵行、`trace/verification.proof-slices.json` 对应 slice 和 verification trace reconciliation 摘录；不得从 `tasks.md` 生成测试目标。
+    - test-worker 必须读取完整 proposal/specs/design 和 `runtime-acceptance.md` Delivery Plane 作为 oracle 一致性核对的共同上游契约；默认 oracle 入口是目标 Proof Slice 范围、`verification.md` 对应矩阵行、`trace/verification.proof-slices.json` 对应 slice 和 verification trace reconciliation 摘录；不得从 `tasks.md` 生成测试目标。
     - `verification.md` 不重复 `scope basis`，不重新解释 source/scope；source/scope 审计只能通过 Proof Slice -> Runtime Row IDs -> runtime-acceptance row 反查。
     - oracle 必须描述 public/runtime observable behavior，不得来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
     - Proof Slice 的语义只能摘取或细分 runtime-acceptance canonical row 的 runtime obligation、observable fact、failure/branch/default/no-scope 字段，不得新增 source/scope 外 behavior。
