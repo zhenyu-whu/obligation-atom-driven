@@ -9,6 +9,12 @@ import {
   isAutomatedProofSliceRequired,
   isProofSlicePlacementSupported,
 } from "./proof-slice-placement-policy.mjs";
+import {
+  RENDER_CONTRACT_VERSION,
+  RenderContractError,
+  renderArtifactMarkdown,
+  tracePathForArtifactPath,
+} from "./render-production-artifacts.mjs";
 
 const TRACE_SCHEMA = "openspec-trace-v1";
 const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
@@ -108,7 +114,7 @@ const TRACE_REQUIREMENTS = {
     common: ["production-source-map", "design-obligation-matrix", "production-alignment-gate"],
   },
   "runtime-acceptance": {
-    common: ["runtime-upstream-coverage-map", "runtime-coverage-source-map", "coverage-closure-checklist"],
+    common: ["canonical-row-index", "runtime-upstream-coverage-map", "runtime-coverage-source-map", "coverage-closure-checklist"],
   },
   verification: {
     common: ["runtime-coverage-reconciliation", "slice-consistency-checklist"],
@@ -193,6 +199,7 @@ export function validateChange(options = {}) {
   const schemaKind = schemaName === "production-default-acceptance-driven" ? "default" : "obligation";
   const files = readChangeFiles(root, changeDir);
   const trace = loadTracePlane(root, changeDir, files, schemaKind, issues, { complete });
+  validateRenderedArtifacts(root, changeDir, files, trace, issues);
   validateProposalAuthorityTrace(root, change, files.byName["proposal.md"], trace.get("proposal"), schemaKind, issues);
 
   if (complete) {
@@ -284,6 +291,7 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}
   const manifestPath = path.join(changeDir, "trace", "manifest.json");
   let manifest = null;
   let traceContractVersion = "";
+  let renderContractVersion = "";
   if (!fs.existsSync(manifestPath)) {
     addIssue(issues, "error", "VAL-TR-001", path.relative(root, manifestPath), "缺少 trace/manifest.json。");
   } else {
@@ -294,6 +302,7 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}
         addIssue(issues, "error", "VAL-TR-002", "trace/manifest.json", `trace-schema 必须为 ${TRACE_SCHEMA}。`);
       }
       traceContractVersion = strip(manifest["trace-contract-version"]);
+      renderContractVersion = strip(manifest["render-contract-version"]);
       if (traceContractVersion && traceContractVersion !== TRACE_CONTRACT_PROOF_SLICES) {
         addIssue(
           issues,
@@ -301,6 +310,32 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}
           "VAL-TR-017",
           "trace/manifest.json",
           `trace-contract-version 不支持：${traceContractVersion}。`,
+        );
+      }
+      if (renderContractVersion === RENDER_CONTRACT_VERSION && !traceContractVersion) {
+        addIssue(
+          issues,
+          "error",
+          "VAL-TR-017",
+          "trace/manifest.json",
+          `trace-contract-version 必须为 ${TRACE_CONTRACT_PROOF_SLICES}。`,
+        );
+      }
+      if (renderContractVersion && renderContractVersion !== RENDER_CONTRACT_VERSION) {
+        addIssue(
+          issues,
+          "error",
+          "VAL-RENDER-003",
+          "trace/manifest.json",
+          `render-contract-version 不支持：${renderContractVersion}。`,
+        );
+      } else if (!renderContractVersion) {
+        addIssue(
+          issues,
+          "error",
+          "VAL-RENDER-003",
+          "trace/manifest.json",
+          `render-contract-version 必须为 ${RENDER_CONTRACT_VERSION}。`,
         );
       }
     }
@@ -355,7 +390,47 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}
     }
   }
   traces.traceContractVersion = traceContractVersion;
+  traces.renderContractVersion = renderContractVersion;
   return traces;
+}
+
+function validateRenderedArtifacts(root, changeDir, files, trace, issues) {
+  if (trace.renderContractVersion !== RENDER_CONTRACT_VERSION) {
+    return;
+  }
+  const proofSlicesTrace = trace.get("verification-proof-slices");
+  for (const file of files.all.filter((candidate) => candidate.artifactId !== "unknown")) {
+    const artifactPath = file.relPath.split(path.sep).join("/");
+    const key = file.artifactId === "specs" ? `specs:${specTraceName(file.relPath)}` : file.artifactId;
+    const artifactTrace = trace.get(key);
+    if (!artifactTrace) {
+      continue;
+    }
+    try {
+      const tracePath = tracePathForArtifactPath(artifactPath);
+      const expected = renderArtifactMarkdown({
+        trace: artifactTrace,
+        proofSlicesTrace,
+        tracePath,
+        traceDigest: sha256File(path.join(changeDir, tracePath)),
+      });
+      if (file.text !== expected) {
+        addIssue(
+          issues,
+          "error",
+          "VAL-RENDER-001",
+          file.repoRelPath,
+          "artifact Markdown 与 trace renderer 输出不一致；必须从 JSON trace 重新渲染。",
+        );
+      }
+    } catch (error) {
+      if (error instanceof RenderContractError) {
+        addIssue(issues, "error", error.ruleId, error.file, error.message.replace(/^VAL-RENDER-\d+:\s*/u, ""));
+      } else {
+        addIssue(issues, "error", "VAL-RENDER-999", file.repoRelPath, `renderer 执行失败：${error.message}`);
+      }
+    }
+  }
 }
 
 function findManifestEntry(manifest, artifactPath, tracePath = null) {
@@ -2081,6 +2156,7 @@ function validateRuntimeCoverageTrace(runtimeTrace, runtimeRows, tracePlane, iss
   if (!runtimeTrace) {
     return;
   }
+  validateRuntimeCanonicalRowIndex(runtimeTrace, runtimeRows, issues);
   const upstreamCoverage = parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues);
   const sourceMapCoverage = parseRuntimeSourceMapCoverage(runtimeTrace, runtimeRows, issues);
 
@@ -2089,6 +2165,67 @@ function validateRuntimeCoverageTrace(runtimeTrace, runtimeRows, tracePlane, iss
   validateRuntimeDesignDecisionCoverage(tracePlane, upstreamCoverage.records, issues);
   validateRuntimeSourceBasisMachineIds(runtimeRows, upstreamCoverage, sourceMapCoverage, issues);
   validateRuntimeRowOrphans(runtimeRows, upstreamCoverage, sourceMapCoverage, issues);
+}
+
+function validateRuntimeCanonicalRowIndex(runtimeTrace, runtimeRows, issues) {
+  const index = runtimeTrace["canonical-row-index"];
+  const ref = "trace/runtime-acceptance.trace.json#/canonical-row-index";
+  if (!index || typeof index !== "object" || Array.isArray(index)) {
+    addIssue(issues, "error", "VAL-RA-110", ref, "canonical-row-index 必须是 object。");
+    return;
+  }
+
+  const sections = [
+    ["surface-rows", "RS"],
+    ["operation-rows", "OP"],
+    ["state-rows", "ST"],
+    ["chain-rows", "CH"],
+  ];
+  const seen = new Map();
+
+  for (const [section, prefix] of sections) {
+    const expected = [...runtimeRows.values()]
+      .filter((row) => row.rowType === prefix)
+      .map((row) => row.id);
+    const rawRows = index[section];
+    const sectionRef = `${ref}/${section}`;
+    if (!Array.isArray(rawRows)) {
+      addIssue(issues, "error", "VAL-RA-110", sectionRef, `${section} 必须是数组。`);
+      continue;
+    }
+
+    const actual = [];
+    for (const [rowIndex, rawId] of rawRows.entries()) {
+      const rowId = strip(rawId);
+      const itemRef = `${sectionRef}/${rowIndex}`;
+      if (!/^(RS|OP|ST|CH)-\d{3}$/u.test(rowId)) {
+        addIssue(issues, "error", "VAL-RA-111", itemRef, `canonical-row-index row id 无效：${rowId || "<empty>"}。`);
+        continue;
+      }
+      actual.push(rowId);
+      if (!rowId.startsWith(`${prefix}-`)) {
+        addIssue(issues, "error", "VAL-RA-113", itemRef, `${rowId} 不属于 ${section}。`);
+      }
+      if (!runtimeRows.has(rowId)) {
+        addIssue(issues, "error", "VAL-RA-112", itemRef, `canonical-row-index 引用未定义 runtime row ${rowId}。`);
+      }
+      const previous = seen.get(rowId);
+      if (previous) {
+        addIssue(issues, "error", "VAL-RA-111", itemRef, `${rowId} 在 canonical-row-index 中重复；首次出现于 ${previous}。`);
+      } else {
+        seen.set(rowId, sectionRef);
+      }
+    }
+
+    compareIdSets(
+      expected,
+      actual.filter((rowId) => rowId.startsWith(`${prefix}-`)),
+      "VAL-RA-111",
+      sectionRef,
+      `${section} 必须完整镜像 runtime-acceptance.md 中的 ${prefix}- rows`,
+      issues,
+    );
+  }
 }
 
 function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues) {

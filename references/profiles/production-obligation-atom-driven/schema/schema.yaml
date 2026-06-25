@@ -1,6 +1,6 @@
 name: production-obligation-atom-driven
-version: 17
-description: 面向生产实现的 obligation atom 工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；artifact 主体是 Delivery Plane，覆盖映射与 reconciliation 统一放入外置 JSON Trace Plane，artifact 末尾只保留 Trace Appendix pointer；tasks AC 主体包含 resolved runtime contract
+version: 18
+description: 面向生产实现的 obligation atom 工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；writer 只写 JSON trace sections，renderer 再生成 Delivery Plane、Trace Appendix 与 manifest digest；artifact 末尾只保留 Trace Appendix pointer；tasks AC 主体包含 resolved runtime contract
 artifacts:
   - id: proposal
     generates: proposal.md
@@ -27,7 +27,7 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
       - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
       - Partial validator hard pass 后才启动只读 `proposal-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
@@ -64,7 +64,7 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
       - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
       - Partial validator hard pass 后才启动只读 `specs-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
@@ -101,7 +101,7 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
       - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
       - Partial validator hard pass 后才启动只读 `design-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
@@ -140,7 +140,7 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
       - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
       - Partial validator hard pass 后才启动只读 `runtime-acceptance-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
@@ -179,7 +179,7 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
       - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
       - Partial validator hard pass 后才启动只读 `verification-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
@@ -220,7 +220,7 @@ artifacts:
       - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
       - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
       - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - 使用 template 结构写入 artifact 和对应 JSON trace；artifact 末尾只保留短 `## Trace Appendix` pointer，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
+      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
       - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
       - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
       - Partial validator hard pass 后才启动只读 `tasks-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
@@ -240,11 +240,10 @@ apply:
   requires: [runtime-acceptance, verification, tasks]
   tracks: tasks.md
   instruction: |
-    本 schema 的 apply instruction 只定义 schema-local artifact 语义；执行顺序、subagent 编排、测试质量门禁、Regression Reconciliation Gate、evidence 输出和 ready-for-archive 判定必须遵守 `openspec/agent-runtime/openspec-apply-change.md`。
+    本 schema 的 apply instruction 只定义 schema-local artifact 语义；执行顺序、subagent 编排、测试质量门禁、evidence 输出和 ready-for-archive 判定必须遵守 `openspec/agent-runtime/openspec-apply-change.md`。
     Checkpoint commit policy 也由 `openspec/agent-runtime/openspec-apply-change.md` 强制定义；checkpoint commit 只作为写入型 apply-stage agent 的过程性审计轨迹，不得作为 runtime oracle、Proof Slice evidence、verification pass、runtime row covered 或 ready-for-archive 信号。
-    Regression Reconciliation Gate 由 `openspec/agent-runtime/regression-reconciliation-gate.md` 强制定义；它是 apply runtime 阶段，不是 proposal/specs/design/runtime-acceptance/verification/tasks artifact，不改变 `apply.requires`。
 
-    主 agent / Phase 0 preflight 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks 的 Delivery Plane 作为 full-context envelope；apply-stage worker/reviewer 必须按 `openspec/agent-runtime/openspec-apply-change.md` 的 Role-specific Context Packaging 消费输入。proposal、specs、design 和 `runtime-acceptance.md` Delivery Plane 是 production/test 共同上游契约，必须完整传入 implementation-worker 与 test-worker；`tasks.md`、`verification.md` 和 JSON trace 必须按角色裁剪，不得把完整 `contextFiles` 当作默认读取授权。JSON Trace Plane 必须由 complete validator 全量机器校验；LLM / worker 的 trace 消费遵守 runtime apply 文档的 lazy-loading / role-specific packaging。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
+    Apply 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
     Apply Phase 0 必须运行 `node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`；validator hard error 必须作为实现前 `Artifact Consistency Blocker`，不得启动 implementation-worker。
 
     `runtime-acceptance.md` 是 canonical runtime coverage registry：
@@ -253,8 +252,7 @@ apply:
 
     `tasks.md` 是 production implementation Delivery Plane；runtime acceptance audit model 位于 `trace/tasks.trace.json`：
     - 使用 `GA-####` 作为 Global Atom ID；必须保留 proposal trace register、spec、design 和 coverage rows 中的 exact IDs，不得使用 ranges。
-    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 必须读取完整 proposal/specs/design 和 `runtime-acceptance.md` Delivery Plane，并默认消费当前 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
-    - implementation-worker 的默认执行入口是当前 AC section，不继承完整 `contextFiles` 中的 `tasks.md`、`verification.md` 或 JSON trace；完整 `runtime-acceptance.md` 只作为 canonical runtime registry、边界和一致性上下文，未被当前 AC `Runtime Rows` 或 checkbox 引用的 rows 不得变成额外实现工作；除主 agent 明确传入的当前 AC 相关摘录外，不得默认读取完整 `verification.md` 或 verification trace。
+    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 默认消费 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
     - Delivery Plane checkbox 只能代表 production implementation work；`Proof:`、`Acceptance Proof`、coverage closure、fixture execution、截图、测试执行或 evidence collection 不得单独成为 checkbox。
     - `trace/tasks.trace.json` 的 `acceptance-driven-coverage` 负责把 obligation atoms、spec scenarios 和 design obligations 映射到 AC、implementation checkbox 和 runtime proof 摘要。
     - `trace/tasks.trace.json` 的 `runtime-acceptance-index` 和 `runtime-acceptance-projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
@@ -263,7 +261,6 @@ apply:
 
     `verification.md` 是 independent test intent and oracle artifact：
     - Proof Slice Matrix 是唯一测试义务模型，不是执行清单；不生成、不引用任何额外业务 oracle 分组 ID。
-    - test-worker 必须读取完整 proposal/specs/design 和 `runtime-acceptance.md` Delivery Plane 作为 oracle 一致性核对的共同上游契约；默认 oracle 入口是目标 Proof Slice 范围、`verification.md` 对应矩阵行、`trace/verification.proof-slices.json` 对应 slice 和 verification trace reconciliation 摘录；不得从 `tasks.md` 生成测试目标。
     - `verification.md` 不重复 `Source Basis`，不重新解释 source/scope；source/scope 审计只能通过 Proof Slice -> Runtime Row IDs -> runtime-acceptance row 反查。
     - oracle 必须描述 public/runtime observable behavior，不得来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
     - Proof Slice 的语义只能摘取或细分 runtime-acceptance canonical row 的 runtime obligation、observable fact、failure/branch/default/no-scope 字段，不得新增 source/scope 外 behavior。

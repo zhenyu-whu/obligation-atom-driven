@@ -1,3 +1,5 @@
+<!-- Writer note: writer/repair-writer 只能写当前 artifact 的 JSON trace sections；随后运行 render-production-artifacts.mjs --write 从 trace 生成本 Delivery Plane、Trace Appendix 与 manifest digest。 -->
+
 ## Context
 
 <!-- 总结此 change 的 production context、依赖、现有 specs 与 proposal boundary。不要在主体列 SI coverage；exact scope/source mapping 写入 JSON trace。 -->

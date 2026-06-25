@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { renderChangeArtifact, renderDeliveryBody } from "./render-production-artifacts.mjs";
 import { validateChange } from "./validate-production-artifacts.mjs";
 
 test("合法 JSON trace complete 校验通过", () => {
@@ -40,6 +41,62 @@ test("proof-slices-v1 proposal partial 不要求 future verification proof slice
 
   assert.equal(result.errorCount, 0);
   assert.equal(result.warningCount, 0);
+});
+
+test("trace-render-v1 proposal partial 缺少 trace-contract-version hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+  files.manifestTraceContractVersion = "";
+
+  const root = makeChange("proposal-missing-trace-contract-change", files);
+  const result = validateChange({ root, change: "proposal-missing-trace-contract-change", complete: false });
+
+  assertRule(result, "VAL-TR-017");
+});
+
+test("renderer 从 trace delivery payload 生成 artifact 且输出稳定", () => {
+  const root = makeChange("render-runtime-change", standardFiles({ renderContract: true }));
+
+  const first = renderChangeArtifact({
+    root,
+    change: "render-runtime-change",
+    artifact: "runtime-acceptance",
+  });
+  const second = renderChangeArtifact({
+    root,
+    change: "render-runtime-change",
+    artifact: "runtime-acceptance",
+  });
+
+  assert.equal(first.markdown, second.markdown);
+  assert.equal(first.markdown, fs.readFileSync(path.join(root, "openspec", "changes", "render-runtime-change", "runtime-acceptance.md"), "utf8"));
+  assert.match(first.markdown, /Trace digest: `sha256-[a-f0-9]{64}`/);
+});
+
+test("renderer 缺少 delivery payload hard fail", () => {
+  const files = standardFiles({ renderContract: true });
+  delete files.traces["runtime-acceptance.trace.json"]["delivery-plane"];
+  const root = makeChange("render-missing-delivery-change", files);
+
+  assert.throws(
+    () =>
+      renderChangeArtifact({
+        root,
+        change: "render-missing-delivery-change",
+        artifact: "runtime-acceptance",
+      }),
+    /VAL-RENDER-002/,
+  );
+});
+
+test("validator 对 renderer 输出漂移 hard fail", () => {
+  const files = standardFiles({ renderContract: true });
+  files.artifacts["runtime-acceptance.md"] = files.artifacts["runtime-acceptance.md"].replace("登录态解析。", "手写漂移。");
+  const root = makeChange("render-drift-change", files);
+  const result = validateChange({ root, change: "render-drift-change", complete: true });
+
+  assertRule(result, "VAL-RENDER-001");
 });
 
 test("proposal register 与 final packet direct atom 集合不一致 hard fail", () => {
@@ -313,6 +370,43 @@ test("runtime trace 与 proposal/specs/design/source basis 一致时通过", () 
   assert.equal(result.warningCount, 0, JSON.stringify(result.issues, null, 2));
 });
 
+test("runtime trace 缺少 canonical-row-index hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  delete files.traces["runtime-acceptance.trace.json"]["canonical-row-index"];
+  const root = makeChange("runtime-missing-row-index-change", files);
+  const result = validateChange({ root, change: "runtime-missing-row-index-change", complete: false });
+
+  assertRule(result, "VAL-TR-014");
+  assertRule(result, "VAL-RA-110");
+});
+
+test("runtime canonical-row-index 缺少 Markdown runtime row hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true, secondAc: true });
+  files.traces["runtime-acceptance.trace.json"]["canonical-row-index"]["surface-rows"] = ["RS-001"];
+  const root = makeChange("runtime-row-index-gap-change", files);
+  const result = validateChange({ root, change: "runtime-row-index-gap-change", complete: false });
+
+  assertRule(result, "VAL-RA-111");
+});
+
+test("runtime canonical-row-index 包含不存在 row hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  files.traces["runtime-acceptance.trace.json"]["canonical-row-index"]["surface-rows"].push("RS-999");
+  const root = makeChange("runtime-row-index-extra-change", files);
+  const result = validateChange({ root, change: "runtime-row-index-extra-change", complete: false });
+
+  assertRule(result, "VAL-RA-112");
+});
+
+test("runtime canonical-row-index row 类型放错数组 hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  files.traces["runtime-acceptance.trace.json"]["canonical-row-index"]["operation-rows"] = ["RS-001"];
+  const root = makeChange("runtime-row-index-type-change", files);
+  const result = validateChange({ root, change: "runtime-row-index-type-change", complete: false });
+
+  assertRule(result, "VAL-RA-113");
+});
+
 test("runtime upstream map 缺少 proposal direct atom hard fail", () => {
   const files = standardFiles({ proposal: true, specs: true, design: true });
   files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"] =
@@ -369,9 +463,15 @@ test("runtime Markdown Source Basis 与 JSON source IDs 漂移 hard fail", () =>
 
 test("runtime canonical row 未被 upstream/source-map 引用 hard fail", () => {
   const files = standardFiles({ proposal: true, specs: true, design: true });
-  files.artifacts["runtime-acceptance.md"] = files.artifacts["runtime-acceptance.md"].replace(
-    "## Operation Coverage Matrix",
-    "| RS-999 | orphan surface | apps/web | route | 孤儿 runtime row。 | orphan fact | real path | none | `GA-0001`、`D-001` | spec-requirement / design | required behavior | no expansion |\n## Operation Coverage Matrix",
+  files.traces["runtime-acceptance.trace.json"]["canonical-row-index"]["surface-rows"].push("RS-999");
+  files.traces["runtime-acceptance.trace.json"]["delivery-plane"]["canonical-rows"].push(
+    runtimeSurfaceRow("RS-999", "孤儿 runtime row。", "GA-0001、D-001"),
+  );
+  files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["runtime-row-ids"] = ["RS-001"];
+  files.traces["runtime-acceptance.trace.json"]["runtime-coverage-source-map"][0]["row-ids"] = ["RS-001"];
+  files.artifacts["runtime-acceptance.md"] = renderDeliveryBody(
+    files.traces["runtime-acceptance.trace.json"],
+    files.traces["verification.proof-slices.json"],
   );
   const root = makeChange("runtime-orphan-row-change", files);
   const result = validateChange({ root, change: "runtime-orphan-row-change", complete: false });
@@ -644,12 +744,31 @@ test("verification reconciliation 未覆盖 runtime row hard fail", () => {
 
 test("verification proof slice 未被 reconciliation 引用 hard fail", () => {
   const files = standardFiles();
-  files.artifacts["verification.md"] = verificationBody({
-    proofRows: [
-      "| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | authorization result | session fixture | high | None |",
-      "| PS-002 | RS-001 | RS-001 | state | actor readback | auth surface | actor 可从 readback 读取。 | actor readback 缺失。 | component | apps/web | rendered assertion | session fixture | medium | None |",
-    ],
+  files.traces["verification.proof-slices.json"]["proof-slices"].push({
+    ...files.traces["verification.proof-slices.json"]["proof-slices"][0],
+    "slice-id": "PS-002",
+    "primitive-type": "state",
+    "branch-variant": "actor readback",
+    "oracle-fragment": "actor 可从 readback 读取。",
+    "failure-signal": "actor readback 缺失。",
+    "primary-layer": "component",
+    "primary-assertion-shape": "rendered assertion",
+    "regression-intent": "medium",
+    "test-contract": {
+      "primary-test-cardinality": "exactly-one",
+      "test-title-prefix": "PS-002",
+      "allow-shared-setup": true,
+      "allow-multi-slice-primary-test": false,
+      "waiver-required-for-multi-slice": true,
+    },
   });
+  files.traces["verification.proof-slices.json"]["proof-slice-summary"]["proof-slice-count"] = 2;
+  files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primitive-types-used"] = ["authorization", "state"];
+  files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primary-layers-used"] = ["security/negative", "component"];
+  files.artifacts["verification.md"] = renderDeliveryBody(
+    files.traces["verification.trace.json"],
+    files.traces["verification.proof-slices.json"],
+  );
   const root = makeChange("unreferenced-proof-slice-change", files);
   const result = validateChange({ root, change: "unreferenced-proof-slice-change", complete: true });
 
@@ -658,11 +777,22 @@ test("verification proof slice 未被 reconciliation 引用 hard fail", () => {
 
 test("疑似非原子 slice 继续输出 warning", () => {
   const files = standardFiles();
-  files.artifacts["verification.md"] = verificationBody({
-    proofRows: [
-      "| PS-001 | RS-001 | RS-001 | operation | edit/delete/add item | API | edit/delete/add 均可观察。 | 操作失败。 | route/API | apps/web | interactive assertions | DB fixture | high | None |",
-    ],
-  });
+  const proofSlice = files.traces["verification.proof-slices.json"]["proof-slices"][0];
+  proofSlice["primitive-type"] = "operation";
+  proofSlice["branch-variant"] = "edit/delete/add item";
+  proofSlice["observable-surface"] = "API";
+  proofSlice["oracle-fragment"] = "edit/delete/add 均可观察。";
+  proofSlice["failure-signal"] = "操作失败。";
+  proofSlice["primary-layer"] = "route/API";
+  proofSlice["primary-assertion-shape"] = "interactive assertions";
+  proofSlice["fixture-mock-boundary"] = "DB fixture";
+  files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primitive-types-used"] = ["operation"];
+  files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primary-layers-used"] = ["route/API"];
+  files.traces["verification.trace.json"]["delivery-plane"] = verificationDelivery();
+  files.artifacts["verification.md"] = renderDeliveryBody(
+    files.traces["verification.trace.json"],
+    files.traces["verification.proof-slices.json"],
+  );
   const root = makeChange("warning-change", files);
   const result = validateChange({ root, change: "warning-change", complete: true });
   assert.equal(result.errorCount, 0);
@@ -722,6 +852,9 @@ function makeChange(change, files) {
           ...(files.manifestTraceContractVersion
             ? { "trace-contract-version": files.manifestTraceContractVersion }
             : {}),
+          ...(files.manifestRenderContractVersion
+            ? { "render-contract-version": files.manifestRenderContractVersion }
+            : {}),
           change,
           "schema-name": "production-obligation-atom-driven",
           artifacts: traceEntries,
@@ -745,7 +878,8 @@ function standardFiles(options = {}) {
     "verification.trace.json": verificationTrace(),
     "tasks.trace.json": tasksTrace(options),
   };
-  if (options.newContract) {
+  const usesRenderContract = options.renderContract !== false;
+  if (options.newContract || usesRenderContract) {
     traces["verification.proof-slices.json"] = proofSlicesTrace();
   }
   if (options.proposal) {
@@ -760,22 +894,30 @@ function standardFiles(options = {}) {
     artifacts["design.md"] = designBody();
     traces["design.trace.json"] = designTrace(options.designGa ?? "GA-0001");
   }
+  if (usesRenderContract) {
+    addRenderDeliveryPayload(artifacts, traces, options);
+  }
   return {
     artifacts,
     traces,
     ...(options.authorityMode ? { authorityMode: options.authorityMode } : {}),
-    ...(options.newContract ? { manifestTraceContractVersion: "proof-slices-v1" } : {}),
+    ...(options.newContract || usesRenderContract ? { manifestTraceContractVersion: "proof-slices-v1" } : {}),
+    ...(usesRenderContract ? { manifestRenderContractVersion: "trace-render-v1" } : {}),
   };
+}
+
+function addRenderDeliveryPayload(artifacts, traces, options = {}) {
+  for (const [artifactPath, body] of Object.entries(artifacts)) {
+    const trace = traces[traceNameForArtifact(artifactPath)];
+    if (trace) {
+      trace["delivery-plane"] = deliveryPayloadForArtifact(artifactPath, options);
+      artifacts[artifactPath] = renderDeliveryBody(trace, traces["verification.proof-slices.json"]);
+    }
+  }
 }
 
 function withSingleProofSlicePlacement(files, options) {
   const manual = options.manual ?? "None";
-  files.artifacts["verification.md"] = verificationBody({
-    proofRows: [
-      `| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | ${options.layer} | ${options.owner} | authorization result | session fixture | high | ${manual} |`,
-    ],
-  });
-
   const proofSlice = files.traces["verification.proof-slices.json"]?.["proof-slices"]?.[0];
   if (proofSlice) {
     proofSlice["primary-layer"] = options.layer;
@@ -785,8 +927,167 @@ function withSingleProofSlicePlacement(files, options) {
       options.layer,
     ];
   }
+  files.traces["verification.trace.json"]["delivery-plane"] = verificationDelivery();
+  files.artifacts["verification.md"] = renderDeliveryBody(
+    files.traces["verification.trace.json"],
+    files.traces["verification.proof-slices.json"],
+  );
 
   return files;
+}
+
+function deliveryPayloadForArtifact(artifactPath, options = {}) {
+  if (artifactPath === "proposal.md") return proposalDelivery();
+  if (artifactPath.startsWith("specs/")) return specsDelivery();
+  if (artifactPath === "design.md") return designDelivery();
+  if (artifactPath === "runtime-acceptance.md") return runtimeDelivery(options);
+  if (artifactPath === "verification.md") return verificationDelivery();
+  if (artifactPath === "tasks.md") return tasksDelivery(options);
+  throw new Error(`Unsupported test artifact: ${artifactPath}`);
+}
+
+function proposalDelivery() {
+  return {
+    why: ["- 测试。"],
+    "change-plan-boundary": ["- 以 fixture final packet 为边界。"],
+    "what-changes": ["- 登录态 actor 解析行为进入 change。"],
+    capabilities: {
+      "new-capabilities": [{ name: "capability", summary: "登录态 actor 解析。" }],
+      "modified-capabilities": [],
+    },
+    "non-goals": ["- 无。"],
+    impact: ["- apps/web auth surface。"],
+    "rollout-readiness": ["- 无。"],
+  };
+}
+
+function specsDelivery() {
+  return {
+    "added-requirements": [
+      {
+        name: "登录态 actor 解析",
+        body: "系统 SHALL 解析登录态 actor，并 MUST NOT 伪造 actor。",
+        scenarios: [
+          {
+            name: "解析登录态 actor",
+            when: "请求进入 auth surface",
+            then: "系统 MUST 解析内部 actor。",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function designDelivery() {
+  return {
+    context: ["- 测试。"],
+    "goals-non-goals": ["- 保持 source-backed scope。"],
+    decisions: [
+      {
+        "decision-id": "D-001",
+        title: "登录态 actor 解析设计",
+        decision: "通过 command 和 placement 承接 source-backed requirement。",
+        "source-gap": "无。",
+        "minimal-shape": "使用 P-001 承接生产落点。",
+        "rejected-expansion": "不扩展 scope。",
+      },
+    ],
+    "architecture-module-boundary-design": ["- P-001 承接生产落点。"],
+    "domain-data-migration-design": ["- 无。"],
+    "api-auth-security-design": ["- auth surface 解析 actor。"],
+    "async-realtime-ai-worker-design": ["- 无。"],
+    "frontend-ux-prototype-fidelity-design": ["- 无。"],
+    "observability-ops-deployment-design": ["- 无。"],
+    "verification-design": ["- 后续 runtime/verification 覆盖。"],
+    "rollout-compatibility": ["- 无。"],
+    "risks-trade-offs": ["- 无。"],
+    "open-questions": ["无"],
+  };
+}
+
+function runtimeDelivery(options = {}) {
+  const canonicalRows = [
+    runtimeSurfaceRow("RS-001", "登录态解析。", "GA-0001、scenario: 解析登录态 actor、D-001"),
+  ];
+  if (options.secondAc) {
+    canonicalRows.push(runtimeSurfaceRow("RS-002", "第二行为。", "GA-0001、D-001"));
+  }
+  return {
+    "runtime-acceptance-intent": {
+      scope: "测试。",
+      "source-basis": "proposal register、spec scenario、design decision。",
+      "out-of-scope": "None。",
+    },
+    "canonical-rows": canonicalRows,
+  };
+}
+
+function runtimeSurfaceRow(id, obligation, sourceBasis) {
+  return {
+    "surface-id": id,
+    "surface-type": id === "RS-001" ? "auth surface" : "route surface",
+    "owner-candidate": "apps/web",
+    "entry-point": "route",
+    "runtime-obligation": obligation,
+    "observable-fact": id === "RS-001" ? "auth fact" : "route fact",
+    "default-path-policy": "real path",
+    "external-boundary": "none",
+    "source-basis": sourceBasis,
+    "projection-type": "spec-requirement / design",
+    "scope-role": "required behavior",
+    "no-scope-expansion-check": "no expansion",
+  };
+}
+
+function verificationDelivery() {
+  return {
+    "verification-intent": {
+      scope: "测试。",
+      "runtime-source": "runtime-acceptance.md。",
+      "out-of-scope": "None。",
+    },
+    "layer-harness-fixture-notes": [],
+    "do-not-test": [],
+  };
+}
+
+function tasksDelivery(options = {}) {
+  const slices = [taskSlice("AC-001", "登录态 actor 解析", ["RS-001"], "实现 actor 解析", "可直接开始")];
+  if (options.secondAc) {
+    slices.push(taskSlice("AC-002", "第二行为", ["RS-002"], "实现第二行为", "需 AC-001"));
+  }
+  return { "acceptance-slices": slices };
+}
+
+function taskSlice(acId, title, runtimeRows, taskTitle, startGate) {
+  return {
+    "ac-id": acId,
+    title,
+    outcome: [acId === "AC-001" ? "- 登录态 actor 可解析。" : "- 第二行为可用。"],
+    "start-gate": [acId === "AC-001" ? "- None" : "- AC-001。"],
+    "runtime-rows": runtimeRows,
+    "resolved-runtime-contract": runtimeRows.map((row) => ({
+      row,
+      "worker-facing-obligation": "生产义务。",
+      "observable-proof": "可观察 proof。",
+      "default-no-scope-boundary": "默认边界。",
+    })),
+    "implementation-scope": [`- ${taskTitle}。`],
+    preserve: ["- 不扩展 scope。"],
+    "proof-contract": ["- 可观察。"],
+    tasks: [
+      {
+        "task-id": `${acId}.1`,
+        title: taskTitle,
+        "runtime-rows": runtimeRows,
+        acceptance: "可观察。",
+        preserve: "不扩展。",
+        proof: "可观察。",
+        "mock-default-path-policy": "默认真实路径。",
+      },
+    ],
+  };
 }
 
 function runtimeAcceptanceBody(options = {}) {
@@ -1181,6 +1482,12 @@ function runtimeTrace(options = {}) {
     "trace-schema": "openspec-trace-v1",
     "artifact-id": "runtime-acceptance",
     "artifact-path": "runtime-acceptance.md",
+    "canonical-row-index": {
+      "surface-rows": runtimeRowIds,
+      "operation-rows": [],
+      "state-rows": [],
+      "chain-rows": [],
+    },
     "runtime-upstream-coverage-map": [
       {
         "upstream-item-id": "GA-0001",

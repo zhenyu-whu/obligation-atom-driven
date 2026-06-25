@@ -10,6 +10,8 @@
 - 使用 proposal/specs 的 JSON trace 作为 source/scope-reading interface。
 - 当 design 需要 exact behavior、architecture/module boundary、data/API shape、auth/security、async/worker、UI/prototype fidelity、observability、deployment 或 verification detail 时，只读取已登记 source/scope window 或 baseline。
 - 起草前建立 design coverage map：每个 in-scope scenario、material design obligation、guard 和需要 implementation placement 的 source/scope item 必须映射到 design decision、guard handling 或 explicit blocker。
+- 建立 trace-backed design coverage map、decision index、implementation placement map、guard handling map、spec scenario design map、proof expectation handoff、production alignment gate inputs 和 `delivery-plane` render payload。
+- writer 只写 `trace/design.trace.json`；`design.md`、Trace Appendix 和 manifest digest 必须由 renderer 从 trace 写入；Delivery Plane 不得另行维护 source/scope coverage 表。
 
 ## Delivery Plane
 

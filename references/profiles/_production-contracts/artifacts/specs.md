@@ -11,6 +11,8 @@
 - 修改 existing capability 前，读取对应 `openspec/specs/<capability>/spec.md`。
 - 建立 capability-to-source/scope map：每个 spec-relevant item 必须落到 requirement/scenario、guard 或明确 handoff。
 - 若 capability 没有直接的 spec-level item，但存在可归档的规范性 design obligation，可以执行 capability-level fallback，派生成最小 requirement/guard；不得把原始 projection 改写为 spec projection。
+- 建立 trace-backed capability-to-source/scope map、requirement/scenario model、guard model、design/proof/context-only handoff notes、existing requirement read set、spec-handling、no-scope-expansion checks 和 `delivery-plane` render payload。
+- writer 只写 `trace/specs/<capability>.trace.json`；`specs/<capability>/spec.md`、Trace Appendix 和 manifest digest 必须由 renderer 从 trace 写入；不得为了 notes 创建空 spec。
 
 ## Delta Rules
 

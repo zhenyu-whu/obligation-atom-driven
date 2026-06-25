@@ -10,6 +10,9 @@
 - 建立 upstream runtime obligation inventory：每个 material source/scope item、in-scope spec scenario、material design decision/obligation、guard 和 proof handling item 都必须成为 inventory item；非 runtime item 必须记录 source/scope-backed not-applicable reason。
 - 从上游 artifacts 抽取 runtime surfaces、operations、states/branches、async/realtime chains，以及 explicit no-async/no-worker/no-queue/no-side-effect preserve boundaries。
 - 对每个 upstream item 分配一个或多个具体 runtime row IDs；不得只用主题汇总行、closure checklist 或聚合行表示覆盖。
+- 建立 trace-backed upstream runtime obligation inventory、not-applicable inventory、canonical runtime row model、row type/index、upstream-to-row coverage map、source map、closure checklist inputs 和 `delivery-plane` render payload。
+- writer 只写 `trace/runtime-acceptance.trace.json`；`runtime-acceptance.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed runtime row ID 集写入。
+- canonical runtime row ID 集必须同时渲染为 Markdown 表格和 trace `canonical-row-index`，不得手工维护两套 row truth。
 
 ## Canonical Rows
 
@@ -24,6 +27,7 @@
 
 ## JSON Trace Plane
 
+- `trace/runtime-acceptance.trace.json` 必须包含 `canonical-row-index`，其中 `surface-rows`、`operation-rows`、`state-rows`、`chain-rows` 四组 ID 必须分别完整镜像主体中的 RS-/OP-/ST-/CH- rows。
 - `trace/runtime-acceptance.trace.json` 的 `runtime-upstream-coverage-map` 必须逐项列出 upstream item、type、projection/handling、runtime row IDs、coverage mode 和 not-applicable reason。
 - Covered item 的 row IDs 必须全部存在于主体 canonical rows。
 - `runtime-coverage-source-map` 可以保留主题汇总，但不得作为 upstream item 的唯一覆盖证明。

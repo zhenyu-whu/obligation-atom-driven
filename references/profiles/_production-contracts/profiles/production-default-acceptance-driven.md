@@ -6,6 +6,7 @@
 - Proposal 的主要输入是用户请求、现有 `openspec/specs/`、现有代码、当前产品行为，以及用户显式提供的 issue、设计稿、外部文档或调研结论。
 - 本 schema 不消费 `openspec/orchestrate`、change plan、final change packet、global atom index 或 capability anchor packet。
 - 不得创建 `GA-####` register，不得把 orchestrate atom 当作本 change scope。
+- `trace/proposal.trace.json` 中的 scope item 必须使用 change-local `SI-###`，并从用户请求、现有 spec/code baseline 或显式外部输入派生；不得读取或依赖 `openspec/orchestrate`。
 
 ## Scope Item 规则
 

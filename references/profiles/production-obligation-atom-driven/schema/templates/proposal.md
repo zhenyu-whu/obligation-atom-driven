@@ -1,3 +1,5 @@
+<!-- Writer note: writer/repair-writer 只能写当前 artifact 的 JSON trace sections；随后运行 render-production-artifacts.mjs --write 从 trace 生成本 Delivery Plane、Trace Appendix 与 manifest digest。 -->
+
 ## Why
 
 <!-- 说明此 production change 的动机：它解决或解锁了哪个产品、架构、production-readiness 或 verification 缺口？不要在主体列 GA coverage；exact atom/source 映射写入 JSON trace。 -->

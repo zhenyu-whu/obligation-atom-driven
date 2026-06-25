@@ -13,6 +13,7 @@
 - `openspec/orchestrate/change-plan.md` 只在自动推断 change slug 或核对 roadmap/dependency 顺序时读取，不得覆盖 final packet。
 - 除 canonical change packet、global atom index 和必要 capability views 外，其它 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。
 - `trace/proposal.trace.json` / `obligation-atom-preconditions` 可记录 `orchestrate-manifest`、`global-atom-index-json`、`atom-plan-mapping-json`、`final-packet-index-json`。这些字段出现时，对应 JSON 缺失必须视为 blocker，不得静默回退到 Markdown。
+- `trace/proposal.trace.json` 中的 source/scope item 必须使用 exact `GA-####`，并从 final packet、global atom index 和 proposal trace register 派生；不得在 trace 中重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
 
 ## Global Atom 规则
 
