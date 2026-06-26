@@ -256,6 +256,7 @@ const RUNTIME_TABLES = [
     idField: "operation-id",
     columns: [
       ["Operation ID", "operation-id"],
+      ["Owner Candidate", "owner-candidate"],
       ["Trigger", "trigger"],
       ["Control / Route", "control-route"],
       ["Request / Action", "request-action"],
@@ -278,6 +279,7 @@ const RUNTIME_TABLES = [
     idField: "state-id",
     columns: [
       ["State ID", "state-id"],
+      ["Owner Candidate", "owner-candidate"],
       ["State / Branch", "state-branch"],
       ["Trigger Into", "trigger-into"],
       ["Runtime Obligation", "runtime-obligation"],
@@ -299,6 +301,7 @@ const RUNTIME_TABLES = [
     idField: "chain-id",
     columns: [
       ["Chain ID", "chain-id"],
+      ["Owner Candidate", "owner-candidate"],
       ["User/System Entry", "user-system-entry"],
       ["Enqueue / Dispatch Fact", "enqueue-dispatch-fact"],
       ["Worker / Consumer Fact", "worker-consumer-fact"],

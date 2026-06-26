@@ -6,10 +6,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  isAutomatedProofSliceRequired,
-  isProofSlicePlacementSupported,
-} from "./proof-slice-placement-policy.mjs";
-import {
   RENDER_CONTRACT_VERSION,
   RenderContractError,
   renderArtifactMarkdown,
@@ -567,6 +563,9 @@ function validateRuntimeAcceptance(file, trace, issues) {
     const scopeRoleIndex = table.headers.findIndex((header) => normalizeHeader(header) === "scope role");
     const ownerIndex = table.headers.findIndex((header) => normalizeHeader(header) === "owner candidate");
     const sourceBasisIndex = table.headers.findIndex((header) => normalizeHeader(header) === "source basis");
+    if (ownerIndex < 0) {
+      addIssue(issues, "error", "VAL-RA-005", `${file.repoRelPath}:${table.line}`, `${heading} 表格缺少 Owner Candidate 列。`);
+    }
     if (sourceBasisIndex < 0) {
       addIssue(issues, "error", "VAL-RA-007", `${file.repoRelPath}:${table.line}`, `${heading} 表格缺少 Source Basis 列。`);
     }
@@ -579,7 +578,7 @@ function validateRuntimeAcceptance(file, trace, issues) {
         addIssue(issues, "error", "VAL-RA-004", `${file.repoRelPath}:${row.line}`, `runtime row ${id} 重复。`);
       }
       const owner = ownerIndex >= 0 ? strip(row.cells[ownerIndex]) : "";
-      if (ownerIndex >= 0 && !owner) {
+      if (!owner) {
         addIssue(issues, "error", "VAL-RA-005", `${file.repoRelPath}:${row.line}`, `runtime row ${id} 缺少 Owner Candidate。`);
       }
       const scopeRole = scopeRoleIndex >= 0 ? strip(row.cells[scopeRoleIndex]) : "";
@@ -705,21 +704,6 @@ function validateProofSliceModel(slice, ref, runtimeRows, issues) {
   }
   if (!slice.owner || isOwnerListOrNonProduction(slice.owner)) {
     addIssue(issues, "error", "VAL-PS-008", ref, `${slice.id} Production Owner 必须是单一 production owner token，不能是 owner list、测试路径或 evidence 路径。`);
-  }
-  if (
-    isAutomatedProofSliceRequired(slice) &&
-    slice.owner &&
-    !isOwnerListOrNonProduction(slice.owner) &&
-    PRIMARY_LAYERS.has(slice.layer) &&
-    !isProofSlicePlacementSupported(slice)
-  ) {
-    addIssue(
-      issues,
-      "error",
-      "VAL-PS-009",
-      ref,
-      `${slice.id} Production Owner + Primary Layer 没有 placement-policy compliant tests/** 落点：${slice.owner} + ${slice.layer}。请改为合法 owner/layer 组合，或改为 source/scope-backed manual/not-applicable。`,
-    );
   }
 
   const combined = [slice.branch, slice.oracle, slice.assertion].join(" ");

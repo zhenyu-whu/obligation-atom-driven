@@ -37,7 +37,7 @@
 - `Primitive Type` 只能是 `operation`、`state`、`failure`、`negative-boundary`、`layout`、`observability`、`fixture-variant`、`authorization`。
 - `Primary Layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
 - `Production Owner` 必须是单一 production code boundary token，不得包含 owner list、测试路径或 evidence 路径。
-- 自动化 Proof Slice（`Manual / Environment Gate` 为 `None`、空或 `null`）的 `Production Owner + Primary Layer` 必须能映射到 `test-quality-strength.md` 定义的 placement-policy compliant `tests/**` 落点；无合法落点时必须修订 owner/layer，或给出 source/scope-backed manual/not-applicable reason。
+- Propose 阶段不得要求 `Production Owner + Primary Layer` 映射到已存在或 planned `tests/**` 目录；`Production Owner` 只表示 planned production boundary，真实测试文件落点由 apply 阶段 `proof-test-map.json` 与 placement audit 校验。
 
 ## 原子性要求
 
@@ -63,5 +63,5 @@
 - `trace/verification.proof-slices.json` 是否存在、登记 manifest digest，并与 `Proof Slice Matrix` 完全一致。
 - 是否遗漏或合并 runtime row 显式分支。
 - Reconciliation 是否真实闭合。
-- 自动化 Proof Slice 的 `Production Owner + Primary Layer` 是否都有 placement-policy compliant `tests/**` 落点。
+- `Primary Layer` 是否为合法枚举，`Production Owner` 是否为单一 planned production boundary token，且未写成测试路径、命令、runner、evidence 或 deposit 路径。
 - 是否写入测试路径、命令、runner、evidence、deposit 或 artifact/process oracle。

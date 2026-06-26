@@ -517,33 +517,12 @@ test("proof-slices-v1 JSON slice owner list hard fail", () => {
   assertRule(result, "VAL-PST-030");
 });
 
-test("proof-slices-v1 自动化 slice 的 apps/web + DB/integration 无合法落点 hard fail", () => {
-  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
-    owner: "apps/web",
-    layer: "DB/integration",
-  });
-  const root = makeChange("proof-slices-web-db-placement-change", files);
-  const result = validateChange({ root, change: "proof-slices-web-db-placement-change", complete: true });
-
-  assertRule(result, "VAL-PS-009");
-});
-
-test("proof-slices-v1 自动化 slice 的 apps/web + contract 无合法落点 hard fail", () => {
-  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
-    owner: "apps/web",
-    layer: "contract",
-  });
-  const root = makeChange("proof-slices-web-contract-placement-change", files);
-  const result = validateChange({ root, change: "proof-slices-web-contract-placement-change", complete: true });
-
-  assertRule(result, "VAL-PS-009");
-});
-
-test("proof-slices-v1 合法 owner/layer placement 组合通过", () => {
+test("proof-slices-v1 propose 阶段不校验 owner/layer tests 目录落点", () => {
   const cases = [
-    { change: "proof-slices-web-route-placement-change", owner: "apps/web", layer: "route/API" },
-    { change: "proof-slices-db-integration-placement-change", owner: "packages/db", layer: "DB/integration" },
-    { change: "proof-slices-domain-contract-placement-change", owner: "packages/domain", layer: "contract" },
+    { change: "proof-slices-web-db-placement-change", owner: "apps/web", layer: "DB/integration" },
+    { change: "proof-slices-web-contract-placement-change", owner: "apps/web", layer: "contract" },
+    { change: "proof-slices-control-api-placement-change", owner: "apps/control-api", layer: "route/API" },
+    { change: "proof-slices-k8s-placement-change", owner: "infra/k8s", layer: "contract" },
   ];
 
   for (const item of cases) {
@@ -551,11 +530,26 @@ test("proof-slices-v1 合法 owner/layer placement 组合通过", () => {
     const root = makeChange(item.change, files);
     const result = validateChange({ root, change: item.change, complete: true });
 
+    assert.ok(
+      !result.issues.some((issue) => issue.ruleId === "VAL-PS-009"),
+      `did not expect VAL-PS-009 for ${item.owner} + ${item.layer}, got ${JSON.stringify(result.issues, null, 2)}`,
+    );
     assert.equal(result.errorCount, 0, `${item.owner} + ${item.layer}: ${JSON.stringify(result.issues, null, 2)}`);
   }
 });
 
-test("proof-slices-v1 manual slice 的非法 owner/layer placement 不触发自动化落点 hard fail", () => {
+test("proof-slices-v1 非法 Primary Layer 仍 hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/control-api",
+    layer: "unsupported/layer",
+  });
+  const root = makeChange("proof-slices-invalid-layer-change", files);
+  const result = validateChange({ root, change: "proof-slices-invalid-layer-change", complete: true });
+
+  assertRule(result, "VAL-PS-007");
+});
+
+test("proof-slices-v1 manual slice 同样不触发 propose 目录落点 hard fail", () => {
   const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
     owner: "apps/web",
     layer: "DB/integration",
