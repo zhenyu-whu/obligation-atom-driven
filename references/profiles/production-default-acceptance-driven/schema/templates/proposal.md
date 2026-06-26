@@ -6,7 +6,7 @@
 
 ## What Changes
 
-<!-- 描述新增或修改的用户/系统行为、数据/API contracts、routes、workers、events、auth/security rules、storage、observability、deployment 与 verification surfaces。只写行为和边界，不写审计映射。 -->
+<!-- 描述新增或修改的用户/系统行为、数据/API contracts、routes、workers、events、auth/security rules、storage、observability、deployment 与 verification surfaces。只写行为和边界，不写审计映射；需要列表效果时在 trace 中显式使用数组或 Markdown 换行，renderer 不自动拆分字符串。 -->
 
 ## Capabilities
 

@@ -10,7 +10,7 @@
 
 ## Decisions
 
-<!-- 记录 implementation decisions。每个 decision 使用 Decision / Source Gap / Minimal Shape / Rejected Expansion 形态；不要加入 coverage/trace 列。 -->
+<!-- 记录 implementation decisions。每个 decision 使用 Decision / Source Gap / Minimal Shape / Rejected Expansion 形态；不要加入 coverage/trace 列。需要列表效果时在 trace 中显式使用数组或 Markdown 换行，renderer 不自动拆分字符串。 -->
 
 ## Architecture / Module Boundary Design
 

@@ -131,6 +131,7 @@ function renderProposalDelivery(delivery) {
       "",
       renderCapabilityList(capabilities["modified-capabilities"]),
       "",
+      "",
     ].join("\n"),
     renderSection("Non-Goals", requireText(delivery["non-goals"], "proposal.delivery-plane.non-goals")),
     renderSection("Impact", requireText(delivery.impact, "proposal.delivery-plane.impact")),
@@ -162,7 +163,7 @@ function renderSpecsDelivery(delivery) {
 function renderRequirement(requirement) {
   const row = asObject(requirement);
   const name = requireScalar(row.name, "specs.requirements[].name");
-  const body = requireText(row.body, `specs.requirements[${name}].body`);
+  const body = renderBlockText(requireText(row.body, `specs.requirements[${name}].body`));
   const scenarios = asArray(row.scenarios);
   if (scenarios.length === 0) {
     throw new RenderContractError("VAL-RENDER-002", "specs delivery-plane", `${name} 缺少 scenarios payload。`);
@@ -174,7 +175,7 @@ function renderScenario(requirementName, scenario) {
   const row = asObject(scenario);
   const name = requireScalar(row.name, `specs.requirements[${requirementName}].scenarios[].name`);
   if (row.body) {
-    return `#### Scenario: ${name}\n\n${renderText(row.body)}\n`;
+    return `#### Scenario: ${name}\n\n${renderBlockText(row.body)}\n`;
   }
   const lines = [];
   if (row.given) lines.push(`- GIVEN ${strip(row.given)}`);
@@ -217,13 +218,13 @@ function renderDesignDecisions(decisions) {
       return [
         `### ${id} ${title}`,
         "",
-        `Decision: ${requireScalar(row.decision, `design.decisions[${id}].decision`)}`,
+        renderLabeledBlock("Decision", row.decision, `design.decisions[${id}].decision`),
         "",
-        `Source Gap: ${requireScalar(row["source-gap"], `design.decisions[${id}].source-gap`)}`,
+        renderLabeledBlock("Source Gap", row["source-gap"], `design.decisions[${id}].source-gap`),
         "",
-        `Minimal Shape: ${requireScalar(row["minimal-shape"], `design.decisions[${id}].minimal-shape`)}`,
+        renderLabeledBlock("Minimal Shape", row["minimal-shape"], `design.decisions[${id}].minimal-shape`),
         "",
-        `Rejected Expansion: ${requireScalar(row["rejected-expansion"], `design.decisions[${id}].rejected-expansion`)}`,
+        renderLabeledBlock("Rejected Expansion", row["rejected-expansion"], `design.decisions[${id}].rejected-expansion`),
       ].join("\n");
     })
     .join("\n\n");
@@ -489,7 +490,7 @@ function renderTaskBlock(acId, task) {
 }
 
 function renderSection(heading, body) {
-  return `## ${heading}\n\n${renderText(body)}\n\n`;
+  return `## ${heading}\n\n${renderBlockText(body)}\n\n`;
 }
 
 function renderText(value) {
@@ -497,6 +498,14 @@ function renderText(value) {
     return value.map((line) => String(line)).join("\n").trimEnd();
   }
   return String(value ?? "").trimEnd();
+}
+
+function renderBlockText(value) {
+  return renderText(value);
+}
+
+function renderLabeledBlock(label, value, ref) {
+  return `${label}:\n\n${renderBlockText(requireText(value, ref))}`;
 }
 
 function requireText(value, ref) {

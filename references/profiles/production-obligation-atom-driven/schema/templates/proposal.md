@@ -10,7 +10,7 @@
 
 ## What Changes
 
-<!-- 描述此 change 修改的 source-backed 产品行为、生产代码、data/API contracts、routes、objects、jobs、events、auth/security rules、storage、billing/entitlement rules、observability、deployment 与 verification surfaces。只写行为和边界，不写审计映射。 -->
+<!-- 描述此 change 修改的 source-backed 产品行为、生产代码、data/API contracts、routes、objects、jobs、events、auth/security rules、storage、billing/entitlement rules、observability、deployment 与 verification surfaces。只写行为和边界，不写审计映射；需要列表效果时在 trace 中显式使用数组或 Markdown 换行，renderer 不自动拆分字符串。 -->
 
 ## Capabilities
 

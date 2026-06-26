@@ -20,6 +20,7 @@
 - 不得把生产行为替换成 placeholder、diagnostic、mock-only、static-only、fixture-only、registry-only 或 sandbox-only 行为，除非 proposal 明确标记为 deferred、non-goal、context 或 proof-only。
 - Design 必须覆盖 architecture/runtime/module boundaries、routing/navigation、data ownership、transactions、auth/security、async processing、realtime streams、storage、provider boundaries、rendering chain、deployment 和 verification strategy。
 - 每个 mutating/selection/action UI control 必须定义 owner component、runtime/client-server boundary、event trigger、handler/action/API route、request payload、response merge 或 reload persistence、submitting/disabled/error/retry behavior。
+- Design sections 和 decision 字段可以由字符串或字符串数组承载；renderer 只按既有类型渲染，不得把字符串按长度或分号拆分。
 
 ## Required Sections
 

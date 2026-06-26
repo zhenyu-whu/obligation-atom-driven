@@ -17,6 +17,7 @@
 
 - `Why` 说明 change 解决的 production capability、product gap、architecture gap、readiness gap 或 verification gap。
 - `What Changes` 只写 source/scope-backed product surfaces、routes、domain commands、APIs、database entities/migrations、worker jobs、events/SSE streams、storage/assets、auth/security rules、billing/entitlement rules、observability/ops surfaces、deployment constraints 和 verification surfaces 的行为边界。
+- `What Changes` 可以由字符串或字符串数组承载；renderer 只按既有类型渲染，不得把字符串按长度或分号拆分。
 - 当 source/scope 描述用户可见操作时，必须保留每个 operation verb 及其可观察结果：触发入口、作用对象、API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
 - `Capabilities` 必须匹配 profile-defined capability boundary。
 - `Non-Goals` 必须表达 explicit non-goal、later-change、preserve、prototype-only、superseded 或其它明确边界。

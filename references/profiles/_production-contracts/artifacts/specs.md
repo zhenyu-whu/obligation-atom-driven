@@ -25,6 +25,7 @@
 
 - 每个 requirement 使用 `### Requirement: <name>`。
 - Requirement 正文使用 SHALL / MUST / MUST NOT 表达规范行为。
+- Requirement 正文和 freeform Scenario body 可以写字符串或字符串数组；renderer 必须保留数组换行，不得隐式逗号拼接，也不得猜测拆分字符串。
 - 每个 requirement 至少有一个 `#### Scenario: <name>`。
 - 若 requirement 包含多个用户可见操作，scenario 必须逐项枚举或拆分；每个操作要定义触发、预期 UI/API/data 后果、持久化或 reload 后结果，以及 disabled/failure/recovery 行为。
 - Design/proof/context-only item 不得伪造成 requirement。

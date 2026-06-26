@@ -27,6 +27,7 @@
 - runtime-acceptance trace 的 `delivery-plane` 必须包含 `runtime-acceptance-intent` 和 `canonical-rows[]`；`canonical-rows` 必须是数组，不能用 `RS-001` / `OP-001` 作为 JSON object key。renderer 按 trace `canonical-row-index.surface-rows`、`operation-rows`、`state-rows`、`chain-rows` 的顺序读取对应 row fields 渲染四张表。
 - verification trace 的 `delivery-plane` 只包含 `verification-intent`、`layer-harness-fixture-notes[]`、`do-not-test[]`；Proof Slice canonical rows 必须来自 `trace/verification.proof-slices.json`，不得复制回 `verification.trace.json`。
 - tasks trace 的 `delivery-plane` 必须包含 `acceptance-slices[]`；每个 slice 必须包含 AC heading payload、`runtime-rows`、`resolved-runtime-contract[]` 和 checkbox `tasks[]` payload。
+- renderer 必须忠实渲染 delivery-plane 既有类型：字符串原样输出，字符串数组逐行输出；不得根据长度、分号或其它标点猜测拆分字符串。
 - renderer 不接受整段 artifact Markdown payload；writer 不得通过把完整 Markdown body 塞入 JSON 来绕过结构化渲染。
 
 ## Artifact-specific 布局
