@@ -5,7 +5,7 @@
 - 当执行或触发 `openspec-archive-change` 技能归档已完成 change，且未指定 change 名称时，先运行 `openspec list --json`。如果活跃 change 只有一个，则默认选择该 change 继续归档流程；如果存在多个活跃 change、无活跃 change，或上下文与列表结果冲突，必须停下向用户确认。
 - 归档前读取 `openspec status --change "<name>" --json`，确认 `schemaName`、检查 `tasks.md` 完成度、确认 `runtime-acceptance.md` 和 `verification.md` 存在，并评估 delta specs 是否需要同步。
 - 两个 production schema 的新格式不兼容旧 `tasks.md` 内置测试矩阵模式；旧 change 如需归档，必须先单独迁移或按其原 schema 处理，不在新 schema 归档门禁中兼容。
-- 两个 production schema 的新格式采用 Delivery Plane + JSON Trace Plane 布局：归档检查必须从 renderer 生成的 artifact 主体读取交付契约，从短 `## Trace Appendix` pointer、`trace/manifest.json` 和对应 JSON trace 读取 coverage、projection、reconciliation 和 alignment gate；`render-contract-version: trace-render-v1` 的 artifact 必须通过 renderer exact output validator。
+- 两个 production schema 的新格式采用 Delivery Plane + JSON Trace Plane 布局：归档检查必须从 artifact 主体读取交付契约，从短 `## Trace Appendix` pointer、`trace/manifest.json` 和对应 JSON trace 读取 coverage、projection、reconciliation 和 alignment gate；`VAL-RENDER-001` renderer exact output drift 作为 warning 记录和评估，不单独作为归档 hard blocker。
 
 ## Schema-aware 归档门禁
 

@@ -8,7 +8,7 @@
 
 - artifact 主体是 renderer 从 JSON trace 生成的 Delivery Plane，承载 worker/tester 直接消费的交付契约。
 - 外置 JSON Trace Plane 是审计平面，承载 coverage、source/scope trace、runtime projection、reconciliation 和 alignment gate；artifact 末尾 `## Trace Appendix` 只是 pointer block。
-- `trace/manifest.json` 的 `render-contract-version: trace-render-v1` 表示 artifact 必须与 renderer exact output 一致；Phase 0 static validator hard error 必须先修订 trace 并重新渲染，不得手写 Markdown 绕过。
+- `trace/manifest.json` 的 `render-contract-version: trace-render-v1` 表示 artifact 期望与 renderer exact output 一致；`VAL-RENDER-001` 为 warning，Phase 0 必须记录并评估但不作为 hard blocker。其它 static validator hard error 必须先修订 trace 并重新渲染，不得手写 Markdown 绕过。
 - 主 agent、change-stabilizer 和 final-reviewer 必须读取 artifact pointer、`trace/manifest.json` 和对应 JSON trace 做 preflight/archive/复核审计。
 - implementation-worker 默认只消费当前 AC Delivery Plane section（尤其是 `Resolved Runtime Contract`）、必要 proposal/spec/design delivery 摘要和明确传入的约束摘录；`runtime-acceptance.md` canonical rows 主要用于 preflight、冲突排查和主 agent 摘录校验，不得把 JSON trace row 当作额外 executable work。
 

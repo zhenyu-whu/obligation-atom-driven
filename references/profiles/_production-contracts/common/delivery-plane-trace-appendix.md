@@ -16,7 +16,7 @@
 - artifact 末尾 `## Trace Appendix` 不得包含 Markdown coverage 表格、alignment checklist、runtime graph 或其它完整 trace 内容。
 - 下游 artifacts 必须通过 JSON trace resolver 读取上游 trace 建立 coverage；不得把 trace rows 当作新增需求、测试计划、执行状态、evidence path、deposit status 或 worker executable work。
 - `trace/manifest.json` 必须列出当前阶段已生成 artifact 的 artifact path、trace path 和 trace digest。新生成 production change 必须写入 `trace-contract-version: "proof-slices-v1"` 和 `render-contract-version: "trace-render-v1"`。
-- static validator 必须复用 renderer pure function 做 exact output comparison；Markdown artifact 与 renderer 输出不一致是 `VAL-RENDER-001` hard error。
+- static validator 必须复用 renderer pure function 做 exact output comparison；Markdown artifact 与 renderer 输出不一致是 `VAL-RENDER-001` warning，供 apply/propose/reviewer 判断是否需要重新渲染，但不作为 hard error 阻断。
 - 当 `trace-contract-version` 为 `proof-slices-v1` 时，`trace/verification.proof-slices.json` 是 verification 阶段和 complete validation 的必需 sidecar trace，其 `trace-schema` 为 `openspec-proof-slices-v1`，并且必须在生成时登记到 manifest。proposal、specs、design 和 runtime-acceptance partial validation 阶段不得要求或伪造尚未生成的 verification sidecar trace。
 
 ## trace-render-v1 payload 形状

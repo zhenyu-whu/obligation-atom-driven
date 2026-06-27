@@ -413,10 +413,10 @@ function validateRenderedArtifacts(root, changeDir, files, trace, issues) {
       if (file.text !== expected) {
         addIssue(
           issues,
-          "error",
+          "warning",
           "VAL-RENDER-001",
           file.repoRelPath,
-          "artifact Markdown 与 trace renderer 输出不一致；必须从 JSON trace 重新渲染。",
+          "artifact Markdown 与 trace renderer 输出不一致；建议从 JSON trace 重新渲染。",
         );
       }
     } catch (error) {

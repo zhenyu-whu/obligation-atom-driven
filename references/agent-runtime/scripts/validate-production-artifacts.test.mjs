@@ -90,13 +90,14 @@ test("renderer 缺少 delivery payload hard fail", () => {
   );
 });
 
-test("validator 对 renderer 输出漂移 hard fail", () => {
+test("validator 对 renderer 输出漂移 warning", () => {
   const files = standardFiles({ renderContract: true });
   files.artifacts["runtime-acceptance.md"] = files.artifacts["runtime-acceptance.md"].replace("登录态解析。", "手写漂移。");
   const root = makeChange("render-drift-change", files);
   const result = validateChange({ root, change: "render-drift-change", complete: true });
 
-  assertRule(result, "VAL-RENDER-001");
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+  assertRule(result, "VAL-RENDER-001", "warning");
 });
 
 test("proposal register 与 final packet direct atom 集合不一致 hard fail", () => {
