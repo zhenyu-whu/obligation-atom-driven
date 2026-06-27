@@ -20,7 +20,8 @@
 - `What Changes` 可以由字符串或字符串数组承载；renderer 只按既有类型渲染，不得把字符串按长度或分号拆分。
 - 当 source/scope 描述用户可见操作时，必须保留每个 operation verb 及其可观察结果：触发入口、作用对象、API/data mutation、成功后的页面或持久化变化，以及 disabled/failure/recovery 边界。
 - `Capabilities` 必须匹配 profile-defined capability boundary。
-- `Non-Goals` 必须表达 explicit non-goal、later-change、preserve、prototype-only、superseded 或其它明确边界。
+- `Non-Goals` 必须表达当前 profile 允许的 registered source/scope boundary，例如 explicit non-goal、later-change、preserve、prototype-only、superseded 或其它明确边界。
+- `Non-Goals` 不得为了补全边界而引入未登记的 future capability、UI、API、workflow、test/e2e 场景或其它 source/scope owner 的 non-goal；source-backed 但未注册到当前 proposal source/scope item 的内容仍属于 scope 外。
 - 主体不得包含 exhaustive source/scope coverage list、projection mix、register rows、coverage suffix 或 alignment gate。
 
 ## JSON Trace Plane
@@ -36,4 +37,4 @@
 - change boundary 是否来自 profile 允许的权威输入。
 - Delivery Plane 是否没有 coverage 泄漏。
 - 每个 material source/scope item 是否有 projection/handling 和 downstream expectation。
-- 是否存在 orphan source/scope item、range、scope 外行为或 source/scope 外 non-goal 漏失。
+- 是否存在 orphan source/scope item、range、scope 外行为、未登记 source/scope 外 non-goal，或应表达但漏失的 registered non-goal boundary。

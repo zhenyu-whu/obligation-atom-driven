@@ -28,7 +28,7 @@
 
 ## Non-Goals
 
-<!-- 明确排除 source-backed later-change boundaries、explicit negative boundaries、explicit non-goals、prototype-only-not-production 与 out-of-scope work。不要在主体列 GA coverage，也不要把边界说明扩展成全仓结构冻结式 guard。 -->
+<!-- 只写当前 final packet direct rows、owner-scoped non-direct boundary rows 或 packet out-of-scope summary 支撑的 non-goal。不得从 Phase 4 wide source window、change-plan 通用摘要或其它 packet owned atoms 摘取后续能力名称；不要在主体列 GA coverage，也不要把边界说明扩展成全仓结构冻结式 guard。 -->
 
 ## Impact
 

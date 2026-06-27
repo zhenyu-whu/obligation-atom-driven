@@ -18,7 +18,10 @@
 ## Global Atom 规则
 
 - 直接使用 global atom registry 中的 `GA-####`，不得重新编号。
-- Proposal register 中每个 packet direct atom 正好一行，不得使用 ranges。
+- Proposal `change-atom-coverage-register` 中每个 packet direct atom 正好一行，不得使用 ranges；它是下游 artifacts 唯一可传播的 trace-backed `GA-####` source set。
+- Proposal `owner-scoped-non-direct-boundary-register` 只承载 reference-only boundary context。它必须继承上游 `final-relation` 或 final packet context type，并通过 `boundary-role`、`reference-only: true`、`downstream-trace-policy: "do-not-propagate-ga"`、`boundary-handling` 或等价字段明确表达边界分类、参考用途和不得传播 GA 身份。
+- Non-direct boundary rows 不产生下游 coverage、projection、reconciliation 或 implementation obligation。若保留上游 artifact projection，只能作为 `original-artifact-projection` 或 source metadata；不得作为下游 `artifact-projection` 使用。
+- 下游 artifacts 可以读取完整 `proposal.md` 与 `trace/proposal.trace.json`，但其 trace-backed `GA-####` 引用只能来自 `change-atom-coverage-register`。`owner-scoped-non-direct-boundary-register` 只能以 boundary label、summary 或 no-scope 语义被消费，不得传播其中的 `GA-####`。
 - Direct atom 不得使用 `contextual-only` projection；非 direct context/boundary row 才可使用 contextual handling。
 - Legacy packet 缺少 artifact projection 时，必须保守推断并记录 projection source；source-aligned JSON handoff 存在时，不得执行 legacy projection inference 覆盖 `atom-plan-mapping.json` 的 final projection。
 - 用户/系统行为、API/data/auth/security contract 默认进入 spec requirement；preserve boundary、explicit non-goal 和 must-not scope 默认进入 guard；architecture/runtime/package/schema/provider/deployment shape 默认进入 design；test/fixture/visual/smoke/evidence 默认进入 verification/proof；非 direct context 默认只保留 context。
@@ -27,7 +30,7 @@
 
 - Proposal 必须对每个 direct `GA-####` 按 JSON handoff 或 legacy global index 的 source path 和 line range 定点重读原始 source window。
 - Non-direct atom 只在需要保留边界、避免误扩 scope 或确认 proof 语义时重读。
-- Downstream artifacts 只能通过 proposal register 中的 exact `GA-####`、source document 和 line range 定点读取原始 docs。
+- Downstream artifacts 只能通过 proposal `change-atom-coverage-register` 中的 exact direct `GA-####`、source document 和 line range 定点读取原始 docs。
 - 不得重新做全量 source extraction。
 
 ## Reviewer Focus
