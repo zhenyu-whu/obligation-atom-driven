@@ -31,17 +31,11 @@ const SI_ID_RE = /\bSI-\d{3}\b/g;
 const D_ID_RE = /\bD-\d{3}\b/g;
 const P_ID_RE = /\bP-\d{3}\b/g;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const FOUNDATION_REFERENCE_RE = /foundation-reference|foundation-runtime-substrate/iu;
 
 const SPEC_HANDLINGS = new Set([
   "direct-spec-requirement",
   "direct-spec-guard",
-  "derived-capability-contract-requirement",
-  "derived-capability-contract-guard",
-]);
-
-const DERIVED_SPEC_HANDLINGS = new Set([
-  "derived-capability-contract-requirement",
-  "derived-capability-contract-guard",
 ]);
 
 const PRIMITIVE_TYPES = new Set([
@@ -752,6 +746,9 @@ function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
 
   for (const [index, row] of rows.entries()) {
     const ref = `${PROOF_SLICES_TRACE_PATH}#/proof-slices/${index}`;
+    if (mentionsFoundationReference(row)) {
+      addIssue(issues, "error", "VAL-PST-040", ref, "foundation reference 不得作为 Proof Slice coverage source。");
+    }
     const slice = proofSliceFromTraceRow(row);
     if (!/^PS-\d{3}$/.test(slice.id)) {
       addIssue(issues, "error", "VAL-PST-010", ref, `slice-id 非法：${slice.id || "(empty)"}。`);
@@ -993,6 +990,7 @@ function validateProposalAuthorityTrace(root, change, proposalFile, proposal, sc
   }
 
   const preconditions = asObject(proposal["obligation-atom-preconditions"]);
+  validateProposalFoundationReferenceReadSet(proposal, issues);
   const jsonAuthority = loadSourceAlignedHandoffAuthority(root, change, preconditions, issues);
   if (jsonAuthority?.invalid) {
     return;
@@ -1643,6 +1641,39 @@ function validateProposalAlignmentGate(proposal, packetRows, issues) {
   }
 }
 
+function validateProposalFoundationReferenceReadSet(proposal, issues) {
+  const rows = proposal["foundation-reference-read-set"];
+  if (rows == null) {
+    return;
+  }
+  if (!Array.isArray(rows)) {
+    addIssue(issues, "error", "VAL-PR-013", "trace/proposal.trace.json#/foundation-reference-read-set", "foundation-reference-read-set 必须是数组。");
+    return;
+  }
+  for (const [index, row] of rows.entries()) {
+    const ref = traceRef("proposal", "foundation-reference-read-set", index);
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      addIssue(issues, "error", "VAL-PR-013", ref, "foundation-reference-read-set row 必须是 object。");
+      continue;
+    }
+    for (const field of ["reference-path", "trace-path", "digest", "read-purpose"]) {
+      if (!strip(row[field])) {
+        addIssue(issues, "error", "VAL-PR-013", ref, `foundation-reference-read-set row 缺少 ${field}。`);
+      }
+    }
+    const detailPointer = findFoundationConsumptionDetail(row);
+    if (detailPointer) {
+      addIssue(
+        issues,
+        "error",
+        "VAL-PR-013",
+        `${ref}${detailPointer}`,
+        "foundation-reference-read-set 只能记录读取元数据，不得记录 GA、consumed/materialized/deferred/not-applicable 等消费明细。",
+      );
+    }
+  }
+}
+
 function validateProposalDeliveryPlaneLeakage(proposalFile, issues) {
   if (!proposalFile) {
     return;
@@ -1694,6 +1725,20 @@ function validateObligationSpecsTraceProjection(trace, registeredRows, files, is
       }
       const effectiveProjection = sourceProjection || proposalProjection;
       const handling = strip(row["spec-handling"]);
+
+      if (effectiveProjection === "design-obligation") {
+        addIssue(issues, "error", "VAL-SP-006", ref, `${globalAtomId} 是 design-obligation，不得通过 fallback/derived handling 写入 specs requirement-source-trace。`);
+        continue;
+      }
+      if (effectiveProjection === "verification-obligation") {
+        addIssue(issues, "error", "VAL-SP-009", ref, `${globalAtomId} 是 verification-obligation，不得直接写入 requirement-source-trace。`);
+        continue;
+      }
+      if (effectiveProjection !== "spec-requirement" && effectiveProjection !== "spec-guard") {
+        addIssue(issues, "error", "VAL-SP-010", ref, `${globalAtomId} projection ${effectiveProjection || "(empty)"} 不能写入 specs requirement-source-trace。`);
+        continue;
+      }
+
       if (!SPEC_HANDLINGS.has(handling)) {
         addIssue(issues, "error", "VAL-SP-003", ref, `spec-handling 非法或缺失：${handling || "(empty)"}。`);
         continue;
@@ -1707,24 +1752,10 @@ function validateObligationSpecsTraceProjection(trace, registeredRows, files, is
         coveredSpecProjectionIds.add(globalAtomId);
         // Correct direct spec projections are fully validated by the handling checks above.
         continue;
-      } else if (effectiveProjection === "design-obligation") {
-        if (!DERIVED_SPEC_HANDLINGS.has(handling)) {
-          addIssue(issues, "error", "VAL-SP-006", ref, `${globalAtomId} 是 design-obligation，写入 specs 时必须使用 derived-capability-contract-* handling。`);
-        }
-        if (!strip(row["derivation-reason"])) {
-          addIssue(issues, "error", "VAL-SP-007", ref, `${globalAtomId} 派生 specs 时必须记录 derivation-reason。`);
-        }
-        if (!strip(row["no-scope-expansion-check"])) {
-          addIssue(issues, "error", "VAL-SP-008", ref, `${globalAtomId} 派生 specs 时必须记录 no-scope-expansion-check。`);
-        }
-      } else if (effectiveProjection === "verification-obligation") {
-        addIssue(issues, "error", "VAL-SP-009", ref, `${globalAtomId} 是 verification-obligation，不得直接写入 requirement-source-trace。`);
-      } else {
-        addIssue(issues, "error", "VAL-SP-010", ref, `${globalAtomId} projection ${effectiveProjection || "(empty)"} 不能写入 specs requirement-source-trace。`);
       }
     }
   }
-  if (sawSpecsTrace) {
+  if (sawSpecsTrace || requiredSpecProjectionIds.length > 0) {
     compareIdSets(
       requiredSpecProjectionIds,
       [...coveredSpecProjectionIds],
@@ -2220,6 +2251,9 @@ function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues) {
 
   for (const [index, row] of asArray(runtimeTrace["runtime-upstream-coverage-map"]).entries()) {
     const ref = traceRef("runtime-acceptance", "runtime-upstream-coverage-map", index);
+    if (mentionsFoundationReference(row)) {
+      addIssue(issues, "error", "VAL-RA-120", ref, "foundation reference 不得作为 runtime-upstream-coverage-map 的 coverage source。");
+    }
     const upstreamItemId = runtimeUpstreamItemId(row);
     const upstreamItemType = runtimeUpstreamItemType(row);
     if (!upstreamItemId || !upstreamItemType) {
@@ -2260,6 +2294,9 @@ function parseRuntimeSourceMapCoverage(runtimeTrace, runtimeRows, issues) {
   const machineIds = new Set();
   for (const [index, row] of asArray(runtimeTrace["runtime-coverage-source-map"]).entries()) {
     const ref = traceRef("runtime-acceptance", "runtime-coverage-source-map", index);
+    if (mentionsFoundationReference(row)) {
+      addIssue(issues, "error", "VAL-RA-120", ref, "foundation reference 不得作为 runtime-coverage-source-map 的 coverage source。");
+    }
     const rowIds = idsFromValue(row["row-ids"] ?? row["runtime-row-ids"], RUNTIME_ROW_RE);
     if (rowIds.length === 0) {
       addIssue(issues, "error", "VAL-RA-109", ref, "runtime-coverage-source-map 每行必须声明至少一个 row-ids/runtime-row-ids。");
@@ -2352,6 +2389,9 @@ function validateRuntimeDesignDecisionCoverage(tracePlane, upstreamRecords, issu
 function validateRuntimeSourceBasisMachineIds(runtimeRows, upstreamCoverage, sourceMapCoverage, issues) {
   const markdownIds = new Set();
   for (const row of runtimeRows.values()) {
+    if (mentionsFoundationReference(row.sourceBasis)) {
+      addIssue(issues, "error", "VAL-RA-120", `runtime-acceptance.md:${row.line}`, "runtime Markdown Source Basis 不得引用 foundation reference。");
+    }
     for (const id of machineIdsFromValue(row.sourceBasis)) {
       markdownIds.add(id);
     }
@@ -2788,6 +2828,35 @@ function collectIds(value, regex, pointer = "") {
     result.push({ id, pointer });
   }
   return result;
+}
+
+function mentionsFoundationReference(value) {
+  return FOUNDATION_REFERENCE_RE.test(strip(typeof value === "string" ? value : JSON.stringify(value ?? "")));
+}
+
+function findFoundationConsumptionDetail(value, pointer = "") {
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const found = findFoundationConsumptionDetail(item, `${pointer}/${index}`);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) {
+      const childPointer = `${pointer}/${key}`;
+      if (/consumed|materialized|deferred|not-applicable|atom-ids|global-atom/iu.test(key)) {
+        return childPointer;
+      }
+      const found = findFoundationConsumptionDetail(child, childPointer);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (idsFromValue(value, GA_ID_RE).length > 0) {
+    return pointer || "/";
+  }
+  return null;
 }
 
 function sha256File(fullPath) {

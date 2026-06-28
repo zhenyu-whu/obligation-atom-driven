@@ -31,7 +31,7 @@ test("proof-slices-v1 缺少 proof slice JSON hard fail", () => {
 });
 
 test("proof-slices-v1 proposal partial 不要求 future verification proof slice JSON", () => {
-  const files = standardFiles({ proposal: true });
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
   files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
   files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
   files.manifestTraceContractVersion = "proof-slices-v1";
@@ -150,6 +150,43 @@ test("proposal source-window-read-set 未覆盖 direct atoms hard fail", () => {
   assertRule(result, "VAL-PR-009");
 });
 
+test("proposal 只记录 foundation reference read-set 时通过", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
+  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+  files.traces["proposal.trace.json"]["foundation-reference-read-set"] = [
+    {
+      "reference-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md",
+      "trace-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.trace.json",
+      digest: "sha256-abc123",
+      "read-purpose": "作为当前业务 change 的设计约束输入。",
+    },
+  ];
+  const root = makeChange("proposal-foundation-read-set-change", files);
+  const result = validateChange({ root, change: "proposal-foundation-read-set-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("proposal foundation reference read-set 记录 GA 消费明细 hard fail", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
+  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+  files.traces["proposal.trace.json"]["foundation-reference-read-set"] = [
+    {
+      "reference-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md",
+      "trace-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.trace.json",
+      digest: "sha256-abc123",
+      "read-purpose": "作为当前业务 change 的设计约束输入。",
+      "global-atom-ids": ["GA-0002"],
+    },
+  ];
+  const root = makeChange("proposal-foundation-consumption-detail-change", files);
+  const result = validateChange({ root, change: "proposal-foundation-consumption-detail-change", complete: false });
+
+  assertRule(result, "VAL-PR-013");
+});
+
 test("source-aligned final-packet-index 缺少目标 change hard fail", () => {
   const files = standardFiles({ proposal: true });
   const root = makeChange("missing-packet-index-change", files);
@@ -228,7 +265,7 @@ test("source-aligned manifest Phase 5 status 与 trace status 漂移 hard fail",
 });
 
 test("legacy Markdown-only proposal authority 仍可校验通过", () => {
-  const files = standardFiles({ proposal: true, authorityMode: "legacy" });
+  const files = standardFiles({ proposal: true, authorityMode: "legacy", proposalProjection: "design-obligation" });
   const root = makeChange("legacy-authority-change", files);
   const result = validateChange({ root, change: "legacy-authority-change", complete: false });
 
@@ -243,6 +280,36 @@ test("specs trace 与 proposal spec projection 一致时通过", () => {
 
   assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
   assert.equal(result.warningCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("design-obligation 写入 specs trace hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, proposalProjection: "design-obligation" });
+  files.traces["specs/capability.trace.json"]["requirement-source-trace"][0]["source-projection"] = "design-obligation";
+  files.traces["specs/capability.trace.json"]["requirement-source-trace"][0]["spec-handling"] = "derived-capability-contract-requirement";
+  const root = makeChange("specs-design-obligation-change", files);
+  const result = validateChange({ root, change: "specs-design-obligation-change", complete: false });
+
+  assertRule(result, "VAL-SP-006");
+});
+
+test("无 spec-level direct atom 且无 specs file 时通过", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
+  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+  const root = makeChange("no-spec-direct-no-specs-change", files);
+  const result = validateChange({ root, change: "no-spec-direct-no-specs-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("有 spec-level direct atom 但缺 specs trace hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+  const root = makeChange("spec-direct-missing-specs-change", files);
+  const result = validateChange({ root, change: "spec-direct-missing-specs-change", complete: false });
+
+  assertRule(result, "VAL-SP-011");
 });
 
 test("specs trace 覆盖缺失 proposal spec projection hard fail", () => {
@@ -429,6 +496,16 @@ test("runtime upstream map 缺少 authority id/type hard fail", () => {
   assertRule(result, "VAL-RA-103");
 });
 
+test("runtime upstream map 引用 foundation reference hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["source-name"] =
+    "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md";
+  const root = makeChange("runtime-foundation-reference-change", files);
+  const result = validateChange({ root, change: "runtime-foundation-reference-change", complete: false });
+
+  assertRule(result, "VAL-RA-120");
+});
+
 test("runtime upstream map 缺少 specs scenario hard fail", () => {
   const files = standardFiles({ proposal: true, specs: true, design: true });
   files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"] =
@@ -499,6 +576,16 @@ test("proof-slices-v1 Markdown matrix 与 JSON 漂移 hard fail", () => {
   const root = makeChange("proof-slices-drift-change", files);
   const result = validateChange({ root, change: "proof-slices-drift-change", complete: true });
   assertRule(result, "VAL-PST-030");
+});
+
+test("proof-slices-v1 JSON slice 引用 foundation reference hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  files.traces["verification.proof-slices.json"]["proof-slices"][0]["coverage-source"] =
+    "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md";
+  const root = makeChange("proof-slices-foundation-reference-change", files);
+  const result = validateChange({ root, change: "proof-slices-foundation-reference-change", complete: true });
+
+  assertRule(result, "VAL-PST-040");
 });
 
 test("proof-slices-v1 reconciliation 引用不存在 JSON slice hard fail", () => {
@@ -1228,6 +1315,7 @@ ${second}`;
 }
 
 function proposalTrace(options = {}) {
+  const artifactProjection = options.proposalProjection ?? "spec-requirement";
   const jsonPreconditions =
     options.authorityMode === "legacy"
       ? {}
@@ -1259,14 +1347,14 @@ function proposalTrace(options = {}) {
         "source-fact": "事实。",
         normativity: "must",
         "coverage-status": "direct",
-        "artifact-projection": "spec-requirement",
+        "artifact-projection": artifactProjection,
         "projection-source": "final-packet",
         "owner-capability": "capability",
         "atom-relation": "direct",
         roles: "direct-owner",
         "propose-use": "使用。",
         "evidence-need": "unit",
-        "downstream-coverage-expectation": "下游 specs/runtime/tasks/verification 需要覆盖。",
+        "downstream-coverage-expectation": artifactProjection === "spec-requirement" ? "下游 specs/runtime/tasks/verification 需要覆盖。" : "下游 design/runtime/tasks/verification 需要覆盖。",
       },
     ],
     "production-source-coverage": [
@@ -1275,7 +1363,7 @@ function proposalTrace(options = {}) {
         "global-atom-ids": ["GA-0001"],
         "line-ranges": ["L1-L2"],
         "atom-count": 1,
-        "artifact-projections": ["spec-requirement"],
+        "artifact-projections": [artifactProjection],
         capabilities: ["capability"],
         "proposal-use": "作为 source-backed 输入。",
       },
