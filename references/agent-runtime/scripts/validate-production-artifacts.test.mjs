@@ -150,7 +150,7 @@ test("proposal source-window-read-set 未覆盖 direct atoms hard fail", () => {
   assertRule(result, "VAL-PR-009");
 });
 
-test("proposal 只记录 foundation reference read-set 时通过", () => {
+test("proposal 出现 foundation reference read-set hard fail", () => {
   const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
   files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
   files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
@@ -165,7 +165,7 @@ test("proposal 只记录 foundation reference read-set 时通过", () => {
   const root = makeChange("proposal-foundation-read-set-change", files);
   const result = validateChange({ root, change: "proposal-foundation-read-set-change", complete: false });
 
-  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+  assertRule(result, "VAL-PR-013");
 });
 
 test("proposal foundation reference read-set 记录 GA 消费明细 hard fail", () => {
@@ -197,6 +197,14 @@ test("source-aligned final-packet-index 缺少目标 change hard fail", () => {
 
   const result = validateChange({ root, change: "missing-packet-index-change", complete: false });
   assertRule(result, "VAL-PR-014");
+});
+
+test("source-aligned final-packet-index foundation planned change 可通过 proposal 校验", () => {
+  const files = standardFiles({ proposal: true, changeKind: "foundation", proposalProjection: "design-obligation" });
+  const root = makeChange("foundation-planned-change", files);
+  const result = validateChange({ root, change: "foundation-planned-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
 });
 
 test("source-aligned atom-plan-mapping direct owner 与 packet index 不一致 hard fail", () => {
@@ -504,6 +512,24 @@ test("runtime upstream map 引用 foundation reference hard fail", () => {
   const result = validateChange({ root, change: "runtime-foundation-reference-change", complete: false });
 
   assertRule(result, "VAL-RA-120");
+});
+
+test("foundation runtime 只包含工程可观察 rows 时通过", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true, changeKind: "foundation" });
+  const root = makeChange("foundation-runtime-observable-change", files);
+  const result = validateChange({ root, change: "foundation-runtime-observable-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("foundation runtime 为未来部署云中立 atom 生成 runtime row hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true, changeKind: "foundation" });
+  files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["source-name"] =
+    "future deployment cloud-neutral non-goal";
+  const root = makeChange("foundation-runtime-future-row-change", files);
+  const result = validateChange({ root, change: "foundation-runtime-future-row-change", complete: false });
+
+  assertRule(result, "VAL-RA-122");
 });
 
 test("runtime upstream map 缺少 specs scenario hard fail", () => {
@@ -974,7 +1000,7 @@ function standardFiles(options = {}) {
   }
   if (options.design) {
     artifacts["design.md"] = designBody();
-    traces["design.trace.json"] = designTrace(options.designGa ?? "GA-0001");
+    traces["design.trace.json"] = designTrace(options.designGa ?? "GA-0001", options);
   }
   if (usesRenderContract) {
     addRenderDeliveryPayload(artifacts, traces, options);
@@ -1316,6 +1342,9 @@ ${second}`;
 
 function proposalTrace(options = {}) {
   const artifactProjection = options.proposalProjection ?? "spec-requirement";
+  const changeKind = options.changeKind ?? "business";
+  const ownerCapability =
+    options.ownerCapability ?? (changeKind === "foundation" ? "runtime-substrate-foundation" : "capability");
   const jsonPreconditions =
     options.authorityMode === "legacy"
       ? {}
@@ -1349,7 +1378,7 @@ function proposalTrace(options = {}) {
         "coverage-status": "direct",
         "artifact-projection": artifactProjection,
         "projection-source": "final-packet",
-        "owner-capability": "capability",
+        "owner-capability": ownerCapability,
         "atom-relation": "direct",
         roles: "direct-owner",
         "propose-use": "使用。",
@@ -1364,7 +1393,7 @@ function proposalTrace(options = {}) {
         "line-ranges": ["L1-L2"],
         "atom-count": 1,
         "artifact-projections": [artifactProjection],
-        capabilities: ["capability"],
+        capabilities: [ownerCapability],
         "proposal-use": "作为 source-backed 输入。",
       },
     ],
@@ -1378,6 +1407,7 @@ function proposalTrace(options = {}) {
       },
     ],
     "proposal-alignment-gate": {
+      "change-kind": changeKind,
       "direct-atoms": {
         count: 1,
         ids: ["GA-0001"],
@@ -1408,7 +1438,9 @@ Rejected Expansion: 不扩展 scope。
 `;
 }
 
-function designTrace(gaId) {
+function designTrace(gaId, options = {}) {
+  const capability =
+    options.ownerCapability ?? (options.changeKind === "foundation" ? "runtime-substrate-foundation" : "capability");
   return {
     "trace-schema": "openspec-trace-v1",
     "artifact-id": "design",
@@ -1426,7 +1458,7 @@ function designTrace(gaId) {
       {
         "source-map-row-id": "PSM-001",
         "global-atom-id": gaId,
-        capability: "capability",
+        capability,
         "source-document": "docs/source.md",
         lines: "L1-L2",
         "atom-type": "requirement",
@@ -1438,7 +1470,7 @@ function designTrace(gaId) {
           {
             "trace-path": "trace/specs/capability.trace.json",
             "trace-pointer": "#/requirement-source-trace/0",
-            capability: "capability",
+            capability,
             requirement: "登录态 actor 解析",
             scenario: "解析登录态 actor",
             "spec-handling": "direct-spec-requirement",
@@ -1465,7 +1497,7 @@ function designTrace(gaId) {
         item: gaId,
         "obligation-kind": "spec-requirement-design-placement",
         "global-atom-id": gaId,
-        capability: "capability",
+        capability,
         "artifact-projection": "spec-requirement",
         "source-fact": "事实。",
         "spec-scenario-anchors": ["capability::登录态 actor 解析::解析登录态 actor"],
@@ -1482,7 +1514,7 @@ function designTrace(gaId) {
       "direct-atom-handling": [
         {
           "global-atom-id": gaId,
-          capability: "capability",
+          capability,
           "source-document": "docs/source.md",
           lines: "L1-L2",
           "artifact-projection": "spec-requirement",
@@ -1493,7 +1525,7 @@ function designTrace(gaId) {
       ],
       "spec-scenario-handling": [
         {
-          capability: "capability",
+          capability,
           requirement: "登录态 actor 解析",
           scenario: "解析登录态 actor",
           handling: "D-001 登录态 actor 解析设计。",
@@ -1561,6 +1593,8 @@ function specsTrace() {
 
 function runtimeTrace(options = {}) {
   const runtimeRowIds = options.secondAc ? ["RS-001", "RS-002"] : ["RS-001"];
+  const foundationObservable =
+    options.changeKind === "foundation" ? { "foundation-observable-kind": "workspace-script" } : {};
   return {
     "trace-schema": "openspec-trace-v1",
     "artifact-id": "runtime-acceptance",
@@ -1581,6 +1615,7 @@ function runtimeTrace(options = {}) {
         "coverage-mode": "covered-by-runtime-rows",
         "not-applicable-reason": "不适用；direct atom 已映射。",
         "coverage-note": "登录态 actor 解析由 runtime surface 覆盖。",
+        ...foundationObservable,
       },
       {
         "upstream-item-id": "scenario-login-actor",
@@ -1591,6 +1626,7 @@ function runtimeTrace(options = {}) {
         "coverage-mode": "covered-by-runtime-rows",
         "not-applicable-reason": "不适用；spec scenario 已映射。",
         "coverage-note": "Requirement/Scenario 已落到 RS-001。",
+        ...foundationObservable,
       },
       {
         "upstream-item-id": "D-001",
@@ -1601,6 +1637,7 @@ function runtimeTrace(options = {}) {
         "coverage-mode": "covered-by-runtime-rows",
         "not-applicable-reason": "不适用；design decision 已映射。",
         "coverage-note": "D-001 已落到 RS-001。",
+        ...foundationObservable,
       },
     ],
     "runtime-coverage-source-map": [
@@ -1805,6 +1842,7 @@ function replaceChangePlaceholder(value, change) {
 function writeProposalAuthoritySources(root, change, traces, enabled, authorityMode = "json") {
   const proposal = traces["proposal.trace.json"];
   if (!enabled || !proposal) return;
+  const changeKind = proposal["proposal-alignment-gate"]?.["change-kind"] ?? "business";
   const rows = proposal["change-atom-coverage-register"] ?? [];
   const packetDir = path.join(root, "openspec", "orchestrate", "change-capability-anchors", change);
   fs.mkdirSync(packetDir, { recursive: true });
@@ -1829,7 +1867,7 @@ function writeProposalAuthoritySources(root, change, traces, enabled, authorityM
   const phase5TracePath = path.join(traceDir, "phase-5.trace.json");
   writeJson(globalIndexPath, globalAtomIndexJson(change, rows));
   writeJson(mappingPath, atomPlanMappingJson(change, rows));
-  writeJson(packetIndexPath, finalPacketIndexJson(root, change, rows, packetPath));
+  writeJson(packetIndexPath, finalPacketIndexJson(root, change, rows, packetPath, changeKind));
   writeJson(phase5TracePath, phase5TraceJson());
   writeJson(
     path.join(traceDir, "manifest.json"),
@@ -1875,23 +1913,26 @@ function atomPlanMappingJson(change, rows) {
       "source-document": row["source-document"],
       lines: row.lines,
       "line-ranges": [{ start: 1, end: 2 }],
+      "final-owner-type": "executable-change",
       "final-owner-change": change,
       "final-owner-capability": row["owner-capability"],
       "final-artifact-projection": row["artifact-projection"],
       "final-relation": "direct",
+      "capability-advancement": row["owner-capability"] === "runtime-substrate-foundation" ? "foundation-substrate" : "advances-capability",
       "plan-decision": "keep",
       reason: "测试映射。",
     })),
   };
 }
 
-function finalPacketIndexJson(root, change, rows, packetPath) {
+function finalPacketIndexJson(root, change, rows, packetPath, changeKind = "business") {
   return {
     "trace-schema": "source-aligned-final-packet-index-v1",
     "trace-contract-version": "source-aligned-trace-v1",
     packets: [
       {
         change,
+        "change-kind": changeKind,
         "packet-path": path.relative(root, packetPath).split(path.sep).join("/"),
         "packet-digest": sha256File(packetPath),
         "direct-atom-ids": rows.map((row) => row["global-atom-id"]),

@@ -31,7 +31,23 @@ const SI_ID_RE = /\bSI-\d{3}\b/g;
 const D_ID_RE = /\bD-\d{3}\b/g;
 const P_ID_RE = /\bP-\d{3}\b/g;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
-const FOUNDATION_REFERENCE_RE = /foundation-reference|foundation-runtime-substrate/iu;
+const DEPRECATED_FOUNDATION_REFERENCE_RE = /foundation-reference|foundation-runtime-substrate/iu;
+const CHANGE_KINDS = new Set(["foundation", "business"]);
+const FOUNDATION_OBSERVABLE_KINDS = new Set([
+  "workspace-script",
+  "app-skeleton-startup",
+  "health-readiness",
+  "config-env",
+  "prisma-migration-readback",
+  "openapi-proto-generation",
+  "package-boundary",
+  "compose-local-smoke",
+  "ci-conformance",
+  "generated-artifact",
+  "repo-structure-readback",
+]);
+const FOUNDATION_NON_RUNTIME_RE =
+  /future\s+deployment|future\s+deploy|cloud[- ]?neutral|cloud\s+neutral|not[- ]?a[- ]?goal|non[- ]?goal|preserve\s+guard|长期\s*preserve|未来部署|云中立|非目标|长期保留|长期\s*guard/iu;
 
 const SPEC_HANDLINGS = new Set([
   "direct-spec-requirement",
@@ -189,6 +205,7 @@ export function validateChange(options = {}) {
   const schemaKind = schemaName === "production-default-acceptance-driven" ? "default" : "obligation";
   const files = readChangeFiles(root, changeDir);
   const trace = loadTracePlane(root, changeDir, files, schemaKind, issues, { complete });
+  const changeContext = { changeKind: proposalChangeKind(trace.get("proposal")) };
   validateRenderedArtifacts(root, changeDir, files, trace, issues);
   validateProposalAuthorityTrace(root, change, files.byName["proposal.md"], trace.get("proposal"), schemaKind, issues);
 
@@ -220,7 +237,7 @@ export function validateChange(options = {}) {
 
   validateVerificationReconciliation(trace.get("verification"), proofSlices, runtimeRows, issues);
   validateSourceScopeTrace(trace, schemaKind, files, issues);
-  validateRuntimeCoverageTrace(trace.get("runtime-acceptance"), runtimeRows, trace, issues);
+  validateRuntimeCoverageTrace(trace.get("runtime-acceptance"), runtimeRows, trace, issues, changeContext);
   validateTasksTrace(trace.get("tasks"), runtimeRows, taskModel, issues);
 
   return summarize(issues);
@@ -1024,7 +1041,7 @@ function validateProposalAuthorityTrace(root, change, proposalFile, proposal, sc
 
     validateProposalSourceWindowReadSet(proposal, jsonAuthority.packetRows, issues);
     validateProposalProductionSourceCoverage(proposal, jsonAuthority.packetRows, issues);
-    validateProposalAlignmentGate(proposal, jsonAuthority.packetRows, issues);
+    validateProposalAlignmentGate(proposal, jsonAuthority.packetRows, issues, jsonAuthority.changeKind);
     validateProposalDeliveryPlaneLeakage(proposalFile, issues);
     return;
   }
@@ -1150,6 +1167,16 @@ function loadSourceAlignedHandoffAuthority(root, change, preconditions, issues) 
   }
 
   const packetRow = asObject(packet);
+  const changeKind = strip(packetRow["change-kind"]);
+  if (!CHANGE_KINDS.has(changeKind)) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-018",
+      paths.finalPacketIndex,
+      `${change} 的 final-packet-index.json row 必须声明 change-kind: foundation 或 business。`,
+    );
+  }
   const packetRelPath =
     strip(packetRow["packet-path"]) ||
     strip(preconditions["canonical-change-packet"]) ||
@@ -1220,7 +1247,7 @@ function loadSourceAlignedHandoffAuthority(root, change, preconditions, issues) 
   }
 
   validateFinalPacketMarkdownMirror(root, packetRelPath, packetRows, packetRow, issues);
-  return { packetRows };
+  return { packetRows, changeKind };
 }
 
 function validateSourceAlignedJsonBasics(data, relPath, expectedSchema, issues) {
@@ -1623,8 +1650,31 @@ function validateProposalProductionSourceCoverage(proposal, packetRows, issues) 
   );
 }
 
-function validateProposalAlignmentGate(proposal, packetRows, issues) {
+function proposalChangeKind(proposal) {
+  const gate = asObject(proposal?.["proposal-alignment-gate"]);
+  return strip(gate["change-kind"]);
+}
+
+function validateProposalAlignmentGate(proposal, packetRows, issues, expectedChangeKind = "") {
   const gate = asObject(proposal["proposal-alignment-gate"]);
+  const changeKind = strip(gate["change-kind"]);
+  if (!CHANGE_KINDS.has(changeKind)) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-018",
+      "trace/proposal.trace.json#/proposal-alignment-gate/change-kind",
+      "proposal-alignment-gate.change-kind 必须为 foundation 或 business。",
+    );
+  } else if (expectedChangeKind && changeKind !== expectedChangeKind) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-018",
+      "trace/proposal.trace.json#/proposal-alignment-gate/change-kind",
+      `proposal-alignment-gate.change-kind 必须与 final-packet-index.json 一致：应为 ${expectedChangeKind}，实际为 ${changeKind}。`,
+    );
+  }
   const directAtoms = asObject(gate["direct-atoms"]);
   const gateIds = idsFromValue(directAtoms.ids, GA_ID_RE);
   compareIdSets(
@@ -1646,32 +1696,13 @@ function validateProposalFoundationReferenceReadSet(proposal, issues) {
   if (rows == null) {
     return;
   }
-  if (!Array.isArray(rows)) {
-    addIssue(issues, "error", "VAL-PR-013", "trace/proposal.trace.json#/foundation-reference-read-set", "foundation-reference-read-set 必须是数组。");
-    return;
-  }
-  for (const [index, row] of rows.entries()) {
-    const ref = traceRef("proposal", "foundation-reference-read-set", index);
-    if (!row || typeof row !== "object" || Array.isArray(row)) {
-      addIssue(issues, "error", "VAL-PR-013", ref, "foundation-reference-read-set row 必须是 object。");
-      continue;
-    }
-    for (const field of ["reference-path", "trace-path", "digest", "read-purpose"]) {
-      if (!strip(row[field])) {
-        addIssue(issues, "error", "VAL-PR-013", ref, `foundation-reference-read-set row 缺少 ${field}。`);
-      }
-    }
-    const detailPointer = findFoundationConsumptionDetail(row);
-    if (detailPointer) {
-      addIssue(
-        issues,
-        "error",
-        "VAL-PR-013",
-        `${ref}${detailPointer}`,
-        "foundation-reference-read-set 只能记录读取元数据，不得记录 GA、consumed/materialized/deferred/not-applicable 等消费明细。",
-      );
-    }
-  }
+  addIssue(
+    issues,
+    "error",
+    "VAL-PR-013",
+    "trace/proposal.trace.json#/foundation-reference-read-set",
+    "foundation-reference-read-set 已废弃；foundation 必须作为 final-packet-index.json 中的 executable foundation change 输入 proposal。",
+  );
 }
 
 function validateProposalDeliveryPlaneLeakage(proposalFile, issues) {
@@ -2167,12 +2198,12 @@ function specKeyFromTracePath(tracePath) {
   return normalized ? `specs:${normalized}` : "";
 }
 
-function validateRuntimeCoverageTrace(runtimeTrace, runtimeRows, tracePlane, issues) {
+function validateRuntimeCoverageTrace(runtimeTrace, runtimeRows, tracePlane, issues, changeContext = {}) {
   if (!runtimeTrace) {
     return;
   }
   validateRuntimeCanonicalRowIndex(runtimeTrace, runtimeRows, issues);
-  const upstreamCoverage = parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues);
+  const upstreamCoverage = parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues, changeContext);
   const sourceMapCoverage = parseRuntimeSourceMapCoverage(runtimeTrace, runtimeRows, issues);
 
   validateRuntimeProposalCoverage(tracePlane, upstreamCoverage.records, issues);
@@ -2243,16 +2274,17 @@ function validateRuntimeCanonicalRowIndex(runtimeTrace, runtimeRows, issues) {
   }
 }
 
-function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues) {
+function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues, changeContext = {}) {
   const records = [];
   const coveredRuntimeRows = new Set();
   const machineIds = new Set();
   const seen = new Set();
+  const foundationMode = changeContext.changeKind === "foundation";
 
   for (const [index, row] of asArray(runtimeTrace["runtime-upstream-coverage-map"]).entries()) {
     const ref = traceRef("runtime-acceptance", "runtime-upstream-coverage-map", index);
     if (mentionsFoundationReference(row)) {
-      addIssue(issues, "error", "VAL-RA-120", ref, "foundation reference 不得作为 runtime-upstream-coverage-map 的 coverage source。");
+      addIssue(issues, "error", "VAL-RA-120", ref, "已废弃的 foundation reference 不得作为 runtime-upstream-coverage-map 的 coverage source。");
     }
     const upstreamItemId = runtimeUpstreamItemId(row);
     const upstreamItemType = runtimeUpstreamItemType(row);
@@ -2271,6 +2303,9 @@ function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues) {
     if (!mode.includes("not-applicable") && rowIds.length === 0) {
       addIssue(issues, "error", "VAL-RA-101", ref, "covered upstream item 必须映射到至少一个 runtime row。");
     }
+    if (foundationMode) {
+      validateFoundationRuntimeCoverageRow(row, rowIds, mode, ref, issues);
+    }
     for (const rowId of rowIds) {
       if (runtimeRows.size > 0 && !runtimeRows.has(rowId)) {
         addIssue(issues, "error", "VAL-RA-102", ref, `runtime-upstream-coverage-map 引用未定义 runtime row ${rowId}。`);
@@ -2287,6 +2322,49 @@ function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues) {
     records.push({ index, row, ref, upstreamItemId, upstreamItemType, rowIds, machineIds: rowMachineIds });
   }
   return { records, coveredRuntimeRows, machineIds };
+}
+
+function validateFoundationRuntimeCoverageRow(row, rowIds, coverageMode, ref, issues) {
+  const notApplicable = coverageMode.includes("not-applicable");
+  if (notApplicable) {
+    if (rowIds.length > 0) {
+      addIssue(issues, "error", "VAL-RA-123", ref, "foundation not-applicable coverage row 不得同时生成 runtime-row-ids。");
+    }
+    const reason = strip(row["not-applicable-reason"] ?? row.reason ?? row["coverage-reason"] ?? row["applicability-reason"]);
+    if (!reason) {
+      addIssue(issues, "error", "VAL-RA-123", ref, "foundation not-applicable coverage row 必须记录 source-backed not-applicable reason。");
+    }
+    return;
+  }
+  if (rowIds.length === 0) {
+    return;
+  }
+  const observableKind = strip(
+    row["foundation-observable-kind"] ??
+      row["runtime-observable-kind"] ??
+      row["observable-kind"] ??
+      row["surface-kind"] ??
+      row["runtime-surface-kind"],
+  );
+  if (!FOUNDATION_OBSERVABLE_KINDS.has(observableKind)) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-RA-121",
+      ref,
+      `foundation runtime row 必须声明允许的工程可观察 surface kind，实际为 ${observableKind || "(empty)"}。`,
+    );
+  }
+  const text = strip(JSON.stringify(row));
+  if (FOUNDATION_NON_RUNTIME_RE.test(text)) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-RA-122",
+      ref,
+      "future deployment、cloud-neutral、非目标或长期 preserve guard 只能写 not-applicable reason，不得生成 foundation runtime row。",
+    );
+  }
 }
 
 function parseRuntimeSourceMapCoverage(runtimeTrace, runtimeRows, issues) {
@@ -2831,7 +2909,7 @@ function collectIds(value, regex, pointer = "") {
 }
 
 function mentionsFoundationReference(value) {
-  return FOUNDATION_REFERENCE_RE.test(strip(typeof value === "string" ? value : JSON.stringify(value ?? "")));
+  return DEPRECATED_FOUNDATION_REFERENCE_RE.test(strip(typeof value === "string" ? value : JSON.stringify(value ?? "")));
 }
 
 function findFoundationConsumptionDetail(value, pointer = "") {

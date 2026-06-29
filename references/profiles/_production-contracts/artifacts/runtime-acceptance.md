@@ -10,6 +10,7 @@
 - 建立 upstream runtime obligation inventory：每个 material source/scope item、in-scope spec scenario、material design decision/obligation、guard 和 proof handling item 都必须成为 inventory item；非 runtime item 必须记录 source/scope-backed not-applicable reason。
 - 从上游 artifacts 抽取 runtime surfaces、operations、states/branches、async/realtime chains，以及 explicit no-async/no-worker/no-queue/no-side-effect preserve boundaries。
 - 对每个 upstream item 分配一个或多个具体 runtime row IDs；不得只用主题汇总行、closure checklist 或聚合行表示覆盖。
+- 当 `proposal-alignment-gate.change-kind` 为 `foundation` 时，只允许为当前 foundation change 的可观察工程运行事实分配 runtime row；允许 surface 包括 workspace/script、app skeleton 启动、health/readiness、config/env、Prisma/migration readback、OpenAPI/proto generation、package boundary、Compose/local smoke 和 CI conformance。纯架构原则、未来部署预留、云中立性、非目标、长期 preserve guard 必须写 not-applicable reason，不能生成 runtime row。
 - 建立 trace-backed upstream runtime obligation inventory、not-applicable inventory、canonical runtime row model、row type/index、upstream-to-row coverage map、source map、closure checklist inputs 和 `delivery-plane` render payload。
 - writer 只写 `trace/runtime-acceptance.trace.json`；`runtime-acceptance.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed runtime row ID 集写入。
 - canonical runtime row ID 集必须同时渲染为 Markdown 表格和 trace `canonical-row-index`，不得手工维护两套 row truth。

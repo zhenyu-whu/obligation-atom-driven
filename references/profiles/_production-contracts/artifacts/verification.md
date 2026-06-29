@@ -10,6 +10,7 @@
 - 必要时只为一致性核对读取 proposal、实际生成的 delta specs 和 design；不得用它们在 verification 中重新建立 source/scope mapping。
 - 索引每个 `RS-/OP-/ST-/CH-` row 的 row type、scope role、runtime obligation、observable fact、default path policy、external boundary、failure/branch/default/no-scope boundary。
 - 对每个 required / preserve / proof-only runtime row 抽取所有独立可失败分支；每个分支生成一个 Proof Slice，或给出 source/scope-backed manual/not-applicable reason。
+- 当 `proposal-alignment-gate.change-kind` 为 `foundation` 时，Proof Slice 只能从有效 foundation runtime rows 派生；不得为 not-applicable、pure design/reference/guard/future rows 生成 required Proof Slice。
 - 建立 trace-backed runtime row branch inventory、manual/not-applicable inventory、proof slice model、Markdown matrix mirror rows、runtime coverage reconciliation、slice consistency checklist inputs 和 `delivery-plane` render payload。
 - writer 只写 `trace/verification.trace.json` 和 `trace/verification.proof-slices.json`；`verification.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed Proof Slice ID 集写入。
 - Proof Slice JSON 是 canonical 测试义务模型，verification.md matrix 必须由它镜像生成。

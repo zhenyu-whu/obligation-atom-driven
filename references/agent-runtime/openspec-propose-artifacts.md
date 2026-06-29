@@ -130,7 +130,7 @@
 
 1. 不创建、不读取、不要求任何 proposal 前置 source artifact。`proposal.md` 是第一个标准 artifact，并且只能通过最小权威读集消费当前已存在的 source-aligned JSON handoff、canonical change packet 与 global atom index。
 2. 不得执行、复制或依赖 `source-aligned-change-plan-coverage` 的 Python validator 或其它上游技能脚本。下游只按稳定数据契约读取 `openspec/orchestrate/**` 中自己消费的 JSON sidecar 与 Markdown mirror。
-3. Machine handoff：若存在 `openspec/orchestrate/trace/manifest.json`、`phase-works/phase-5/final-packet-index.json`、`phase-works/phase-5/atom-plan-mapping.json`、`change-capability-anchors/obligation-atom-index.json`，proposal 入口必须优先读取这些 JSON。若存在 `openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md` 和 `.trace.json`，proposal 入口只将其作为只读设计约束 reference 读取。`trace-contract-version` 必须为 `source-aligned-trace-v1`；`trace/manifest.json` 的 `phase-statuses.phase-5` 和 `trace/phase-5.trace.json.status` 必须一致，且当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。该 status 是 source-aligned Phase 5 最终 handoff 决策，不得写入 validator/reviewer/repair 流程态。
+3. Machine handoff：若存在 `openspec/orchestrate/trace/manifest.json`、`phase-works/phase-5/final-packet-index.json`、`phase-works/phase-5/atom-plan-mapping.json`、`change-capability-anchors/obligation-atom-index.json`，proposal 入口必须优先读取这些 JSON。所有 planned changes（包括 `change-kind: foundation`）都来自 `final-packet-index.json` 和对应 final packet；不得读取或生成额外的 foundation 只读 handoff。`trace-contract-version` 必须为 `source-aligned-trace-v1`；`trace/manifest.json` 的 `phase-statuses.phase-5` 和 `trace/phase-5.trace.json.status` 必须一致，且当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。该 status 是 source-aligned Phase 5 最终 handoff 决策，不得写入 validator/reviewer/repair 流程态。
 4. Canonical change contract：当前 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 仍是 proposal-facing 内容权威和人审镜像。它独占表达本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers；JSON sidecar 是机器 handoff 数据源。
 5. Lookup table：`obligation-atom-index.json` 优先用于校验 `GA-####` 存在，并按 atom id 补齐 source trace 字段、source fact、normativity、focused source-window read 所需的 `Source Document` + `Lines`；`atom-plan-mapping.json` 优先提供 final owner change/capability、final relation 和 final artifact projection。legacy `obligation-atom-index.md` 只在 JSON sidecar 缺失且 proposal preconditions 未显式指向 JSON handoff 时作为兼容 fallback。
 6. Discovery gates：
@@ -150,20 +150,7 @@
 }
 ```
 
-若读取 foundation reference，只能在 `foundation-reference-read-set` 记录 reference path、trace path、digest 和 read purpose；`foundation-reference-read-set` 必须是数组，每行只允许 `reference-path`、`trace-path`、`digest`、`read-purpose`。合法形状示例：
-
-```json
-"foundation-reference-read-set": [
-  {
-    "reference-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md",
-    "trace-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.trace.json",
-    "digest": "sha256-...",
-    "read-purpose": "只作为设计约束读取，不传播 foundation GA。"
-  }
-]
-```
-
-不得在 `foundation-reference-read-set` 记录 `atom-ids`、`global-atom-ids`、`consumed`、`materialized`、`deferred`、`not-applicable` 或 foundation atom 消费明细；不得原样复制 foundation trace 的 `artifact-digest` / `atom-ids[]` 到 proposal trace，不得传播 foundation `GA-####`。
+Foundation change 使用统一 production schema，并通过 `proposal-alignment-gate.change-kind: "foundation"` 进入后续 specs/design/runtime/verification/tasks。不得为 foundation 另建只读 reference、额外 read-set 或第三套 schema。
 11. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 JSON handoff 或 legacy final packet 中每个 direct atom 建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
 12. proposal 生成时必须对每个 direct atom 定点重读 JSON handoff / legacy atom index 中记录的 `Source Document` + `Lines`。对 contextual、explicit-non-goal、contextual-preserve、prototype-only-not-production 等 non-direct atoms，只在需要保留精确边界、避免误扩 scope 或确认 proof 语义时定点重读。
 13. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。
@@ -178,7 +165,7 @@
 5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 `verification.md` 的 oracle/proof intent；所有需要生产实现、preserve boundary 或 runtime proof 的 rows 必须进入 `runtime-acceptance.md` canonical row，并由 `tasks.md` 和 `verification.md` 投影覆盖；`contextual-only` 只允许作为非 direct context/guard。final packet 的 direct row 不得使用 `contextual-only`；若出现，必须改入 context/non-direct handling 或记录 blocker。不能留下 orphan direct atom。
 6. proposal 不得因为 atom 是 direct 就自动要求 specs 生成 requirement/scenario。旧 packet 缺少 projection 时，必须按 schema 的 legacy inference 保守推断并记录 `Projection Source: inferred-from-legacy-packet`；无法推断则 blocker。
 7. proposal Delivery Plane 主体只写业务边界、行为承诺、影响面和 readiness；不得在 `## Trace Appendix` 前生成 exhaustive `GA-####` coverage list、`Direct atoms`、`Projection mix`、`Global Atoms:` 或“覆盖 GA...”类 suffix。
-8. `trace/proposal.trace.json` 的 `proposal-alignment-gate` 必须声明 proposal input mode、change slug、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
+8. `trace/proposal.trace.json` 的 `proposal-alignment-gate` 必须声明 proposal input mode、change slug、`change-kind`（`foundation` 或 `business`，来自 `final-packet-index.json`）、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
 
 ## Obligation Specs / Design 门禁
 
@@ -197,9 +184,10 @@
 2. `runtime-acceptance.md` 必须在 `verification.md` 和 `tasks.md` 之前生成，依赖 proposal/specs/design；`verification.md` 和 `tasks.md` 都依赖 `runtime-acceptance.md`，但二者不得互相作为新增需求来源。
 3. `runtime-acceptance.md` 主体必须包含 `Runtime Acceptance Intent`、`Runtime Surface Inventory`、`Operation Coverage Matrix`、`State / Branch Coverage Matrix`、`Async / Realtime Chain Matrix`；`trace/runtime-acceptance.trace.json` 必须包含 `canonical-row-index`、`runtime-upstream-coverage-map`、`runtime-coverage-source-map` 和 `coverage-closure-checklist`。
 4. `runtime-acceptance.md` 只定义 canonical RS-/OP-/ST-/CH- rows，不得包含 AC checkbox、implementation task IDs、Proof Slice、测试文件、固定命令、runner selector、evidence path、执行状态或 deposit status。
-5. `runtime-upstream-coverage-map` 是当前 business change 可观察运行行为的审计表：只覆盖当前 change 中会产生或约束可观察运行行为的 proposal direct `GA-####`、in-scope spec scenario 和 design decision/guard。非 runtime 项可写当前 change source-backed not-applicable reason。Foundation reference artifact/path 或 foundation `GA-####` 不得作为 runtime coverage source；不得只用 `Direct atom closure`、主题 source map 行或 checklist 证明覆盖；每个 covered item 的 row IDs 必须解析到主体 canonical rows。
+5. `runtime-upstream-coverage-map` 是当前 change 可观察运行行为的审计表：只覆盖当前 change 中会产生或约束可观察运行行为的 proposal direct `GA-####`、in-scope spec scenario 和 design decision/guard。Business mode 覆盖业务运行行为；foundation mode 只覆盖当前 foundation change 可观察工程运行事实。Foundation mode 允许的 observable kind 包括 `workspace-script`、`app-skeleton-startup`、`health-readiness`、`config-env`、`prisma-migration-readback`、`openapi-proto-generation`、`package-boundary`、`compose-local-smoke`、`ci-conformance`。纯架构原则、未来部署预留、云中立性、非目标、长期 preserve guard 不得生成 runtime rows，只能写 source-backed not-applicable reason。不得只用 `Direct atom closure`、主题 source map 行或 checklist 证明覆盖；每个 covered item 的 row IDs 必须解析到主体 canonical rows。
 6. `verification.md` 主体必须包含 `Verification Intent`、`Proof Slice Matrix`、`Layer / Harness / Fixture Notes`、`Do Not Test`；canonical Proof Slice 模型必须写入 `trace/verification.proof-slices.json`，`trace/verification.trace.json` 必须包含 `runtime-coverage-reconciliation` 和 `slice-consistency-checklist`。
 7. `trace/verification.proof-slices.json` 是唯一测试义务模型；`Proof Slice Matrix` 必须是该 JSON 的完整镜像。每个 required / preserve / proof-only runtime row 必须拆出所有独立可失败分支并生成 expected Proof Slice，或有 source/scope-backed manual/not-applicable reason。每个 slice 必须有 Runtime Row IDs、Primary Runtime Row ID、Primitive Type、Branch / Variant、Observable Surface、Oracle Fragment、Failure Signal、Primary Layer、Production Owner、Primary Assertion Shape、Fixture / Mock Boundary、Regression Intent、Manual / Environment Gate 和 `test-contract`。Propose 阶段只校验 `Production Owner` 是单一 planned production boundary token、`Primary Layer` 是合法枚举；不得要求 owner/layer 映射到 `tests/**` 目录。真实测试文件落点必须在 apply 阶段通过 `proof-test-map.json` 和 placement audit 校验。`test-contract` 默认要求 `primary-test-cardinality: "exactly-one"`、`test-title-prefix` 等于 slice id、`allow-shared-setup: true`、`allow-multi-slice-primary-test: false`、`waiver-required-for-multi-slice: true`。oracle 不能来自当前实现细节、`tasks.md`、测试文件结构或 evidence/deposit 结构。
+   - Foundation mode 下，Proof Slice 只能从有效 foundation runtime rows 派生；不得为 not-applicable、pure design/reference/guard/future rows 生成 required Proof Slice。
 8. `verification.md` 不得包含具体测试文件、固定测试命令、runner selector、evidence directory 或 deposit status。
 9. `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以 `## Trace Appendix` 结束；`trace/tasks.trace.json` 保留 `acceptance-driven-coverage`、`runtime-acceptance-index` 和 `runtime-acceptance-projection`。
 10. 每个 AC section 必须按顺序包含 `Outcome:`、`Start Gate:`、`Runtime Rows:`、`Resolved Runtime Contract:`、`Implementation Scope:`、`Preserve:`、`Proof Contract:`，随后是 checkbox tasks。
@@ -207,6 +195,7 @@
 12. `Resolved Runtime Contract` 只能摘录 canonical row 的 worker-facing 语义，不得包含 `GA-####`、source trace、projection、Proof Slice、测试路径、固定命令或 evidence path，不得新增 canonical runtime row。
 13. obligation profile 的每个 checkbox task 必须包含 `Runtime Rows:`、`Acceptance:`、`Preserve:`、`Proof:`、`Mock / Default Path Policy:` 字段。
     - checkbox task 必须代表 production implementation work：代码、schema、migration、API、domain behavior、UI behavior、auth/security guard、config、provider contract、observability、deployment 或 runtime boundary preservation。
+    - Foundation mode 的 AC 和 checkbox task 必须代表生产工程底座实现工作，例如 workspace、app skeleton、scripts、config、migration、health、生成链路、package boundary 或 CI/local smoke。
     - checkbox task 不得只为了 proof、verification、test、fixture replay、截图、evidence、coverage closure、acceptance closure 或 artifact closure 而存在。
     - task-level `Runtime Rows:` 只能列该 task 实现、实质修改或保留的 rows；仅由 proof/readback 观察的 supporting rows 不得列入该 task 的 `Runtime Rows:`。
     - `Proof:` 是生产任务完成标准，不是独立 executable work。

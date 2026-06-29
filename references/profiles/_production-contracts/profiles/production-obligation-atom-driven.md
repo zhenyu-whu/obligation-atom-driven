@@ -3,7 +3,7 @@
 ## 输入权威
 
 - 不得执行、复制或依赖 `source-aligned-change-plan-coverage` 的 Python validator 或其它上游技能脚本。此 profile 只消费 `openspec/orchestrate/**` 中稳定的 handoff 数据契约。
-- 若存在 source-aligned JSON sidecar，proposal 入口必须优先读取 `openspec/orchestrate/trace/manifest.json`、`openspec/orchestrate/phase-works/phase-5/final-packet-index.json`、`openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json` 和 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json`。`trace-contract-version` 必须为 `source-aligned-trace-v1`；`trace/manifest.json` 的 `phase-statuses.phase-5` 和 `trace/phase-5.trace.json.status` 必须一致，且当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。该 status 是 Phase 5 最终 handoff 决策，不是 validator/reviewer/repair 流程态。
+- 若存在 source-aligned JSON sidecar，proposal 入口必须优先读取 `openspec/orchestrate/trace/manifest.json`、`openspec/orchestrate/phase-works/phase-5/final-packet-index.json`、`openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json` 和 `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json`。所有 planned changes（包括 foundation）都来自 `final-packet-index.json` 和对应 final packet；`change-kind` 必须为 `foundation` 或 `business`。`trace-contract-version` 必须为 `source-aligned-trace-v1`；`trace/manifest.json` 的 `phase-statuses.phase-5` 和 `trace/phase-5.trace.json.status` 必须一致，且当 Phase 5 status 字段存在时必须为 `accepted` 或 `adjusted`。该 status 是 Phase 5 最终 handoff 决策，不是 validator/reviewer/repair 流程态。
 - 当前 final change packet `openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md` 仍是 proposal-facing canonical change contract 和人审镜像。
 - 它独占表达本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers；JSON sidecar 是机器 handoff 数据源。
 - `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json` 优先作为 `GA-####` lookup table，用于校验 atom 存在并补齐 source document、line range、source fact、normativity 和 focused source-window read 信息。
@@ -25,7 +25,7 @@
 ```
 
 - 不合法形状示例：`"orchestrate-manifest": {"path": "...", "sha256": "..."}`。proposal trace 只保存 handoff path；schema、status、digest 一致性由 validator 通过这些路径读取上游 JSON 后校验。
-- `trace/proposal.trace.json` 中的 source/scope item 必须使用 exact `GA-####`，并从 final packet、global atom index 和 proposal trace register 派生；不得在 trace 中重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
+- `trace/proposal.trace.json` 中的 source/scope item 必须使用 exact `GA-####`，并从 final packet、global atom index 和 proposal trace register 派生；不得在 trace 中重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。`proposal-alignment-gate.change-kind` 必须与 `final-packet-index.json` 当前 packet 一致。
 
 ## Global Atom 规则
 

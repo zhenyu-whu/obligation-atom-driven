@@ -16,6 +16,7 @@
 ## AC Creation Gate
 
 - 只有当一个 AC 提供或实质修改 current-change production runtime behavior，或提供必须由本 change 交付的 preserve boundary，才允许创建该 AC。
+- 当 `proposal-alignment-gate.change-kind` 为 `foundation` 时，AC 必须提供或实质修改生产工程底座 runtime behavior，例如 workspace、app skeleton、scripts、config、migration、health/readiness、生成链路、package boundary、Compose/local smoke 或 CI conformance。
 - 不得创建名称或 scope 仅为 proof closure、verification closure、evidence closure、coverage closure 或 acceptance proof closure 的 AC。
 - 如果 proof-only row 需要生产 runtime work，AC 名称必须描述该生产工作，而不是“验收证明收束”。
 
@@ -31,6 +32,7 @@
 
 - 每个 checkbox task 必须包含 `Runtime Rows:`、`Acceptance:`、`Preserve:`、`Proof:`、`Mock / Default Path Policy:`。
 - checkbox 必须代表 production implementation work。
+- Foundation mode 下 checkbox 必须代表生产工程底座实现工作；不得为 not-applicable foundation atom、proof-only、coverage-only 或 artifact closure 创建 checkbox。
 - task-level `Runtime Rows:` 只能列该 task 实现、实质修改或保留的 rows；仅由 proof/readback 观察的 supporting rows 不得列入。
 - `Acceptance:` 描述 task 贡献证明的具体行为，不写 file-edit summary。
 - `Proof:` 说明可观察 proof；用户可见操作必须证明 runtime interaction、API/data effect 和 reload/readback。
