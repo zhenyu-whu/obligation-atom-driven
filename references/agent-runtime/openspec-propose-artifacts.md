@@ -139,7 +139,31 @@
 7. Optional grouping aids：只有当 final packet 或 schema 写作需要拆分 spec file 时，才读取当前 change 下的 `capability-anchors/<capability>.md`。这些 capability view 只能辅助 capability 分组，不得覆盖 final change packet。
 8. Audit/debug evidence：除 canonical change packet、global atom index 和必要 capability views 外，其他 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。不得从这些文件新增、删除、移动、重判 direct atom，也不得用它们扩展 final packet 之外的 scope。
 9. 若用户请求不是 final packet index 中的 change，必须报告目标超出当前 canonical change contract，而不是在 proposal 中扩展范围或要求新的 proposal 前置 source artifact。
-10. proposal 的 `trace/proposal.trace.json` / `obligation-atom-preconditions` 可记录 `orchestrate-manifest`、`global-atom-index-json`、`atom-plan-mapping-json`、`final-packet-index-json`。这些字段出现时，对应 JSON 缺失必须视为 blocker，不得静默回退到 Markdown。若读取 foundation reference，只能在 `foundation-reference-read-set` 记录 reference path、trace path、digest 和 read purpose；不得记录 consumed/materialized/deferred/not-applicable foundation atoms，也不得传播 foundation `GA-####`。
+10. proposal 的 `trace/proposal.trace.json` / `obligation-atom-preconditions` 可记录 `orchestrate-manifest`、`global-atom-index-json`、`atom-plan-mapping-json`、`final-packet-index-json`。这些字段出现时，对应 JSON 缺失必须视为 blocker，不得静默回退到 Markdown。上述 handoff 字段值必须是字符串路径，不得是 object，不得内联 `{ "path": "...", "sha256": "...", "trace-schema": "..." }` 或其它上游 metadata。合法形状示例：
+
+```json
+"obligation-atom-preconditions": {
+  "orchestrate-manifest": "openspec/orchestrate/trace/manifest.json",
+  "global-atom-index-json": "openspec/orchestrate/change-capability-anchors/obligation-atom-index.json",
+  "atom-plan-mapping-json": "openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json",
+  "final-packet-index-json": "openspec/orchestrate/phase-works/phase-5/final-packet-index.json"
+}
+```
+
+若读取 foundation reference，只能在 `foundation-reference-read-set` 记录 reference path、trace path、digest 和 read purpose；`foundation-reference-read-set` 必须是数组，每行只允许 `reference-path`、`trace-path`、`digest`、`read-purpose`。合法形状示例：
+
+```json
+"foundation-reference-read-set": [
+  {
+    "reference-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.md",
+    "trace-path": "openspec/orchestrate/foundation-reference/foundation-runtime-substrate.trace.json",
+    "digest": "sha256-...",
+    "read-purpose": "只作为设计约束读取，不传播 foundation GA。"
+  }
+]
+```
+
+不得在 `foundation-reference-read-set` 记录 `atom-ids`、`global-atom-ids`、`consumed`、`materialized`、`deferred`、`not-applicable` 或 foundation atom 消费明细；不得原样复制 foundation trace 的 `artifact-digest` / `atom-ids[]` 到 proposal trace，不得传播 foundation `GA-####`。
 11. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 JSON handoff 或 legacy final packet 中每个 direct atom 建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
 12. proposal 生成时必须对每个 direct atom 定点重读 JSON handoff / legacy atom index 中记录的 `Source Document` + `Lines`。对 contextual、explicit-non-goal、contextual-preserve、prototype-only-not-production 等 non-direct atoms，只在需要保留精确边界、避免误扩 scope 或确认 proof 语义时定点重读。
 13. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。

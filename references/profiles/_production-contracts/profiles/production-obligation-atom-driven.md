@@ -13,6 +13,18 @@
 - `openspec/orchestrate/change-plan.md` 只在自动推断 change slug 或核对 roadmap/dependency 顺序时读取，不得覆盖 final packet。
 - 除 canonical change packet、global atom index 和必要 capability views 外，其它 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。
 - `trace/proposal.trace.json` / `obligation-atom-preconditions` 可记录 `orchestrate-manifest`、`global-atom-index-json`、`atom-plan-mapping-json`、`final-packet-index-json`。这些字段出现时，对应 JSON 缺失必须视为 blocker，不得静默回退到 Markdown。
+- `obligation-atom-preconditions` 中的 source-aligned handoff 字段值必须是字符串路径，不得是 object，不得内联 `path`、`sha256`、`trace-schema`、`phase-5-status` 或其它上游 metadata。合法形状示例：
+
+```json
+"obligation-atom-preconditions": {
+  "orchestrate-manifest": "openspec/orchestrate/trace/manifest.json",
+  "global-atom-index-json": "openspec/orchestrate/change-capability-anchors/obligation-atom-index.json",
+  "atom-plan-mapping-json": "openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json",
+  "final-packet-index-json": "openspec/orchestrate/phase-works/phase-5/final-packet-index.json"
+}
+```
+
+- 不合法形状示例：`"orchestrate-manifest": {"path": "...", "sha256": "..."}`。proposal trace 只保存 handoff path；schema、status、digest 一致性由 validator 通过这些路径读取上游 JSON 后校验。
 - `trace/proposal.trace.json` 中的 source/scope item 必须使用 exact `GA-####`，并从 final packet、global atom index 和 proposal trace register 派生；不得在 trace 中重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
 
 ## Global Atom 规则
