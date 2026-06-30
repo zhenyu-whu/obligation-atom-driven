@@ -151,21 +151,22 @@
 ```
 
 Foundation change 使用统一 production schema，并通过 `proposal-alignment-gate.change-kind: "foundation"` 进入后续 specs/design/runtime/verification/tasks。不得为 foundation 另建只读 reference、额外 read-set 或第三套 schema。
-11. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 JSON handoff 或 legacy final packet 中每个 direct atom 建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。
+11. proposal 的 `trace/proposal.trace.json` / `change-atom-coverage-register` 必须为 JSON handoff 或 legacy final packet 中每个 direct atom 建立 register row，直接引用 exact `GA-####`，记录 `Artifact Projection` 和 `Projection Source`，不重新编号，不使用 ranges。每行必须包含 `global-atom-id`、`source-document`、`lines`、`atom-type`、`source-fact`、`normativity`、`coverage-status`、`artifact-projection`、`projection-source`、`owner-capability`、`atom-relation`、`propose-use`、`evidence-need`、`downstream-coverage-expectation`；`owner-capability` 是 canonical 字段，不能用 `capability` 替代。
 12. proposal 生成时必须对每个 direct atom 定点重读 JSON handoff / legacy atom index 中记录的 `Source Document` + `Lines`。对 contextual、explicit-non-goal、contextual-preserve、prototype-only-not-production 等 non-direct atoms，只在需要保留精确边界、避免误扩 scope 或确认 proof 语义时定点重读。
-13. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，列出被重读的 `GA-####`、source path、line range、重读目的和 interpretation result。
+13. `trace/proposal.trace.json` 必须记录 `source-window-read-set`，并按 direct `GA-####` 逐行列出 `global-atom-id`、`source-document`、`line-range`、`source-fact` 和 `read-purpose`。`interpretation-result` 可作为中文解释字段，但不得与 `source-fact` 矛盾；不得用 `atom-ids[]` 聚合多个 direct atom。
 14. downstream artifacts 只能通过 proposal `trace/proposal.trace.json` register 中的 exact `GA-####`、source document 和 line range 定点读取原始 docs。不得重新做全量 source extraction，不得从 source line range 直接发明新的 direct atom。
 
 ## Obligation Proposal 门禁
 
 1. proposal 的 `trace/proposal.trace.json` 必须包含 `change-atom-coverage-register`，且每个 direct atom 正好对应一个 `GA-####` register row。
-2. `trace/proposal.trace.json` / `change-atom-coverage-register` 必须保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `Capability`、`Propose Use` 和 `Evidence Need`。
+2. `trace/proposal.trace.json` / `change-atom-coverage-register` 必须保留 global atom / packet row 的 `Source Document`、`Lines`、`Atom Type`、`Source Fact`、`Normativity`、`Coverage Status`、`Artifact Projection`、final packet `owner-capability`、`Propose Use` 和 `Evidence Need`。
+2a. `trace/proposal.trace.json` / `production-source-coverage` 必须是数组，每行包含 `source-document`、`global-atom-ids[]`、`line-ranges[]`、`atom-count`、`artifact-projections[]`、`owner-capabilities[]` 和 `proposal-use`；不得写成单个 summary object。
 3. proposal 必须将 `direct`、`contextual`、`contextual-preserve`、`explicit-non-goal`、`prototype-only-not-production`、`non-production`、`blocked` 等 atom 状态分别处理，不能把上下文、排除项或 prototype-only atom 误转成实现 scope。
 4. proposal 的 `Capabilities` 必须匹配 final change packet 中的 capability atom views；除非 packet 明确记录非阻塞 gap 或 blocker。
 5. 每个 direct atom 必须有 downstream coverage expectation，并且必须匹配 artifact projection：`spec-requirement` 进入 requirement/scenario；`spec-guard` 进入 guard/gate/non-goal；`design-obligation` 必须进入 design artifact；`verification-obligation` 必须进入 `verification.md` 的 oracle/proof intent；所有需要生产实现、preserve boundary 或 runtime proof 的 rows 必须进入 `runtime-acceptance.md` canonical row，并由 `tasks.md` 和 `verification.md` 投影覆盖；`contextual-only` 只允许作为非 direct context/guard。final packet 的 direct row 不得使用 `contextual-only`；若出现，必须改入 context/non-direct handling 或记录 blocker。不能留下 orphan direct atom。
 6. proposal 不得因为 atom 是 direct 就自动要求 specs 生成 requirement/scenario。旧 packet 缺少 projection 时，必须按 schema 的 legacy inference 保守推断并记录 `Projection Source: inferred-from-legacy-packet`；无法推断则 blocker。
 7. proposal Delivery Plane 主体只写业务边界、行为承诺、影响面和 readiness；不得在 `## Trace Appendix` 前生成 exhaustive `GA-####` coverage list、`Direct atoms`、`Projection mix`、`Global Atoms:` 或“覆盖 GA...”类 suffix。
-8. `trace/proposal.trace.json` 的 `proposal-alignment-gate` 必须声明 proposal input mode、change slug、`change-kind`（`foundation` 或 `business`，来自 `final-packet-index.json`）、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。
+8. `trace/proposal.trace.json` 的 `proposal-alignment-gate` 必须声明 proposal input mode、change slug、`change-kind`（`foundation` 或 `business`，来自 `final-packet-index.json`）、global atom index、change packet、capability atom view files、direct atoms、artifact projection coverage、contextual/preserve/non-goal atoms、source windows re-read、orphan direct atoms、capability increment coverage 和 blockers。`direct-atoms` 必须是 `{ "count": <number>, "ids": ["GA-####"], "id-list-source": "<source>" }` object，不能写成裸数组。
 
 ## Obligation Specs / Design 门禁
 

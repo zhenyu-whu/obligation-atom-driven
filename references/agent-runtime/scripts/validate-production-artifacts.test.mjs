@@ -150,6 +150,60 @@ test("proposal source-window-read-set 未覆盖 direct atoms hard fail", () => {
   assertRule(result, "VAL-PR-009");
 });
 
+test("proposal source-window-read-set 聚合 atom-ids hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  files.traces["proposal.trace.json"]["source-window-read-set"] = [
+    {
+      "read-id": "SWR-001",
+      "source-document": "docs/source.md",
+      "line-range": "L1-L2",
+      "source-fact": "事实。",
+      "atom-ids": ["GA-0001"],
+      "read-purpose": "确认 source-backed 边界。",
+      "interpretation-result": "定点重读确认该事实进入 proposal。",
+    },
+  ];
+  const root = makeChange("proposal-read-set-aggregate-change", files);
+  const result = validateChange({ root, change: "proposal-read-set-aggregate-change", complete: false });
+  assertRule(result, "VAL-PR-009");
+});
+
+test("proposal register 缺少 owner-capability hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  files.traces["proposal.trace.json"]["change-atom-coverage-register"][0].capability = "capability";
+  delete files.traces["proposal.trace.json"]["change-atom-coverage-register"][0]["owner-capability"];
+  const root = makeChange("proposal-owner-capability-gap-change", files);
+  const result = validateChange({ root, change: "proposal-owner-capability-gap-change", complete: false });
+  assertRule(result, "VAL-PR-004");
+});
+
+test("proposal alignment gate direct-atoms 裸数组 hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  files.traces["proposal.trace.json"]["proposal-alignment-gate"]["direct-atoms"] = ["GA-0001"];
+  const root = makeChange("proposal-direct-atoms-array-change", files);
+  const result = validateChange({ root, change: "proposal-direct-atoms-array-change", complete: false });
+  assertRule(result, "VAL-PR-010");
+});
+
+test("proposal overlay contract documents canonical obligation trace fields", () => {
+  const overlay = fs.readFileSync(
+    path.join(process.cwd(), "openspec", "schemas", "_production-contracts", "overlays", "production-obligation-atom-driven", "proposal.md"),
+    "utf8",
+  );
+  for (const required of [
+    "owner-capability",
+    "source-window-read-set[]",
+    "source-fact",
+    "production-source-coverage[]",
+    "owner-capabilities[]",
+    "proposal-alignment-gate.direct-atoms",
+    "id-list-source",
+    "do-not-propagate-ga",
+  ]) {
+    assert.match(overlay, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+  }
+});
+
 test("proposal 出现 foundation reference read-set hard fail", () => {
   const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
   files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
@@ -257,6 +311,25 @@ test("final packet Markdown 缺少 JSON direct atom hard fail", () => {
   fs.writeFileSync(packetPath, fs.readFileSync(packetPath, "utf8").replaceAll("GA-0001", "GA-9999"));
 
   const result = validateChange({ root, change: "packet-mirror-missing-change", complete: false });
+  assertRule(result, "VAL-PR-017");
+});
+
+test("source-aligned final-packet-index packet-digest stale hard fail", () => {
+  const files = standardFiles({ proposal: true });
+  const root = makeChange("packet-digest-stale-change", files);
+  const packetIndexPath = path.join(root, "openspec", "orchestrate", "phase-works", "phase-5", "final-packet-index.json");
+  const packetIndex = JSON.parse(fs.readFileSync(packetIndexPath, "utf8"));
+  packetIndex.packets[0]["packet-digest"] = "0".repeat(64);
+  fs.writeFileSync(packetIndexPath, `${JSON.stringify(packetIndex, null, 2)}\n`);
+  const globalIndexPath = path.join(root, "openspec", "orchestrate", "change-capability-anchors", "obligation-atom-index.json");
+  const mappingPath = path.join(root, "openspec", "orchestrate", "phase-works", "phase-5", "atom-plan-mapping.json");
+  const phase5TracePath = path.join(root, "openspec", "orchestrate", "trace", "phase-5.trace.json");
+  fs.writeFileSync(
+    path.join(root, "openspec", "orchestrate", "trace", "manifest.json"),
+    `${JSON.stringify(sourceAlignedManifest(root, [globalIndexPath, mappingPath, packetIndexPath, phase5TracePath]), null, 2)}\n`,
+  );
+
+  const result = validateChange({ root, change: "packet-digest-stale-change", complete: false });
   assertRule(result, "VAL-PR-017");
 });
 
@@ -1393,7 +1466,7 @@ function proposalTrace(options = {}) {
         "line-ranges": ["L1-L2"],
         "atom-count": 1,
         "artifact-projections": [artifactProjection],
-        capabilities: [ownerCapability],
+        "owner-capabilities": [ownerCapability],
         "proposal-use": "作为 source-backed 输入。",
       },
     ],
@@ -1402,8 +1475,9 @@ function proposalTrace(options = {}) {
         "global-atom-id": "GA-0001",
         "source-document": "docs/source.md",
         "line-range": "L1-L2",
+        "source-fact": "事实。",
         "read-purpose": "确认 source-backed 边界。",
-        "interpretation-result": "事实。",
+        "interpretation-result": "定点重读确认该事实进入 proposal。",
       },
     ],
     "proposal-alignment-gate": {

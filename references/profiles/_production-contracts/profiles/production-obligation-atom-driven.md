@@ -8,6 +8,7 @@
 - 它独占表达本 change 的 direct scope、capability 归属、artifact projection、contextual/preserve/non-goal guard、upstream realized baseline、downstream constraints、evidence burden 和 blockers；JSON sidecar 是机器 handoff 数据源。
 - `openspec/orchestrate/change-capability-anchors/obligation-atom-index.json` 优先作为 `GA-####` lookup table，用于校验 atom 存在并补齐 source document、line range、source fact、normativity 和 focused source-window read 信息。
 - `openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json` 优先提供 final owner change/capability、final relation 和 final artifact projection。
+- `final-packet-index.json`、`atom-plan-mapping.json` 和 `obligation-atom-index.json` 是 source-aligned machine handoff。Proposal trace 必须对当前 packet direct atoms 做字段级镜像：每个 direct `GA-####` 在 `change-atom-coverage-register[]`、`source-window-read-set[]` 和 alignment gate 中都必须可独立解析。不得用 source-window 聚合行、主题 summary、atom count、projection mix 或 capability 汇总替代逐 GA rows。
 - legacy `obligation-atom-index.md` 只在 JSON sidecar 缺失且 proposal preconditions 未显式指向 JSON handoff 时作为兼容 fallback；它不得覆盖 final packet 的 direct scope、artifact projection 或 capability 归属。
 - `openspec/orchestrate/change-capability-anchors/index.md` 只用于 packet discovery。
 - `openspec/orchestrate/change-plan.md` 只在自动推断 change slug 或核对 roadmap/dependency 顺序时读取，不得覆盖 final packet。

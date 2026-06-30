@@ -1525,6 +1525,16 @@ function parseGlobalAtomIndex(text, relPath, issues) {
 
 function parseProposalRegister(proposal, issues) {
   const rows = new Map();
+  if (!Array.isArray(proposal["change-atom-coverage-register"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-004",
+      "trace/proposal.trace.json#/change-atom-coverage-register",
+      "change-atom-coverage-register 必须是数组，且每行包含一个 exact GA ID 与 owner-capability 等必填字段。",
+    );
+    return rows;
+  }
   const requiredFields = [
     "source-document",
     "lines",
@@ -1542,6 +1552,13 @@ function parseProposalRegister(proposal, issues) {
   for (const [index, row] of asArray(proposal["change-atom-coverage-register"]).entries()) {
     const ids = idsFromValue(row["global-atom-id"], GA_ID_RE);
     if (ids.length !== 1) {
+      addIssue(
+        issues,
+        "error",
+        "VAL-PR-004",
+        traceRef("proposal", "change-atom-coverage-register", index),
+        "change-atom-coverage-register 每行必须通过 global-atom-id 包含一个 exact GA ID。",
+      );
       continue;
     }
     const globalAtomId = ids[0];
@@ -1550,7 +1567,11 @@ function parseProposalRegister(proposal, issues) {
     }
     for (const field of requiredFields) {
       if (!strip(row[field])) {
-        addIssue(issues, "error", "VAL-PR-004", traceRef("proposal", "change-atom-coverage-register", index), `${globalAtomId} 缺少必填字段 ${field}。`);
+        const detail =
+          field === "owner-capability" && strip(row.capability)
+            ? "；owner-capability 是 canonical 字段，capability 不能替代它"
+            : "";
+        addIssue(issues, "error", "VAL-PR-004", traceRef("proposal", "change-atom-coverage-register", index), `${globalAtomId} 缺少必填字段 ${field}${detail}。`);
       }
     }
     rows.set(globalAtomId, row);
@@ -1581,13 +1602,24 @@ function compareProposalAuthorityFields(globalAtomId, expected, actual, ruleId, 
 }
 
 function validateProposalSourceWindowReadSet(proposal, packetRows, issues) {
+  if (!Array.isArray(proposal["source-window-read-set"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-009",
+      "trace/proposal.trace.json#/source-window-read-set",
+      "source-window-read-set 必须是数组，且每行必须包含 global-atom-id、source-document、line-range、source-fact 和 read-purpose。",
+    );
+  }
   const rows = asArray(proposal["source-window-read-set"]);
   const readRows = new Map();
+  const requiredFields = ["source-document", "line-range", "source-fact", "read-purpose"];
   for (const [index, row] of rows.entries()) {
     const ids = idsFromValue(row["global-atom-id"], GA_ID_RE);
     const ref = traceRef("proposal", "source-window-read-set", index);
     if (ids.length !== 1) {
-      addIssue(issues, "error", "VAL-PR-009", ref, "source-window-read-set 每行必须包含一个 exact GA ID。");
+      const aggregateHint = Array.isArray(row["atom-ids"]) ? "不得使用 atom-ids[] 聚合多个 GA；请拆成逐 global-atom-id 行。" : "source-window-read-set 每行必须包含一个 exact GA ID。";
+      addIssue(issues, "error", "VAL-PR-009", ref, aggregateHint);
       continue;
     }
     const globalAtomId = ids[0];
@@ -1600,17 +1632,26 @@ function validateProposalSourceWindowReadSet(proposal, packetRows, issues) {
     if (!packetRow) {
       continue;
     }
+    for (const field of requiredFields) {
+      if (!strip(row[field])) {
+        addIssue(issues, "error", "VAL-PR-009", ref, `${globalAtomId} 缺少必填字段 ${field}。`);
+      }
+    }
     const sourceDocument = normalizeTraceComparable(row["source-document"]);
     const lineRange = normalizeTraceComparable(row["line-range"] ?? row.lines);
-    const interpretation = normalizeTraceComparable(row["interpretation-result"]);
+    const sourceFact = normalizeTraceComparable(row["source-fact"]);
+    const interpretation = row["interpretation-result"];
     if (sourceDocument && sourceDocument !== normalizeTraceComparable(packetRow["source-document"])) {
       addIssue(issues, "error", "VAL-PR-009", ref, `${globalAtomId} 的 source-document 与 final packet 不一致。`);
     }
     if (lineRange && lineRange !== normalizeTraceComparable(packetRow.lines)) {
       addIssue(issues, "error", "VAL-PR-009", ref, `${globalAtomId} 的 line-range 与 final packet 不一致。`);
     }
-    if (interpretation && interpretation !== normalizeTraceComparable(packetRow["source-fact"])) {
-      addIssue(issues, "error", "VAL-PR-009", ref, `${globalAtomId} 的 interpretation-result 与 final packet source fact 不一致。`);
+    if (sourceFact && sourceFact !== normalizeTraceComparable(packetRow["source-fact"])) {
+      addIssue(issues, "error", "VAL-PR-009", ref, `${globalAtomId} 的 source-fact 与 final packet source fact 不一致。`);
+    }
+    if (Object.hasOwn(row, "interpretation-result") && !strip(interpretation)) {
+      addIssue(issues, "error", "VAL-PR-009", ref, `${globalAtomId} 的 interpretation-result 若出现则必须是非空中文解释。`);
     }
   }
   compareIdSets(
@@ -1624,10 +1665,34 @@ function validateProposalSourceWindowReadSet(proposal, packetRows, issues) {
 }
 
 function validateProposalProductionSourceCoverage(proposal, packetRows, issues) {
+  if (!Array.isArray(proposal["production-source-coverage"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-011",
+      "trace/proposal.trace.json#/production-source-coverage",
+      "production-source-coverage 必须是数组，每行包含 source-document、global-atom-ids[]、line-ranges[]、atom-count、artifact-projections[]、owner-capabilities[] 和 proposal-use。",
+    );
+  }
   const sourceCoverageRows = asArray(proposal["production-source-coverage"]);
   const covered = new Set();
+  const requiredFields = ["source-document", "global-atom-ids", "line-ranges", "atom-count", "artifact-projections", "owner-capabilities", "proposal-use"];
   for (const [index, row] of sourceCoverageRows.entries()) {
     const ref = traceRef("proposal", "production-source-coverage", index);
+    for (const field of requiredFields) {
+      if (field === "atom-count") {
+        if (!Number.isFinite(Number(row[field]))) {
+          addIssue(issues, "error", "VAL-PR-011", ref, "atom-count 必须是数字，并等于 global-atom-ids 数量。");
+        }
+      } else if (!strip(row[field])) {
+        addIssue(issues, "error", "VAL-PR-011", ref, `production-source-coverage 缺少必填字段 ${field}。`);
+      }
+    }
+    for (const field of ["global-atom-ids", "line-ranges", "artifact-projections", "owner-capabilities"]) {
+      if (!Array.isArray(row[field])) {
+        addIssue(issues, "error", "VAL-PR-011", ref, `${field} 必须是数组。`);
+      }
+    }
     const ids = idsFromValue(row["global-atom-ids"], GA_ID_RE);
     for (const id of ids) {
       covered.add(id);
@@ -1675,7 +1740,22 @@ function validateProposalAlignmentGate(proposal, packetRows, issues, expectedCha
       `proposal-alignment-gate.change-kind 必须与 final-packet-index.json 一致：应为 ${expectedChangeKind}，实际为 ${changeKind}。`,
     );
   }
+  if (!gate["direct-atoms"] || Array.isArray(gate["direct-atoms"]) || typeof gate["direct-atoms"] !== "object") {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-010",
+      "trace/proposal.trace.json#/proposal-alignment-gate/direct-atoms",
+      "proposal-alignment-gate.direct-atoms 必须是对象：{ count, ids, id-list-source }，不能写成裸数组。",
+    );
+  }
   const directAtoms = asObject(gate["direct-atoms"]);
+  if (!Array.isArray(directAtoms.ids)) {
+    addIssue(issues, "error", "VAL-PR-010", "trace/proposal.trace.json#/proposal-alignment-gate/direct-atoms", "direct-atoms.ids 必须是 GA ID 数组。");
+  }
+  if (!strip(directAtoms["id-list-source"])) {
+    addIssue(issues, "error", "VAL-PR-010", "trace/proposal.trace.json#/proposal-alignment-gate/direct-atoms", "direct-atoms 必须包含 id-list-source。");
+  }
   const gateIds = idsFromValue(directAtoms.ids, GA_ID_RE);
   compareIdSets(
     [...packetRows.keys()],
