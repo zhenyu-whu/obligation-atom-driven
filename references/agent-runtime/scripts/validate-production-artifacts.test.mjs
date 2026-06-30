@@ -186,10 +186,10 @@ test("proposal alignment gate direct-atoms 裸数组 hard fail", () => {
 });
 
 test("proposal overlay contract documents canonical obligation trace fields", () => {
-  const overlay = fs.readFileSync(
+  const overlay = fs.readFileSync(firstExistingPath([
     path.join(process.cwd(), "openspec", "schemas", "_production-contracts", "overlays", "production-obligation-atom-driven", "proposal.md"),
-    "utf8",
-  );
+    path.join(process.cwd(), "references", "profiles", "_production-contracts", "overlays", "production-obligation-atom-driven", "proposal.md"),
+  ]), "utf8");
   for (const required of [
     "owner-capability",
     "source-window-read-set[]",
@@ -203,6 +203,12 @@ test("proposal overlay contract documents canonical obligation trace fields", ()
     assert.match(overlay, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
   }
 });
+
+function firstExistingPath(paths) {
+  const found = paths.find((candidate) => fs.existsSync(candidate));
+  assert.ok(found, `expected one existing path from ${paths.join(", ")}`);
+  return found;
+}
 
 test("proposal 出现 foundation reference read-set hard fail", () => {
   const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
@@ -411,6 +417,15 @@ test("specs trace source 字段漂移 hard fail", () => {
   assertRule(result, "VAL-SP-012");
 });
 
+test("specs trace 缺少 source-projection hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true });
+  delete files.traces["specs/capability.trace.json"]["requirement-source-trace"][0]["source-projection"];
+  const root = makeChange("specs-source-projection-gap-change", files);
+  const result = validateChange({ root, change: "specs-source-projection-gap-change", complete: false });
+
+  assertRule(result, "VAL-SP-002");
+});
+
 test("specs trace requirement/scenario 锚点不存在 hard fail", () => {
   const files = standardFiles({ proposal: true, specs: true });
   files.traces["specs/capability.trace.json"]["requirement-source-trace"][0].scenario = "不存在的场景";
@@ -461,6 +476,16 @@ test("design production-source-map source 字段漂移 hard fail", () => {
   files.traces["design.trace.json"]["production-source-map"][0]["source-fact"] = "漂移事实。";
   const root = makeChange("design-source-field-change", files);
   const result = validateChange({ root, change: "design-source-field-change", complete: false });
+
+  assertRule(result, "VAL-DG-002");
+});
+
+test("design production-source-map 缺少 owner-capability hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  files.traces["design.trace.json"]["production-source-map"][0].capability = "capability";
+  delete files.traces["design.trace.json"]["production-source-map"][0]["owner-capability"];
+  const root = makeChange("design-owner-capability-gap-change", files);
+  const result = validateChange({ root, change: "design-owner-capability-gap-change", complete: false });
 
   assertRule(result, "VAL-DG-002");
 });
@@ -577,6 +602,38 @@ test("runtime upstream map 缺少 authority id/type hard fail", () => {
   assertRule(result, "VAL-RA-103");
 });
 
+test("runtime upstream map 缺少 projection/reason hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  const row = files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0];
+  delete row["projection-handling"];
+  row["runtime-row-ids"] = [];
+  row["coverage-mode"] = "not-applicable";
+  delete row["not-applicable-reason"];
+  const root = makeChange("runtime-upstream-required-fields-change", files);
+  const result = validateChange({ root, change: "runtime-upstream-required-fields-change", complete: false });
+
+  assertRule(result, "VAL-RA-103");
+});
+
+test("runtime upstream map 缺少 coverage-mode hard fail", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  delete files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["coverage-mode"];
+  const root = makeChange("runtime-upstream-mode-gap-change", files);
+  const result = validateChange({ root, change: "runtime-upstream-mode-gap-change", complete: false });
+
+  assertRule(result, "VAL-RA-103");
+});
+
+test("runtime proposal coverage 不能靠文本中出现 GA 闭合", () => {
+  const files = standardFiles({ proposal: true, specs: true, design: true });
+  files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["upstream-item-id"] = "proposal-direct-atom";
+  files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["coverage-note"] = "文本提到 GA-0001 但 upstream item 不是该 GA。";
+  const root = makeChange("runtime-proposal-text-mention-change", files);
+  const result = validateChange({ root, change: "runtime-proposal-text-mention-change", complete: false });
+
+  assertRule(result, "VAL-RA-104");
+});
+
 test("runtime upstream map 引用 foundation reference hard fail", () => {
   const files = standardFiles({ proposal: true, specs: true, design: true });
   files.traces["runtime-acceptance.trace.json"]["runtime-upstream-coverage-map"][0]["source-name"] =
@@ -685,6 +742,16 @@ test("proof-slices-v1 JSON slice 引用 foundation reference hard fail", () => {
   const result = validateChange({ root, change: "proof-slices-foundation-reference-change", complete: true });
 
   assertRule(result, "VAL-PST-040");
+});
+
+test("proof-slices-v1 canonical 字段缺失 hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  delete files.traces["verification.proof-slices.json"]["source-interface"];
+  delete files.traces["verification.proof-slices.json"]["proof-slices"][0]["oracle-fragment"];
+  const root = makeChange("proof-slices-required-fields-change", files);
+  const result = validateChange({ root, change: "proof-slices-required-fields-change", complete: true });
+
+  assertRule(result, "VAL-PST-014");
 });
 
 test("proof-slices-v1 reconciliation 引用不存在 JSON slice hard fail", () => {
@@ -884,6 +951,22 @@ test("tasks acceptance-driven-coverage 未覆盖 runtime rows hard fail", () => 
   assertRule(result, "VAL-TS-116");
 });
 
+test("tasks acceptance-driven-coverage 缺少必需 section hard fail", () => {
+  const files = standardFiles();
+  delete files.traces["tasks.trace.json"]["acceptance-driven-coverage"]["design-obligation-coverage"];
+  const root = makeChange("task-coverage-section-gap-change", files);
+  const result = validateChange({ root, change: "task-coverage-section-gap-change", complete: true });
+  assertRule(result, "VAL-TS-117");
+});
+
+test("tasks obligation-atom-coverage 聚合 GA hard fail", () => {
+  const files = standardFiles();
+  files.traces["tasks.trace.json"]["acceptance-driven-coverage"]["obligation-atom-coverage"][0]["global-atom-id"] = ["GA-0001", "GA-0002"];
+  const root = makeChange("task-coverage-aggregate-ga-change", files);
+  const result = validateChange({ root, change: "task-coverage-aggregate-ga-change", complete: true });
+  assertRule(result, "VAL-TS-117");
+});
+
 test("AC graph cycle 或后置 dependency hard fail", () => {
   const files = standardFiles({ secondAc: true });
   const ownership = files.traces["tasks.trace.json"]["runtime-acceptance-index"]["ac-runtime-ownership-index"];
@@ -912,6 +995,16 @@ test("verification reconciliation expected slice 不存在、missing 非空、co
   const result = validateChange({ root, change: "bad-reconciliation-change", complete: true });
   assertRule(result, "VAL-RC-003");
   assertRule(result, "VAL-RC-004");
+});
+
+test("verification reconciliation 缺少必填闭环字段 hard fail", () => {
+  const files = standardFiles();
+  delete files.traces["verification.trace.json"]["runtime-coverage-reconciliation"][0]["coverage-status"];
+  delete files.traces["verification.trace.json"]["runtime-coverage-reconciliation"][0]["gap-not-covered-reason"];
+  const root = makeChange("reconciliation-required-fields-change", files);
+  const result = validateChange({ root, change: "reconciliation-required-fields-change", complete: true });
+
+  assertRule(result, "VAL-RC-008");
 });
 
 test("verification reconciliation 未覆盖 runtime row hard fail", () => {
@@ -1532,7 +1625,7 @@ function designTrace(gaId, options = {}) {
       {
         "source-map-row-id": "PSM-001",
         "global-atom-id": gaId,
-        capability,
+        "owner-capability": capability,
         "source-document": "docs/source.md",
         lines: "L1-L2",
         "atom-type": "requirement",
@@ -1544,7 +1637,7 @@ function designTrace(gaId, options = {}) {
           {
             "trace-path": "trace/specs/capability.trace.json",
             "trace-pointer": "#/requirement-source-trace/0",
-            capability,
+            "owner-capability": capability,
             requirement: "登录态 actor 解析",
             scenario: "解析登录态 actor",
             "spec-handling": "direct-spec-requirement",
@@ -1571,7 +1664,7 @@ function designTrace(gaId, options = {}) {
         item: gaId,
         "obligation-kind": "spec-requirement-design-placement",
         "global-atom-id": gaId,
-        capability,
+        "owner-capability": capability,
         "artifact-projection": "spec-requirement",
         "source-fact": "事实。",
         "spec-scenario-anchors": ["capability::登录态 actor 解析::解析登录态 actor"],
@@ -1588,7 +1681,7 @@ function designTrace(gaId, options = {}) {
       "direct-atom-handling": [
         {
           "global-atom-id": gaId,
-          capability,
+          "owner-capability": capability,
           "source-document": "docs/source.md",
           lines: "L1-L2",
           "artifact-projection": "spec-requirement",

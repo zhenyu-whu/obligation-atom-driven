@@ -42,6 +42,7 @@
 ## JSON Trace Plane
 
 - 必须写入 `trace/design.trace.json`，包含 source/scope map 和 production alignment gate。
+- `production-source-map[]` 的每个 direct source row 必须镜像 proposal register 的 `global-atom-id`、`source-document`、`lines`、`atom-type`、`source-fact`、`normativity`、`artifact-projection` 和 `owner-capability`；`owner-capability` 是 canonical 字段，不能用 legacy `capability` 替代。
 - Gate 必须确认每个 scenario、design obligation、guard、implementation placement 和 proof expectation 都有 design handling 或 blocker。
 - Exact source/scope mapping 只写 JSON trace，不写 Delivery Plane coverage column。
 - artifact 末尾只保留短 `## Trace Appendix` 指针块。

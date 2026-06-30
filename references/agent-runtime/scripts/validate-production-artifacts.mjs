@@ -238,7 +238,7 @@ export function validateChange(options = {}) {
   validateVerificationReconciliation(trace.get("verification"), proofSlices, runtimeRows, issues);
   validateSourceScopeTrace(trace, schemaKind, files, issues);
   validateRuntimeCoverageTrace(trace.get("runtime-acceptance"), runtimeRows, trace, issues, changeContext);
-  validateTasksTrace(trace.get("tasks"), runtimeRows, taskModel, issues);
+  validateTasksTrace(trace.get("tasks"), runtimeRows, taskModel, schemaKind, issues);
 
   return summarize(issues);
 }
@@ -745,13 +745,26 @@ function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
   if (trace["artifact-path"] !== "verification.md") {
     addIssue(issues, "error", "VAL-PST-007", PROOF_SLICES_TRACE_PATH, "artifact-path 必须为 verification.md。");
   }
+  for (const field of ["change-name", "schema-name", "source-interface", "proof-slice-summary", "proof-slices"]) {
+    if (!(field in trace)) {
+      addIssue(issues, "error", "VAL-PST-014", PROOF_SLICES_TRACE_PATH, `verification.proof-slices.json 缺少顶层字段 ${field}。`);
+    }
+  }
+  if (trace["source-interface"] && (typeof trace["source-interface"] !== "object" || Array.isArray(trace["source-interface"]))) {
+    addIssue(issues, "error", "VAL-PST-014", PROOF_SLICES_TRACE_PATH, "source-interface 必须是 object。");
+  }
+  if (!trace["proof-slice-summary"] || typeof trace["proof-slice-summary"] !== "object" || Array.isArray(trace["proof-slice-summary"])) {
+    addIssue(issues, "error", "VAL-PST-009", PROOF_SLICES_TRACE_PATH, "proof-slice-summary 必须是 object，并声明 proof-slice-count。");
+  }
 
   const rows = asArray(trace["proof-slices"]);
   if (rows.length === 0) {
     addIssue(issues, "error", "VAL-PST-008", PROOF_SLICES_TRACE_PATH, "proof-slices 必须至少包含一行。");
   }
   const summaryCount = Number(trace["proof-slice-summary"]?.["proof-slice-count"]);
-  if (Number.isFinite(summaryCount) && summaryCount !== rows.length) {
+  if (!Number.isFinite(summaryCount)) {
+    addIssue(issues, "error", "VAL-PST-009", PROOF_SLICES_TRACE_PATH, "proof-slice-summary.proof-slice-count 必须是数字。");
+  } else if (summaryCount !== rows.length) {
     addIssue(
       issues,
       "error",
@@ -763,6 +776,7 @@ function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
 
   for (const [index, row] of rows.entries()) {
     const ref = `${PROOF_SLICES_TRACE_PATH}#/proof-slices/${index}`;
+    validateProofSliceRequiredFields(row, ref, issues);
     if (mentionsFoundationReference(row)) {
       addIssue(issues, "error", "VAL-PST-040", ref, "foundation reference 不得作为 Proof Slice coverage source。");
     }
@@ -792,6 +806,32 @@ function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
     }
   }
   return slices;
+}
+
+function validateProofSliceRequiredFields(row, ref, issues) {
+  const requiredScalarFields = [
+    "slice-id",
+    "primary-runtime-row-id",
+    "primitive-type",
+    "branch-variant",
+    "observable-surface",
+    "oracle-fragment",
+    "failure-signal",
+    "primary-layer",
+    "production-owner",
+    "primary-assertion-shape",
+    "fixture-mock-boundary",
+    "regression-intent",
+    "manual-environment-gate",
+  ];
+  if (idsFromValue(row["runtime-row-ids"], RUNTIME_ROW_RE).length === 0) {
+    addIssue(issues, "error", "VAL-PST-014", ref, "Proof Slice row 缺少 runtime-row-ids。");
+  }
+  for (const field of requiredScalarFields) {
+    if (!strip(row[field])) {
+      addIssue(issues, "error", "VAL-PST-014", ref, `Proof Slice row 缺少 ${field}。`);
+    }
+  }
 }
 
 function validateProofSliceTestContract(contract, sliceId, ref, issues) {
@@ -877,6 +917,18 @@ function validateVerificationReconciliation(trace, proofSlices, runtimeRows, iss
     const expected = idsFromValue(row["expected-proof-slice-ids"], PROOF_SLICE_RE);
     const missing = idsFromValue(row["missing-proof-slice-ids"], PROOF_SLICE_RE);
     const status = strip(row["coverage-status"]).toLowerCase();
+    if (!Object.hasOwn(row, "expected-proof-slice-ids")) {
+      addIssue(issues, "error", "VAL-RC-008", ref, `${runtimeRowId || "(unknown)"} 缺少 expected-proof-slice-ids。`);
+    }
+    if (!Object.hasOwn(row, "missing-proof-slice-ids")) {
+      addIssue(issues, "error", "VAL-RC-008", ref, `${runtimeRowId || "(unknown)"} 缺少 missing-proof-slice-ids。`);
+    }
+    if (!status) {
+      addIssue(issues, "error", "VAL-RC-008", ref, `${runtimeRowId || "(unknown)"} 缺少 coverage-status。`);
+    }
+    if (!strip(row["gap-not-covered-reason"] ?? row["gap-reason"] ?? row["not-covered-reason"])) {
+      addIssue(issues, "error", "VAL-RC-008", ref, `${runtimeRowId || "(unknown)"} 缺少 gap/not-covered reason。`);
+    }
     for (const sliceId of expected) {
       if (!proofSlices.has(sliceId)) {
         addIssue(issues, "error", "VAL-RC-003", ref, `${runtimeRowId} expected slice ${sliceId} 不存在。`);
@@ -1830,7 +1882,10 @@ function validateObligationSpecsTraceProjection(trace, registeredRows, files, is
       validateSpecsTraceMarkdownAnchor(row, specFile, anchors, ref, issues);
 
       const proposalProjection = strip(proposalRow["artifact-projection"]);
-      const sourceProjection = strip(row["source-projection"] ?? row["artifact-projection"] ?? row["projection"]);
+      const sourceProjection = strip(row["source-projection"]);
+      if (!sourceProjection) {
+        addIssue(issues, "error", "VAL-SP-002", ref, `${globalAtomId} requirement-source-trace 缺少必填字段 source-projection。`);
+      }
       if (sourceProjection && sourceProjection !== proposalProjection) {
         addIssue(issues, "error", "VAL-SP-002", ref, `${globalAtomId} source-projection 必须保留 proposal projection ${proposalProjection}。`);
       }
@@ -2010,7 +2065,7 @@ function validateDesignSourceFields(productionSourceRows, registeredRows, issues
     ["source-fact", "source-fact"],
     ["normativity", "normativity"],
     ["artifact-projection", "artifact-projection"],
-    ["capability", "owner-capability"],
+    ["owner-capability", "owner-capability"],
   ];
 
   for (const [globalAtomId, { row, index }] of productionSourceRows.entries()) {
@@ -2023,7 +2078,11 @@ function validateDesignSourceFields(productionSourceRows, registeredRows, issues
       const expectedValue = normalizeTraceComparable(proposalRow[proposalField] ?? proposalRow[designField]);
       const actualValue = normalizeTraceComparable(row[designField]);
       if (expectedValue && !actualValue) {
-        addIssue(issues, "error", "VAL-DG-002", ref, `${globalAtomId} production-source-map 缺少 ${designField}。`);
+        const detail =
+          designField === "owner-capability" && strip(row.capability)
+            ? "；owner-capability 是 canonical 字段，capability 不能替代它"
+            : "";
+        addIssue(issues, "error", "VAL-DG-002", ref, `${globalAtomId} production-source-map 缺少 ${designField}${detail}。`);
       } else if (expectedValue && actualValue !== expectedValue) {
         addIssue(
           issues,
@@ -2379,8 +2438,22 @@ function parseRuntimeUpstreamCoverage(runtimeTrace, runtimeRows, issues, changeC
     }
 
     const mode = strip(row["coverage-mode"]).toLowerCase();
+    if (!mode) {
+      addIssue(issues, "error", "VAL-RA-103", ref, "runtime-upstream-coverage-map 每行必须声明 coverage-mode。");
+    }
+    const projectionHandling = strip(row["projection-handling"] ?? row["artifact-projection"] ?? row["source-projection"] ?? row.handling);
+    if (!projectionHandling) {
+      addIssue(issues, "error", "VAL-RA-103", ref, "runtime-upstream-coverage-map 每行必须声明 projection-handling。");
+    }
     const rowIds = idsFromValue(row["runtime-row-ids"], RUNTIME_ROW_RE);
-    if (!mode.includes("not-applicable") && rowIds.length === 0) {
+    const notApplicable = mode.includes("not-applicable");
+    if (notApplicable) {
+      const reason = strip(row["not-applicable-reason"] ?? row.reason ?? row["coverage-reason"] ?? row["applicability-reason"]);
+      if (!reason) {
+        addIssue(issues, "error", "VAL-RA-103", ref, "not-applicable upstream item 必须记录 source-backed not-applicable reason。");
+      }
+    }
+    if (!notApplicable && rowIds.length === 0) {
       addIssue(issues, "error", "VAL-RA-101", ref, "covered upstream item 必须映射到至少一个 runtime row。");
     }
     if (foundationMode) {
@@ -2481,7 +2554,7 @@ function validateRuntimeProposalCoverage(tracePlane, upstreamRecords, issues) {
   for (const row of asArray(proposal["change-atom-coverage-register"])) {
     expected.push(...idsFromValue(row["global-atom-id"], GA_ID_RE));
   }
-  const covered = new Set(upstreamRecords.flatMap((record) => record.machineIds.filter(isGaId)));
+  const covered = new Set(upstreamRecords.map((record) => record.upstreamItemId).filter(isGaId));
   compareIdSets(
     unique(expected),
     [...covered],
@@ -2607,7 +2680,7 @@ function isDesignDecisionId(value) {
   return /^D-\d{3}$/u.test(strip(value));
 }
 
-function validateTasksTrace(trace, runtimeRows, taskModel, issues) {
+function validateTasksTrace(trace, runtimeRows, taskModel, schemaKind, issues) {
   if (!trace) {
     return;
   }
@@ -2709,12 +2782,22 @@ function validateTasksTrace(trace, runtimeRows, taskModel, issues) {
     acById,
     taskModel,
     { projectedRuntimeRows, ownerByRuntimeRow },
+    schemaKind,
     issues,
   );
 }
 
-function validateTasksAcceptanceDrivenCoverage(trace, runtimeRows, acById, taskModel, projectionModel, issues) {
+function validateTasksAcceptanceDrivenCoverage(trace, runtimeRows, acById, taskModel, projectionModel, schemaKind, issues) {
   const coverage = asObject(trace["acceptance-driven-coverage"]);
+  const requiredSections =
+    schemaKind === "default"
+      ? ["scope-item-coverage", "requirement-scenario-coverage", "design-decision-coverage"]
+      : ["obligation-atom-coverage", "requirement-scenario-coverage", "design-obligation-coverage"];
+  for (const section of requiredSections) {
+    if (!Object.hasOwn(coverage, section)) {
+      addIssue(issues, "error", "VAL-TS-117", `trace/tasks.trace.json#/acceptance-driven-coverage/${section}`, `${section} section 必须存在。`);
+    }
+  }
   const coveredRuntimeRows = new Set();
   for (const [sectionKey, rowsValue] of Object.entries(coverage)) {
     if (!Array.isArray(rowsValue)) {
@@ -2727,6 +2810,18 @@ function validateTasksAcceptanceDrivenCoverage(trace, runtimeRows, acById, taskM
       const acIds = idsFromValue(row["acceptance-slice-ids"], AC_ID_RE);
       const taskIds = idsFromValue(row["implementation-task-ids"], TASK_ID_RE);
       const status = strip(row["coverage-status"]).toLowerCase();
+      if (schemaKind === "obligation" && sectionKey === "obligation-atom-coverage") {
+        const gaIds = idsFromValue(row["global-atom-id"], GA_ID_RE);
+        if (gaIds.length !== 1) {
+          addIssue(issues, "error", "VAL-TS-117", ref, "obligation-atom-coverage 每行必须包含一个 exact global-atom-id。");
+        }
+      }
+      if (schemaKind === "default" && sectionKey === "scope-item-coverage") {
+        const scopeItemIds = idsFromValue(row["scope-item-id"] ?? row["global-atom-id"], SI_ID_RE);
+        if (scopeItemIds.length !== 1) {
+          addIssue(issues, "error", "VAL-TS-117", ref, "scope-item-coverage 每行必须包含一个 exact scope-item-id。");
+        }
+      }
 
       if (status.includes("projected") && (runtimeRowIds.length === 0 || acIds.length === 0 || taskIds.length === 0)) {
         addIssue(issues, "error", "VAL-TS-114", ref, "projected coverage row 必须同时填写 runtime-row-ids、acceptance-slice-ids 和 implementation-task-ids。");
