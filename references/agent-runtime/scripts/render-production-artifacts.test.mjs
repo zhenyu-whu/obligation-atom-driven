@@ -5,7 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { RENDER_CONTRACT_VERSION, renderChangeArtifact } from "./render-production-artifacts.mjs";
+import {
+  NO_DELTA_SPECS_ARTIFACT_PATH,
+  NO_DELTA_SPECS_COMPLETION_MODE,
+  RENDER_CONTRACT_VERSION,
+  renderChangeArtifact,
+} from "./render-production-artifacts.mjs";
 
 test("renderer 从 trace fixture 渲染 proposal/spec/design/runtime/tasks", () => {
   const root = makeRenderChange("render-all-change");
@@ -130,6 +135,31 @@ test("renderer --write 更新 artifact 和 manifest digest 且重复运行稳定
   assertManifestDigest(manifest, "trace/verification.proof-slices.json", root);
 });
 
+test("renderer --no-delta-specs --write 生成 no-delta marker 与 manifest entry", () => {
+  const change = "render-no-delta-specs-change";
+  const root = makeRenderChange(change);
+  const changeDir = path.join(root, "openspec", "changes", change);
+  const traceDir = path.join(changeDir, "trace");
+  writeTrace(traceDir, "specs/no-spec-delta/README.trace.json", noDeltaSpecsTrace());
+
+  const result = renderChangeArtifact({ root, change, artifact: "specs", noDeltaSpecs: true, write: true });
+
+  assert.equal(result.artifactPath, NO_DELTA_SPECS_ARTIFACT_PATH);
+  assert.equal(result.tracePath, "trace/specs/no-spec-delta/README.trace.json");
+  const markdown = fs.readFileSync(path.join(changeDir, NO_DELTA_SPECS_ARTIFACT_PATH), "utf8");
+  assert.match(markdown, /## No Spec Delta\n\n- 本 change 无 OpenSpec delta spec。/);
+  assert.match(markdown, /## Projection Closure\n\n- projection closure 进入 design\/runtime-acceptance\/verification\/tasks。/);
+  assert.doesNotMatch(markdown, /## (?:ADDED|MODIFIED|REMOVED|RENAMED) Requirements/);
+  assert.doesNotMatch(markdown, /#{3,4} (?:Requirement|Scenario):/);
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(changeDir, "trace", "manifest.json"), "utf8"));
+  const entry = manifest.artifacts.find((artifact) => artifact["artifact-path"] === NO_DELTA_SPECS_ARTIFACT_PATH);
+  assert.ok(entry);
+  assert.equal(entry["artifact-id"], "specs");
+  assert.equal(entry["trace-path"], "trace/specs/no-spec-delta/README.trace.json");
+  assertManifestDigest(manifest, "trace/specs/no-spec-delta/README.trace.json", root, change);
+});
+
 function makeRenderChange(change) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-renderer-"));
   const changeDir = path.join(root, "openspec", "changes", change);
@@ -222,6 +252,18 @@ function specsTrace() {
       },
     ],
   });
+}
+
+function noDeltaSpecsTrace() {
+  const value = trace("specs", NO_DELTA_SPECS_ARTIFACT_PATH, {
+    "completion-mode": NO_DELTA_SPECS_COMPLETION_MODE,
+    summary: ["- 本 change 无 OpenSpec delta spec。"],
+    "projection-closure": ["- projection closure 进入 design/runtime-acceptance/verification/tasks。"],
+  });
+  value["schema-name"] = "production-obligation-atom-driven";
+  value["specs-completion-mode"] = NO_DELTA_SPECS_COMPLETION_MODE;
+  value["production-alignment-gate"] = { blockers: [] };
+  return value;
 }
 
 function designTrace() {
@@ -334,6 +376,8 @@ function proofSlicesTrace() {
         "failure-signal": "actor 缺失。",
         "primary-layer": "security/negative",
         "production-owner": "apps/web",
+        "persistent-test-required": true,
+        "proof-evidence-mode": "durable-test",
         "primary-assertion-shape": "authorization result",
         "fixture-mock-boundary": "session fixture",
         "regression-intent": "high",
@@ -349,10 +393,10 @@ function writeTrace(traceDir, relPath, value) {
   fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function assertManifestDigest(manifest, tracePath, root) {
+function assertManifestDigest(manifest, tracePath, root, change = "render-write-change") {
   const entry = manifest.artifacts.find((artifact) => artifact["trace-path"] === tracePath);
   assert.ok(entry, `missing manifest entry for ${tracePath}`);
-  const fullPath = path.join(root, "openspec", "changes", "render-write-change", tracePath);
+  const fullPath = path.join(root, "openspec", "changes", change, tracePath);
   const digest = `sha256-${crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex")}`;
   assert.equal(entry["trace-digest"], digest);
 }

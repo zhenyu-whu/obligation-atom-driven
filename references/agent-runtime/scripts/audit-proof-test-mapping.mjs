@@ -6,7 +6,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  isAutomatedProofSliceRequired,
+  isForbiddenTestPlacement,
+  isPersistentTestRequired,
+  isProofEvidenceRequired,
   isPlacementAllowed,
 } from "./proof-slice-placement-policy.mjs";
 
@@ -15,6 +17,7 @@ const PROOF_TEST_MAP_SCHEMA = "openspec-proof-test-map-v1";
 const PROOF_SLICE_RE = /\bPS-\d{3}\b/g;
 const KNOWN_EXECUTION_SCOPES = new Set(["focused-test", "containing-file", "related-suite", "workspace"]);
 const ROBUST_EXECUTION_SCOPES = new Set(["containing-file", "related-suite", "workspace"]);
+const ACCEPTED_EVIDENCE_STATUSES = new Set(["passed", "manual", "manual-environment", "manual-complete", "manual-environment-complete"]);
 
 export function auditProofTestMapping(options = {}) {
   const root = options.root ?? process.cwd();
@@ -59,10 +62,14 @@ export function auditProofTestMapping(options = {}) {
     proofSlices.set(sliceId, row);
   }
 
-  const requiredSliceIds = [...proofSlices.values()]
-    .filter((row) => isAutomatedProofSliceRequired(row))
+  const durableSliceIds = [...proofSlices.values()]
+    .filter((row) => isPersistentTestRequired(row))
     .map((row) => strip(row["slice-id"]));
-  const requiredSliceSet = new Set(requiredSliceIds);
+  const durableSliceSet = new Set(durableSliceIds);
+  const evidenceSliceIds = [...proofSlices.values()]
+    .filter((row) => isProofEvidenceRequired(row))
+    .map((row) => strip(row["slice-id"]));
+  const evidenceSliceSet = new Set(evidenceSliceIds);
 
   const mapRows = asArray(proofTestMap["proof-test-results"]);
   const rowsBySlice = new Map();
@@ -79,25 +86,53 @@ export function auditProofTestMapping(options = {}) {
     rowsBySlice.get(sliceId).push({ row, index });
   }
 
-  for (const sliceId of requiredSliceIds) {
+  const evidenceRows = asArray(proofTestMap["proof-evidence-results"]);
+  const evidenceRowsBySlice = new Map();
+  for (const [index, row] of evidenceRows.entries()) {
+    const sliceId = strip(row["slice-id"]);
+    if (!/^PS-\d{3}$/.test(sliceId)) {
+      addIssue(issues, "error", "MAP-EV-002", `proof-evidence-results/${index}`, `slice-id 非法：${sliceId || "(empty)"}。`);
+      continue;
+    }
+    if (!proofSlices.has(sliceId)) {
+      addIssue(issues, "error", "MAP-EV-003", `proof-evidence-results/${index}`, `${sliceId} 不存在于 proof-slices JSON。`);
+    }
+    if (!evidenceRowsBySlice.has(sliceId)) evidenceRowsBySlice.set(sliceId, []);
+    evidenceRowsBySlice.get(sliceId).push({ row, index });
+  }
+
+  for (const sliceId of durableSliceIds) {
     const rows = rowsBySlice.get(sliceId) ?? [];
     if (rows.length === 0) {
-      addIssue(issues, "error", "MAP-TM-004", sliceId, "required Proof Slice 缺少 primary test mapping。");
+      addIssue(issues, "error", "MAP-TM-004", sliceId, "persistent-test-required Proof Slice 缺少 primary test mapping。");
     } else if (rows.length > 1) {
-      addIssue(issues, "error", "MAP-TM-005", sliceId, "required Proof Slice 只能有一个 primary test mapping。");
+      addIssue(issues, "error", "MAP-TM-005", sliceId, "persistent-test-required Proof Slice 只能有一个 primary test mapping。");
+    }
+  }
+
+  for (const sliceId of evidenceSliceIds) {
+    const rows = evidenceRowsBySlice.get(sliceId) ?? [];
+    if (rows.length === 0) {
+      addIssue(issues, "error", "MAP-EV-004", sliceId, "non-persistent Proof Slice 缺少 proof evidence result。");
+    } else if (rows.length > 1) {
+      addIssue(issues, "error", "MAP-EV-005", sliceId, "non-persistent Proof Slice 只能有一个 proof evidence result。");
     }
   }
 
   const discoveredTests =
-    options.discoveredTests ??
-    discoverRunnerTests(root, issues, options.runnerOutputs);
+    mapRows.length > 0
+      ? (options.discoveredTests ?? discoverRunnerTests(root, issues, options.runnerOutputs))
+      : [];
   for (const { row, index } of mapRowsWithIndex(mapRows)) {
     const sliceId = strip(row["slice-id"]);
     const slice = proofSlices.get(sliceId);
     const ref = `proof-test-results/${index}`;
     if (!slice) continue;
 
-    if (requiredSliceSet.has(sliceId) && strip(row.status).toLowerCase() !== "passed") {
+    if (!durableSliceSet.has(sliceId)) {
+      addIssue(issues, "error", "MAP-TM-014", ref, `${sliceId} 不需要持久测试，不得写入 proof-test-results。`);
+    }
+    if (durableSliceSet.has(sliceId) && strip(row.status).toLowerCase() !== "passed") {
       addIssue(issues, "error", "MAP-TM-006", ref, `${sliceId} status 必须为 passed。`);
     }
     const title = strip(row["test-title"]);
@@ -105,14 +140,44 @@ export function auditProofTestMapping(options = {}) {
       addIssue(issues, "error", "MAP-TM-007", ref, `${sliceId} test-title 必须以 exact ${sliceId} 开头且只包含一个 PS。`);
     }
     const file = strip(row.file);
-    if (!isPlacementAllowed(file, slice)) {
-      addIssue(issues, "error", "MAP-TM-008", ref, `${sliceId} 测试文件落位不符合 Production Owner + Primary Layer：${file || "(empty)"}。`);
+    if (!isPlacementAllowed(file, slice) || isForbiddenTestPlacement(file)) {
+      addIssue(issues, "error", "MAP-TM-008", ref, `${sliceId} 测试文件落位在 forbidden placement 或非外置 tests 目录：${file || "(empty)"}。`);
     }
     if (!isDiscovered(discoveredTests, row)) {
       addIssue(issues, "error", "MAP-TM-009", ref, `${sliceId} 映射的 test-title 未被 runner list 发现。`);
     }
-    if (requiredSliceSet.has(sliceId) && requiresRobustExecution(slice) && strip(row.status).toLowerCase() === "passed") {
+    if (durableSliceSet.has(sliceId) && requiresRobustExecution(slice) && strip(row.status).toLowerCase() === "passed") {
       auditRobustExecutionEvidence(row, sliceId, ref, issues);
+    }
+  }
+
+  for (const { row, index } of mapRowsWithIndex(evidenceRows)) {
+    const sliceId = strip(row["slice-id"]);
+    const slice = proofSlices.get(sliceId);
+    const ref = `proof-evidence-results/${index}`;
+    if (!slice) continue;
+    if (!evidenceSliceSet.has(sliceId)) {
+      addIssue(issues, "error", "MAP-EV-014", ref, `${sliceId} 需要持久测试，不得只写入 proof-evidence-results。`);
+    }
+    const status = strip(row.status).toLowerCase();
+    if (!ACCEPTED_EVIDENCE_STATUSES.has(status)) {
+      addIssue(issues, "error", "MAP-EV-006", ref, `${sliceId} proof evidence status 必须为 passed 或 manual environment completed。`);
+    }
+    const mode = strip(row["proof-evidence-mode"] ?? row["evidence-mode"]);
+    const expectedMode = strip(slice["proof-evidence-mode"]);
+    if (mode !== expectedMode) {
+      addIssue(issues, "error", "MAP-EV-007", ref, `${sliceId} proof-evidence-mode 必须等于 canonical slice：${expectedMode || "(empty)"}。`);
+    }
+    if (status === "passed") {
+      if (!strip(row.command)) {
+        addIssue(issues, "error", "MAP-EV-008", ref, `${sliceId} passed evidence 必须记录 command。`);
+      }
+      const exitStatus = exitStatusValue(row);
+      if (exitStatus !== 0) {
+        addIssue(issues, "error", "MAP-EV-009", ref, `${sliceId} passed evidence 必须记录 0 exit status。`);
+      }
+    } else if (!strip(row.reason ?? row["manual-environment-reason"] ?? row["evidence-reason"])) {
+      addIssue(issues, "error", "MAP-EV-010", ref, `${sliceId} manual evidence 必须记录 reason。`);
     }
   }
 

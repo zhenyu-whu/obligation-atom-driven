@@ -16,7 +16,7 @@
 
 ### New Capabilities
 
-<!-- 描述新增 capabilities。将 <name> 替换为 kebab-case identifier；只有包含 spec-requirement 或 spec-guard delta 的 capability 才会创建 specs/<name>/spec.md。纯 design-obligation / verification-obligation capability 不创建空 spec。 -->
+<!-- 描述新增 capabilities。将 <name> 替换为 kebab-case identifier；只有包含 spec-requirement 或 spec-guard delta 的 capability 才会创建 specs/<name>/spec.md。纯 design-obligation / verification-obligation capability 不创建空 spec；若整个 change 无 spec-level delta，specs artifact 用 specs/no-spec-delta/README.md marker 完成。 -->
 
 - `<name>`: <概述该 capability 的交付范围、行为边界和 readiness 要求；exact atom mapping 写入 JSON trace>
 

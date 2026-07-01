@@ -6,7 +6,7 @@
 
 ## 写入前
 
-- 读取 proposal、所有实际生成的 delta specs 和 design。
+- 读取 proposal、所有实际生成的 delta specs 或 `specs/no-spec-delta/README.md` marker，以及 design。
 - 建立 upstream runtime obligation inventory：每个 material source/scope item、in-scope spec scenario、material design decision/obligation、guard 和 proof handling item 都必须成为 inventory item；非 runtime item 必须记录 source/scope-backed not-applicable reason。
 - 从上游 artifacts 抽取 runtime surfaces、operations、states/branches、async/realtime chains，以及 explicit no-async/no-worker/no-queue/no-side-effect preserve boundaries。
 - 对每个 upstream item 分配一个或多个具体 runtime row IDs；不得只用主题汇总行、closure checklist 或聚合行表示覆盖。

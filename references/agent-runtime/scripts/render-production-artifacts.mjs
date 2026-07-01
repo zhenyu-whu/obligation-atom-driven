@@ -10,6 +10,8 @@ export const TRACE_CONTRACT_VERSION = "proof-slices-v1";
 export const TRACE_SCHEMA = "openspec-trace-v1";
 export const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
 export const PROOF_SLICES_TRACE_PATH = "trace/verification.proof-slices.json";
+export const NO_DELTA_SPECS_ARTIFACT_PATH = "specs/no-spec-delta/README.md";
+export const NO_DELTA_SPECS_COMPLETION_MODE = "no-delta";
 
 export class RenderContractError extends Error {
   constructor(ruleId, file, message) {
@@ -32,7 +34,7 @@ export function renderChangeArtifact(options = {}) {
   }
 
   const changeDir = path.join(root, "openspec", "changes", change);
-  const artifactPath = artifactPathForRequest(artifact, options.capability);
+  const artifactPath = artifactPathForRequest(artifact, options);
   const tracePath = tracePathForArtifactPath(artifactPath);
   const traceFullPath = path.join(changeDir, tracePath);
   const trace = readJson(traceFullPath);
@@ -140,6 +142,9 @@ function renderProposalDelivery(delivery) {
 }
 
 function renderSpecsDelivery(delivery) {
+  if (strip(delivery["completion-mode"]) === NO_DELTA_SPECS_COMPLETION_MODE) {
+    return renderNoDeltaSpecsDelivery(delivery);
+  }
   const sections = [
     ["ADDED Requirements", delivery["added-requirements"], true],
     ["MODIFIED Requirements", delivery["modified-requirements"], false],
@@ -158,6 +163,13 @@ function renderSpecsDelivery(delivery) {
     output += `## ${heading}\n\n${rows.map(renderRequirement).join("\n")}`;
   }
   return output;
+}
+
+function renderNoDeltaSpecsDelivery(delivery) {
+  return [
+    renderSection("No Spec Delta", requireText(delivery.summary, "specs.delivery-plane.summary")),
+    renderSection("Projection Closure", requireText(delivery["projection-closure"], "specs.delivery-plane.projection-closure")),
+  ].join("");
 }
 
 function renderRequirement(requirement) {
@@ -366,7 +378,7 @@ function renderVerificationDelivery(delivery, proofSlicesTrace) {
   }
   const proofRows = asArray(proofSlicesTrace["proof-slices"]).map((slice) => {
       const runtimeRows = asArray(slice["runtime-row-ids"]).join(", ");
-      return `| ${cell(slice["slice-id"])} | ${cell(runtimeRows)} | ${cell(slice["primary-runtime-row-id"])} | ${cell(slice["primitive-type"])} | ${cell(slice["branch-variant"])} | ${cell(slice["observable-surface"])} | ${cell(slice["oracle-fragment"])} | ${cell(slice["failure-signal"])} | ${cell(slice["primary-layer"])} | ${cell(slice["production-owner"])} | ${cell(slice["primary-assertion-shape"])} | ${cell(slice["fixture-mock-boundary"])} | ${cell(slice["regression-intent"])} | ${cell(slice["manual-environment-gate"])} |`;
+      return `| ${cell(slice["slice-id"])} | ${cell(runtimeRows)} | ${cell(slice["primary-runtime-row-id"])} | ${cell(slice["primitive-type"])} | ${cell(slice["branch-variant"])} | ${cell(slice["observable-surface"])} | ${cell(slice["oracle-fragment"])} | ${cell(slice["failure-signal"])} | ${cell(slice["primary-layer"])} | ${cell(slice["production-owner"])} | ${cell(slice["persistent-test-required"])} | ${cell(slice["proof-evidence-mode"])} | ${cell(slice["primary-assertion-shape"])} | ${cell(slice["fixture-mock-boundary"])} | ${cell(slice["regression-intent"])} | ${cell(slice["manual-environment-gate"])} |`;
   });
   return `## Verification Intent
 
@@ -378,8 +390,8 @@ ${renderIntentList(delivery["verification-intent"], [
 
 ## Proof Slice Matrix
 
-| Slice ID | Runtime Row IDs | Primary Runtime Row ID | Primitive Type | Branch / Variant | Observable Surface | Oracle Fragment | Failure Signal | Primary Layer | Production Owner | Primary Assertion Shape | Fixture / Mock Boundary | Regression Intent | Manual / Environment Gate |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Slice ID | Runtime Row IDs | Primary Runtime Row ID | Primitive Type | Branch / Variant | Observable Surface | Oracle Fragment | Failure Signal | Primary Layer | Production Owner | Persistent Test Required | Proof Evidence Mode | Primary Assertion Shape | Fixture / Mock Boundary | Regression Intent | Manual / Environment Gate |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${proofRows.join("\n")}
 
 ## Layer / Harness / Fixture Notes
@@ -572,13 +584,20 @@ function renderMarkdownTableLines(headers, rows, keys) {
   ].join("\n");
 }
 
-function artifactPathForRequest(artifact, capability = "") {
+function artifactPathForRequest(artifact, options = {}) {
   if (artifact === "proposal") return "proposal.md";
   if (artifact === "design") return "design.md";
   if (artifact === "runtime-acceptance") return "runtime-acceptance.md";
   if (artifact === "verification") return "verification.md";
   if (artifact === "tasks") return "tasks.md";
   if (artifact === "specs") {
+    if (options.noDeltaSpecs) {
+      if (options.capability) {
+        throw new Error("renderChangeArtifact does not accept --capability with --no-delta-specs");
+      }
+      return NO_DELTA_SPECS_ARTIFACT_PATH;
+    }
+    const capability = options.capability ?? "";
     if (!capability) {
       throw new Error("renderChangeArtifact requires --capability for specs");
     }
@@ -594,7 +613,10 @@ export function tracePathForArtifactPath(artifactPath) {
   if (artifactPath === "verification.md") return "trace/verification.trace.json";
   if (artifactPath === "tasks.md") return "trace/tasks.trace.json";
   if (artifactPath.startsWith("specs/")) {
-    return `trace/${artifactPath.replace(/\/spec\.md$/u, ".trace.json")}`;
+    const traceRelPath = artifactPath.endsWith("/spec.md")
+      ? artifactPath.replace(/\/spec\.md$/u, ".trace.json")
+      : artifactPath.replace(/\.md$/u, ".trace.json");
+    return `trace/${traceRelPath}`;
   }
   throw new RenderContractError("VAL-RENDER-002", artifactPath, `无法解析 artifact trace path：${artifactPath}`);
 }
@@ -687,6 +709,7 @@ function parseArgs(argv) {
     if (arg === "--change") options.change = argv[++index];
     else if (arg === "--artifact") options.artifact = argv[++index];
     else if (arg === "--capability") options.capability = argv[++index];
+    else if (arg === "--no-delta-specs") options.noDeltaSpecs = true;
     else if (arg === "--write") options.write = true;
     else if (arg === "--root") options.root = argv[++index];
     else if (arg === "--help" || arg === "-h") options.help = true;
@@ -697,7 +720,7 @@ function parseArgs(argv) {
 
 function usage() {
   return `Usage:
-  node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change <slug> --artifact <id> [--capability <name>] [--write] [--root <path>]
+  node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change <slug> --artifact <id> [--capability <name>] [--no-delta-specs] [--write] [--root <path>]
 `;
 }
 

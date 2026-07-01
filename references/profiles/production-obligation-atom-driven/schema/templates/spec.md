@@ -2,7 +2,7 @@
 
 ## ADDED Requirements
 
-<!-- 仅当本 capability 有 direct spec-requirement/spec-guard atom 时创建此文件。不要为了 design-obligation、verification-obligation、handoff、proof-only 或实现细节创建空 spec。 -->
+<!-- 仅当本 capability 有 direct spec-requirement/spec-guard atom 时创建此文件。若整个 change 无 spec-level direct atom，不使用本模板，改生成 specs/no-spec-delta/README.md marker。不要为了 design-obligation、verification-obligation、handoff、proof-only 或实现细节创建空 spec。 -->
 
 ### Requirement: <!-- requirement name，优先中文；只有 exact source-native 技术标题才保留英文 -->
 

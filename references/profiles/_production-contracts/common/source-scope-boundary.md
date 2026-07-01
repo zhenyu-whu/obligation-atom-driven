@@ -15,7 +15,7 @@
 - `spec-requirement` / `spec` 必须落到 requirement/scenario，或有明确 source/scope-backed reason。
 - `spec-guard` / `guard` 必须作为 non-goal、MUST NOT、preserve 或明确负向边界，不得膨胀成新的正向行为。
 - `design-obligation` / `design` 必须落到 design decision、implementation boundary、guard handling 或 blocker。
-- 当某个 capability 没有 `spec-requirement` / `spec-guard` direct item 时，不创建 spec file。`design-obligation` / `verification-obligation` 必须保留原 projection 并进入 design、runtime、verification 或 tasks handoff，不得派生成 specs requirement/guard。
+- 当某个 capability 没有 `spec-requirement` / `spec-guard` direct item 时，不创建该 capability 的 spec file。若整个 change 没有 spec-level direct item，必须用 `specs/no-spec-delta/README.md` marker 显式完成 specs artifact。`design-obligation` / `verification-obligation` 必须保留原 projection 并进入 design、runtime、verification 或 tasks handoff，不得派生成 specs requirement/guard。
 - `verification-obligation` / `proof` 必须落到 runtime acceptance / verification / proof expectation，不得为了 proof 创建 production scope 外任务。
 - `contextual-only` / `context` 不成为新增 implementation scope，只保留必要边界。
 

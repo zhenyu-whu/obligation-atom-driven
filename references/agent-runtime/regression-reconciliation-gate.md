@@ -8,7 +8,7 @@
 2. 本 gate 不生成当前 change 的 Proof Slice，不替代 `test-worker`、`test-proof-reviewer`、`fix-worker` 或 `change-stabilizer` 对当前 change evidence 的职责。
 3. 本 gate 可以处理当前 change 外的历史测试假设过期问题，但只能依据当前 OpenSpec artifacts、已归档主规格、baseline evidence 和实际测试失败事实做判断；不得把“测试过期”作为无依据跳过失败的理由。
 4. `proof-test-map.json` 只能作为 evidence / context，用于识别当前 change Proof Slice evidence、当前 change 新增或确认的测试、测试文件和命令边界；它不是 oracle 来源。行为 oracle 仍来自当前 change artifacts、已归档主规格和当前生产 runtime contract。
-5. 本 gate 不得修改 proposal、delta specs、design、`runtime-acceptance.md`、`verification.md` 或 `tasks.md` 来适配回归失败。若发现 artifact 或 oracle 冲突，必须返回 `artifact-consistency-blocker`。
+5. 本 gate 不得修改 proposal、实际 delta specs 或 `specs/no-spec-delta/README.md` marker、design、`runtime-acceptance.md`、`verification.md` 或 `tasks.md` 来适配回归失败。若发现 artifact 或 oracle 冲突，必须返回 `artifact-consistency-blocker`。
 
 ## 启动条件
 
@@ -20,7 +20,7 @@
 ## Agent 权限与输入
 
 1. `regression-reconciler` 是 read/write apply-stage agent，必须遵守 `openspec/agent-runtime/openspec-apply-change.md` 的 subagent 串行、模型、checkpoint 和不覆盖他人改动约束。
-2. `regression-reconciler` 可以读取完整 `contextFiles`、artifact pointer、proposal、delta specs、design、`runtime-acceptance.md`、`verification.md`、`tasks.md`、`trace/manifest.json`、必要 JSON trace 摘录、worker/reviewer/stabilizer 报告、checkpoint 摘要、`apply-result.md`、`proof-test-map.json`、全量回归命令输出、失败测试文件、相关生产代码和可用 baseline 记录。
+2. `regression-reconciler` 可以读取完整 `contextFiles`、artifact pointer、proposal、实际 delta specs 或 `specs/no-spec-delta/README.md` marker、design、`runtime-acceptance.md`、`verification.md`、`tasks.md`、`trace/manifest.json`、必要 JSON trace 摘录、worker/reviewer/stabilizer 报告、checkpoint 摘要、`apply-result.md`、`proof-test-map.json`、全量回归命令输出、失败测试文件、相关生产代码和可用 baseline 记录。
 3. `regression-reconciler` 默认运行本仓库全量回归命令：`pnpm test`。如果该命令不可用、环境不可用或依赖外部状态失败，必须记录 `flaky-or-environmental` 或流程级环境 blocker；不得在未运行且无 blocker 的情况下通过本 gate。
 4. `regression-reconciler` 可以修改：
    - 被当前回归调和判定为 stale 的历史测试或 test fixture。

@@ -7,9 +7,9 @@
 ## 写入前
 
 - 读取 `runtime-acceptance.md` 的 canonical rows。
-- 必要时只为一致性核对读取 proposal、实际生成的 delta specs 和 design；不得用它们在 verification 中重新建立 source/scope mapping。
+- 必要时只为一致性核对读取 proposal、实际生成的 delta specs 或 `specs/no-spec-delta/README.md` marker，以及 design；不得用它们在 verification 中重新建立 source/scope mapping。marker 存在时不得从 specs 派生测试 oracle。
 - 索引每个 `RS-/OP-/ST-/CH-` row 的 row type、scope role、runtime obligation、observable fact、default path policy、external boundary、failure/branch/default/no-scope boundary。
-- 对每个 required / preserve / proof-only runtime row 抽取所有独立可失败分支；每个分支生成一个 Proof Slice，或给出 source/scope-backed manual/not-applicable reason。
+- 对每个 required / preserve / proof-only runtime row 抽取所有独立可失败分支；每个分支生成一个 Proof Slice，或给出 source/scope-backed manual/not-applicable reason。Proof Slice 必须一一覆盖 runtime acceptance 分支，但是否生成持久测试由 slice 自身的 persistence 字段决定。
 - 当 `proposal-alignment-gate.change-kind` 为 `foundation` 时，Proof Slice 只能从有效 foundation runtime rows 派生；不得为 not-applicable、pure design/reference/guard/future rows 生成 required Proof Slice。
 - 建立 trace-backed runtime row branch inventory、manual/not-applicable inventory、proof slice model、Markdown matrix mirror rows、runtime coverage reconciliation、slice consistency checklist inputs 和 `delivery-plane` render payload。
 - writer 只写 `trace/verification.trace.json` 和 `trace/verification.proof-slices.json`；`verification.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed Proof Slice ID 集写入。
@@ -20,8 +20,12 @@
 - 新 change 必须在 `trace/manifest.json` 写入 `trace-contract-version: "proof-slices-v1"`。
 - 新 change 必须生成 `trace/verification.proof-slices.json`，其 `trace-schema` 固定为 `openspec-proof-slices-v1`，并在 `trace/manifest.json` 登记 `trace-path`、`trace-schema` 和 `trace-digest`。
 - `trace/verification.proof-slices.json` 顶层必须包含：`artifact-id`、`artifact-path`、`change-name`、`schema-name`、`source-interface`、`proof-slice-summary`、`proof-slices`。
-- 每个 `proof-slices[]` row 必须包含 Markdown `Proof Slice Matrix` 的全部语义字段：`slice-id`、`runtime-row-ids`、`primary-runtime-row-id`、`primitive-type`、`branch-variant`、`observable-surface`、`oracle-fragment`、`failure-signal`、`primary-layer`、`production-owner`、`primary-assertion-shape`、`fixture-mock-boundary`、`regression-intent`、`manual-environment-gate`。
-- 每个 `proof-slices[]` row 必须包含 `test-contract`，默认值固定为：`primary-test-cardinality: "exactly-one"`、`test-title-prefix: "<slice-id>"`、`allow-shared-setup: true`、`allow-multi-slice-primary-test: false`、`waiver-required-for-multi-slice: true`。
+- 每个 `proof-slices[]` row 必须包含 Markdown `Proof Slice Matrix` 的全部语义字段：`slice-id`、`runtime-row-ids`、`primary-runtime-row-id`、`primitive-type`、`branch-variant`、`observable-surface`、`oracle-fragment`、`failure-signal`、`primary-layer`、`production-owner`、`persistent-test-required`、`proof-evidence-mode`、`primary-assertion-shape`、`fixture-mock-boundary`、`regression-intent`、`manual-environment-gate`。
+- `persistent-test-required` 必须是 boolean。`proof-evidence-mode` 只能是 `durable-test`、`readiness-command`、`build-command`、`codegen-command`、`compose-config-readback`、`static-boundary-readback`、`manual-environment`。
+- `persistent-test-required: true` 时，`proof-evidence-mode` 必须为 `durable-test`，`test-contract.primary-test-cardinality` 必须为 `exactly-one`，`test-contract.test-title-prefix` 必须等于 `slice-id`。
+- `persistent-test-required: false` 时，`proof-evidence-mode` 不得为 `durable-test`，`test-contract.primary-test-cardinality` 必须为 `none`；如提供 `test-title-prefix`，仍必须等于 `slice-id`。
+- business change 中，若 `manual-environment-gate` 为 `None` / 空 / `null`，Proof Slice 默认必须 `persistent-test-required: true`。foundation change 可按 slice 标记 `persistent-test-required: false`，但仍必须给出非持久 evidence mode。
+- 每个 `proof-slices[]` row 必须包含 `test-contract`，固定包含：`primary-test-cardinality`、`test-title-prefix`、`allow-shared-setup: true`、`allow-multi-slice-primary-test: false`、`waiver-required-for-multi-slice: true`。
 - 若确需合并多个 Proof Slice 到同一 primary test，必须在 `test-contract` 中显式设置 `allow-multi-slice-primary-test: true` 并提供 `multi-slice-waiver`，包含 `slice-ids` 和中文 `reason`；普通 operation/state/failure/security/layout/observability 分支不得使用 waiver。
 - JSON object key 必须使用 kebab-case。解释性字段值必须遵守中文约束。
 
@@ -30,7 +34,7 @@
 - `Proof Slice Matrix` 必须是 `trace/verification.proof-slices.json` 的完整镜像；writer 不得手工维护两套不同 truth。
 - reviewer 和 validator 必须逐字段比对 Markdown matrix 与 JSON canonical row；任一漂移都是 artifact blocker。
 
-- Columns 必须包含：`Slice ID`、`Runtime Row IDs`、`Primary Runtime Row ID`、`Primitive Type`、`Branch / Variant`、`Observable Surface`、`Oracle Fragment`、`Failure Signal`、`Primary Layer`、`Production Owner`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Regression Intent`、`Manual / Environment Gate`。
+- Columns 必须包含：`Slice ID`、`Runtime Row IDs`、`Primary Runtime Row ID`、`Primitive Type`、`Branch / Variant`、`Observable Surface`、`Oracle Fragment`、`Failure Signal`、`Primary Layer`、`Production Owner`、`Persistent Test Required`、`Proof Evidence Mode`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Regression Intent`、`Manual / Environment Gate`。
 - `Slice ID` 使用 `PS-###`，文件内唯一。
 - `Runtime Row IDs` 只能引用 runtime-acceptance 中已定义 rows。
 - `Primary Runtime Row ID` 必须存在于同一行 `Runtime Row IDs` 中，并作为 coverage/trace anchor。
@@ -38,7 +42,7 @@
 - `Primitive Type` 只能是 `operation`、`state`、`failure`、`negative-boundary`、`layout`、`observability`、`fixture-variant`、`authorization`。
 - `Primary Layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
 - `Production Owner` 必须是单一 production code boundary token，不得包含 owner list、测试路径或 evidence 路径。
-- Propose 阶段不得要求 `Production Owner + Primary Layer` 映射到已存在或 planned `tests/**` 目录；`Production Owner` 只表示 planned production boundary，真实测试文件落点由 apply 阶段 `proof-test-map.json` 与 placement audit 校验。
+- Propose 阶段不得写测试路径、固定命令、runner selector 或 evidence path，也不得要求 `Production Owner + Primary Layer` 映射到已存在或 planned `tests/**` 目录；`Production Owner` 只表示 planned production boundary。持久测试的真实落点由 apply 阶段 test agent 根据当前 repo layout、Production Owner、Primary Layer 和最佳测试实践推断，并由 `proof-test-map.json` 与 placement audit 校验禁区路径、runner 触达和证据闭环。
 
 ## 原子性要求
 
@@ -63,6 +67,7 @@
 - 是否只从 runtime-acceptance 推导 oracle。
 - `trace/verification.proof-slices.json` 是否存在、登记 manifest digest，并与 `Proof Slice Matrix` 完全一致。
 - 是否遗漏或合并 runtime row 显式分支。
+- `persistent-test-required` 与 `proof-evidence-mode` 是否满足 change-kind、manual gate 和 test-contract 约束。
 - Reconciliation 是否真实闭合。
 - `Primary Layer` 是否为合法枚举，`Production Owner` 是否为单一 planned production boundary token，且未写成测试路径、命令、runner、evidence 或 deposit 路径。
 - 是否写入测试路径、命令、runner、evidence、deposit 或 artifact/process oracle。

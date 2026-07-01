@@ -6,7 +6,7 @@
 
 ## 写入前
 
-- 读取 proposal、所有实际生成的 delta specs、design 和 runtime-acceptance。
+- 读取 proposal、所有实际生成的 delta specs 或 `specs/no-spec-delta/README.md` marker、design 和 runtime-acceptance。
 - 索引 source/scope rows、artifact projection/handling、spec scenarios、design obligations、canonical runtime rows、AC sections、checkbox task IDs 和 coverage table references。
 - 建立 runtime provision graph：每个 runtime row 由 baseline、current-change AC、future change 或 explicit negative boundary 提供；AC sections 必须按 graph 拓扑排序。
 - 建立 trace-backed runtime provision graph、AC section model、checkbox task model、acceptance-driven coverage model、runtime acceptance index、runtime acceptance projection 和 `delivery-plane` render payload。

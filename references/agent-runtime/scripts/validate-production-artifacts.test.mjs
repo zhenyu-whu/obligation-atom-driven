@@ -5,7 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { renderChangeArtifact, renderDeliveryBody } from "./render-production-artifacts.mjs";
+import {
+  NO_DELTA_SPECS_ARTIFACT_PATH,
+  NO_DELTA_SPECS_COMPLETION_MODE,
+  renderChangeArtifact,
+  renderDeliveryBody,
+} from "./render-production-artifacts.mjs";
 import { validateChange } from "./validate-production-artifacts.mjs";
 
 test("合法 JSON trace complete 校验通过", () => {
@@ -260,7 +265,12 @@ test("source-aligned final-packet-index 缺少目标 change hard fail", () => {
 });
 
 test("source-aligned final-packet-index foundation planned change 可通过 proposal 校验", () => {
-  const files = standardFiles({ proposal: true, changeKind: "foundation", proposalProjection: "design-obligation" });
+  const files = standardFiles({
+    proposal: true,
+    changeKind: "foundation",
+    proposalProjection: "design-obligation",
+    noDeltaSpecs: true,
+  });
   const root = makeChange("foundation-planned-change", files);
   const result = validateChange({ root, change: "foundation-planned-change", complete: false });
 
@@ -352,7 +362,12 @@ test("source-aligned manifest Phase 5 status 与 trace status 漂移 hard fail",
 });
 
 test("legacy Markdown-only proposal authority 仍可校验通过", () => {
-  const files = standardFiles({ proposal: true, authorityMode: "legacy", proposalProjection: "design-obligation" });
+  const files = standardFiles({
+    proposal: true,
+    authorityMode: "legacy",
+    proposalProjection: "design-obligation",
+    noDeltaSpecs: true,
+  });
   const root = makeChange("legacy-authority-change", files);
   const result = validateChange({ root, change: "legacy-authority-change", complete: false });
 
@@ -387,6 +402,87 @@ test("无 spec-level direct atom 且无 specs file 时通过", () => {
   const result = validateChange({ root, change: "no-spec-direct-no-specs-change", complete: false });
 
   assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("无 spec-level direct atom 且有 no-delta specs marker 时通过", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation", noDeltaSpecs: true });
+  const root = makeChange("no-spec-direct-marker-change", files);
+  const result = validateChange({ root, change: "no-spec-direct-marker-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+  assert.equal(result.warningCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("无 spec-level direct atom 且已有下游 artifact 但缺 no-delta marker hard fail", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
+  const root = makeChange("no-spec-direct-missing-marker-change", files);
+  const result = validateChange({ root, change: "no-spec-direct-missing-marker-change", complete: false });
+
+  assertRule(result, "VAL-SP-015");
+});
+
+test("有 spec-level direct atom 时 no-delta marker hard fail", () => {
+  const files = standardFiles({ proposal: true, noDeltaSpecs: true });
+  const root = makeChange("spec-direct-no-delta-marker-change", files);
+  const result = validateChange({ root, change: "spec-direct-no-delta-marker-change", complete: false });
+
+  assertRule(result, "VAL-SP-015");
+});
+
+test("no-delta marker 与普通 specs 共存 hard fail", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation", specs: true, noDeltaSpecs: true });
+  const root = makeChange("no-delta-coexists-with-specs-change", files);
+  const result = validateChange({ root, change: "no-delta-coexists-with-specs-change", complete: false });
+
+  assertRule(result, "VAL-SP-015");
+});
+
+test("no-delta marker 出现 delta heading 或 Requirement hard fail", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation", noDeltaSpecs: true });
+  files.artifacts[NO_DELTA_SPECS_ARTIFACT_PATH] = `## ADDED Requirements
+
+### Requirement: 不允许的 requirement
+
+#### Scenario: 不允许的 scenario
+
+- THEN 不应出现。
+`;
+  const root = makeChange("no-delta-forbidden-markdown-change", files);
+  const result = validateChange({ root, change: "no-delta-forbidden-markdown-change", complete: false });
+
+  assertRule(result, "VAL-SP-015");
+});
+
+test("no-delta marker requirement-source-trace 非空 hard fail", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation", noDeltaSpecs: true });
+  files.traces["specs/no-spec-delta/README.trace.json"]["requirement-source-trace"] = [
+    {
+      requirement: "不允许的 requirement",
+      scenario: "不允许的 scenario",
+      "global-atom-id": "GA-0001",
+      "source-document": "docs/source.md",
+      lines: "L1-L2",
+      "source-projection": "design-obligation",
+      "spec-handling": "derived-capability-contract-requirement",
+      "source-fact": "事实。",
+    },
+  ];
+  const root = makeChange("no-delta-nonempty-requirement-trace-change", files);
+  const result = validateChange({ root, change: "no-delta-nonempty-requirement-trace-change", complete: false });
+
+  assertRule(result, "VAL-SP-015");
+});
+
+test("no-delta marker 仅允许 obligation schema hard fail", () => {
+  const files = standardFiles({ proposal: true, proposalProjection: "design-obligation", noDeltaSpecs: true });
+  const root = makeChange("no-delta-default-schema-change", files);
+  fs.writeFileSync(
+    path.join(root, "openspec", "changes", "no-delta-default-schema-change", ".openspec.yaml"),
+    "schema: production-default-acceptance-driven\n",
+  );
+  const result = validateChange({ root, change: "no-delta-default-schema-change", complete: false });
+
+  assertRule(result, "VAL-SP-015");
 });
 
 test("有 spec-level direct atom 但缺 specs trace hard fail", () => {
@@ -726,7 +822,7 @@ test("proof-slices-v1 Markdown matrix 与 JSON 漂移 hard fail", () => {
   const files = standardFiles({ newContract: true });
   files.artifacts["verification.md"] = verificationBody({
     proofRows: [
-      "| PS-001 | RS-001 | RS-001 | authorization | actor drift | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | authorization result | session fixture | high | None |",
+      "| PS-001 | RS-001 | RS-001 | authorization | actor drift | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | true | durable-test | authorization result | session fixture | high | None |",
     ],
   });
   const root = makeChange("proof-slices-drift-change", files);
@@ -748,10 +844,57 @@ test("proof-slices-v1 canonical 字段缺失 hard fail", () => {
   const files = standardFiles({ newContract: true });
   delete files.traces["verification.proof-slices.json"]["source-interface"];
   delete files.traces["verification.proof-slices.json"]["proof-slices"][0]["oracle-fragment"];
+  delete files.traces["verification.proof-slices.json"]["proof-slices"][0]["persistent-test-required"];
+  delete files.traces["verification.proof-slices.json"]["proof-slices"][0]["proof-evidence-mode"];
   const root = makeChange("proof-slices-required-fields-change", files);
   const result = validateChange({ root, change: "proof-slices-required-fields-change", complete: true });
 
   assertRule(result, "VAL-PST-014");
+});
+
+test("business proof slice 不得关闭持久测试 hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  setSingleProofSlicePersistence(files, {
+    persistent: false,
+    mode: "readiness-command",
+    cardinality: "none",
+  });
+  const root = makeChange("business-non-persistent-proof-change", files);
+  const result = validateChange({ root, change: "business-non-persistent-proof-change", complete: true });
+
+  assertRule(result, "VAL-PST-027");
+});
+
+test("foundation proof slice 可使用非持久 command evidence", () => {
+  const files = standardFiles({
+    proposal: true,
+    newContract: true,
+    changeKind: "foundation",
+    proposalProjection: "design-obligation",
+    noDeltaSpecs: true,
+  });
+  setSingleProofSlicePersistence(files, {
+    persistent: false,
+    mode: "readiness-command",
+    cardinality: "none",
+  });
+  const root = makeChange("foundation-non-persistent-proof-change", files);
+  const result = validateChange({ root, change: "foundation-non-persistent-proof-change", complete: true });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("proof-slices-v1 Markdown 新列与 JSON 漂移 hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  files.artifacts["verification.md"] = verificationBody({
+    proofRows: [
+      "| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | true | build-command | authorization result | session fixture | high | None |",
+    ],
+  });
+  const root = makeChange("proof-slices-persistence-drift-change", files);
+  const result = validateChange({ root, change: "proof-slices-persistence-drift-change", complete: true });
+
+  assertRule(result, "VAL-PST-030");
 });
 
 test("proof-slices-v1 reconciliation 引用不存在 JSON slice hard fail", () => {
@@ -1164,6 +1307,10 @@ function standardFiles(options = {}) {
     artifacts["specs/capability/spec.md"] = specsBody();
     traces["specs/capability.trace.json"] = specsTrace();
   }
+  if (options.noDeltaSpecs) {
+    artifacts[NO_DELTA_SPECS_ARTIFACT_PATH] = noDeltaSpecsBody();
+    traces["specs/no-spec-delta/README.trace.json"] = noDeltaSpecsTrace();
+  }
   if (options.design) {
     artifacts["design.md"] = designBody();
     traces["design.trace.json"] = designTrace(options.designGa ?? "GA-0001", options);
@@ -1210,8 +1357,27 @@ function withSingleProofSlicePlacement(files, options) {
   return files;
 }
 
+function setSingleProofSlicePersistence(files, options) {
+  const proofSlice = files.traces["verification.proof-slices.json"]?.["proof-slices"]?.[0];
+  if (proofSlice) {
+    proofSlice["persistent-test-required"] = options.persistent;
+    proofSlice["proof-evidence-mode"] = options.mode;
+    proofSlice["test-contract"] = {
+      ...proofSlice["test-contract"],
+      "primary-test-cardinality": options.cardinality,
+    };
+  }
+  files.traces["verification.trace.json"]["delivery-plane"] = verificationDelivery();
+  files.artifacts["verification.md"] = renderDeliveryBody(
+    files.traces["verification.trace.json"],
+    files.traces["verification.proof-slices.json"],
+  );
+  return files;
+}
+
 function deliveryPayloadForArtifact(artifactPath, options = {}) {
   if (artifactPath === "proposal.md") return proposalDelivery();
+  if (artifactPath === NO_DELTA_SPECS_ARTIFACT_PATH) return noDeltaSpecsDelivery();
   if (artifactPath.startsWith("specs/")) return specsDelivery();
   if (artifactPath === "design.md") return designDelivery();
   if (artifactPath === "runtime-acceptance.md") return runtimeDelivery(options);
@@ -1250,6 +1416,14 @@ function specsDelivery() {
         ],
       },
     ],
+  };
+}
+
+function noDeltaSpecsDelivery() {
+  return {
+    "completion-mode": NO_DELTA_SPECS_COMPLETION_MODE,
+    summary: ["- 本 change 无 OpenSpec delta spec。"],
+    "projection-closure": ["- projection closure 进入 design/runtime-acceptance/verification/tasks。"],
   };
 }
 
@@ -1397,7 +1571,7 @@ ${extraRow}## Operation Coverage Matrix
 function verificationBody(options = {}) {
   const proofRows =
     options.proofRows ??
-    ["| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | authorization result | session fixture | high | None |"];
+    ["| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | true | durable-test | authorization result | session fixture | high | None |"];
   return `## Verification Intent
 
 - Scope: 测试。
@@ -1406,8 +1580,8 @@ function verificationBody(options = {}) {
 
 ## Proof Slice Matrix
 
-| Slice ID | Runtime Row IDs | Primary Runtime Row ID | Primitive Type | Branch / Variant | Observable Surface | Oracle Fragment | Failure Signal | Primary Layer | Production Owner | Primary Assertion Shape | Fixture / Mock Boundary | Regression Intent | Manual / Environment Gate |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Slice ID | Runtime Row IDs | Primary Runtime Row ID | Primitive Type | Branch / Variant | Observable Surface | Oracle Fragment | Failure Signal | Primary Layer | Production Owner | Persistent Test Required | Proof Evidence Mode | Primary Assertion Shape | Fixture / Mock Boundary | Regression Intent | Manual / Environment Gate |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${proofRows.join("\n")}
 
 ## Layer / Harness / Fixture Notes
@@ -1758,6 +1932,33 @@ function specsTrace() {
   };
 }
 
+function noDeltaSpecsBody() {
+  return `## No Spec Delta
+
+- 本 change 无 OpenSpec delta spec。
+
+## Projection Closure
+
+- projection closure 进入 design/runtime-acceptance/verification/tasks。
+`;
+}
+
+function noDeltaSpecsTrace() {
+  return {
+    "trace-schema": "openspec-trace-v1",
+    "artifact-id": "specs",
+    "artifact-path": NO_DELTA_SPECS_ARTIFACT_PATH,
+    "change-name": "%CHANGE%",
+    "schema-name": "production-obligation-atom-driven",
+    "specs-completion-mode": NO_DELTA_SPECS_COMPLETION_MODE,
+    "requirement-source-trace": [],
+    "production-alignment-gate": {
+      "spec-level-direct-atoms": "none",
+      blockers: [],
+    },
+  };
+}
+
 function runtimeTrace(options = {}) {
   const runtimeRowIds = options.secondAc ? ["RS-001", "RS-002"] : ["RS-001"];
   const foundationObservable =
@@ -1869,6 +2070,8 @@ function proofSlicesTrace() {
         "failure-signal": "actor 缺失。",
         "primary-layer": "security/negative",
         "production-owner": "apps/web",
+        "persistent-test-required": true,
+        "proof-evidence-mode": "durable-test",
         "primary-assertion-shape": "authorization result",
         "fixture-mock-boundary": "session fixture",
         "regression-intent": "high",

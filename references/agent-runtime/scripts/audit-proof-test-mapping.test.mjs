@@ -28,6 +28,27 @@ test("proof-test-map 缺少 required PS hard fail", () => {
   assertRule(result, "MAP-TM-004");
 });
 
+test("non-persistent proof 缺少 evidence result hard fail", () => {
+  const root = makeProofMappingChange("missing-evidence-map", {
+    sliceOverrides: nonPersistentSliceOverrides(),
+    results: [],
+    discoveredTests: [],
+  });
+  const result = auditProofTestMapping({ root, change: "missing-evidence-map", discoveredTests: [] });
+  assertRule(result, "MAP-EV-004");
+});
+
+test("non-persistent proof 使用 command evidence 时通过", () => {
+  const root = makeProofMappingChange("valid-evidence-map", {
+    sliceOverrides: nonPersistentSliceOverrides(),
+    results: [],
+    evidenceResults: [proofEvidenceResult("PS-001")],
+    discoveredTests: [],
+  });
+  const result = auditProofTestMapping({ root, change: "valid-evidence-map", discoveredTests: [] });
+  assert.equal(result.errorCount, 0);
+});
+
 test("proof-test-map 多 PS primary title hard fail", () => {
   const root = makeProofMappingChange("multi-title-map", {
     results: [proofResult("PS-001", { "test-title": "PS-001/PS-002 actor and owner denial" })],
@@ -52,11 +73,11 @@ test("proof-test-map runner list 未发现 mapped test hard fail", () => {
 
 test("proof-test-map placement 错误 hard fail", () => {
   const root = makeProofMappingChange("bad-placement-map", {
-    results: [proofResult("PS-001", { file: "apps/web/tests/api/foo.test.ts" })],
+    results: [proofResult("PS-001", { file: "packages/domain/src/foo.test.ts" })],
     discoveredTests: [
       {
         runner: "vitest",
-        file: "apps/web/tests/api/foo.test.ts",
+        file: "packages/domain/src/foo.test.ts",
         title: "PS-001 actor denial",
       },
     ],
@@ -67,12 +88,29 @@ test("proof-test-map placement 错误 hard fail", () => {
     discoveredTests: [
       {
         runner: "vitest",
-        file: "apps/web/tests/api/foo.test.ts",
+        file: "packages/domain/src/foo.test.ts",
         title: "PS-001 actor denial",
       },
     ],
   });
   assertRule(result, "MAP-TM-008");
+});
+
+test("proof-test-map 不再按 owner/layer 固定目录 hard fail", () => {
+  const root = makeProofMappingChange("owner-layer-flex-map", {
+    sliceOverrides: {
+      "primary-layer": "contract",
+      "production-owner": "workspace-root",
+    },
+    results: [proofResult("PS-001")],
+    discoveredTests: [discovered("PS-001 actor denial")],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "owner-layer-flex-map",
+    discoveredTests: [discovered("PS-001 actor denial")],
+  });
+  assert.equal(result.errorCount, 0);
 });
 
 test("browser proof 缺少 containing-file validation hard fail", () => {
@@ -165,6 +203,7 @@ function makeProofMappingChange(change, options) {
         "trace-schema": "openspec-proof-test-map-v1",
         "change-name": change,
         "proof-test-results": options.results,
+        "proof-evidence-results": options.evidenceResults ?? [],
       },
       null,
       2,
@@ -192,6 +231,8 @@ function proofSlices(sliceOverrides = {}) {
     "failure-signal": "无效 actor 被接受。",
     "primary-layer": "contract",
     "production-owner": "packages/domain",
+    "persistent-test-required": true,
+    "proof-evidence-mode": "durable-test",
     "primary-assertion-shape": "authorization denial",
     "fixture-mock-boundary": "actor fixture",
     "regression-intent": "high",
@@ -217,6 +258,16 @@ function proofSlices(sliceOverrides = {}) {
   };
 }
 
+function nonPersistentSliceOverrides() {
+  return {
+    "persistent-test-required": false,
+    "proof-evidence-mode": "readiness-command",
+    "test-contract": {
+      "primary-test-cardinality": "none",
+    },
+  };
+}
+
 function proofResult(sliceId, overrides = {}) {
   return {
     "slice-id": sliceId,
@@ -226,6 +277,18 @@ function proofResult(sliceId, overrides = {}) {
     "test-title": `${sliceId} actor denial`,
     filter: `^${sliceId}\\b`,
     command: `pnpm exec vitest run packages/domain/tests/contract/generate-first-draft.contract.test.ts -t '^${sliceId}\\b'`,
+    ...overrides,
+  };
+}
+
+function proofEvidenceResult(sliceId, overrides = {}) {
+  return {
+    "slice-id": sliceId,
+    status: "passed",
+    "proof-evidence-mode": "readiness-command",
+    command: "pnpm readiness:workspace",
+    "exit-status": 0,
+    "runtime-row-ids": ["RS-001"],
     ...overrides,
   };
 }

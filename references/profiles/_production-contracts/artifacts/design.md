@@ -6,8 +6,8 @@
 
 ## 写入前
 
-- 读取 proposal 和所有实际生成的 delta specs。
-- 使用 proposal/specs 的 JSON trace 作为 source/scope-reading interface。
+- 读取 proposal 和所有实际生成的 delta specs；若 specs artifact 是 no-delta marker，则读取 `specs/no-spec-delta/README.md` 与对应 trace 作为 specs completion，不从中派生 spec scenario。
+- 使用 proposal 和实际 specs 完成态的 JSON trace 作为 source/scope-reading interface。
 - 当 design 需要 exact behavior、architecture/module boundary、data/API shape、auth/security、async/worker、UI/prototype fidelity、observability、deployment 或 verification detail 时，只读取已登记 source/scope window 或 baseline。
 - 起草前建立 design coverage map：每个 in-scope scenario、material design obligation、guard 和需要 implementation placement 的 source/scope item 必须映射到 design decision、guard handling 或 explicit blocker。
 - 建立 trace-backed design coverage map、decision index、implementation placement map、guard handling map、spec scenario design map、proof expectation handoff、production alignment gate inputs 和 `delivery-plane` render payload。

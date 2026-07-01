@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  NO_DELTA_SPECS_ARTIFACT_PATH,
+  NO_DELTA_SPECS_COMPLETION_MODE,
   RENDER_CONTRACT_VERSION,
   RenderContractError,
   renderArtifactMarkdown,
@@ -32,6 +34,9 @@ const D_ID_RE = /\bD-\d{3}\b/g;
 const P_ID_RE = /\bP-\d{3}\b/g;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const DEPRECATED_FOUNDATION_REFERENCE_RE = /foundation-reference|foundation-runtime-substrate/iu;
+const NO_DELTA_SPECS_TRACE_KEY = "specs:no-spec-delta/README";
+const SPECS_DELTA_HEADER_RE = /^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\b/mu;
+const SPECS_REQUIREMENT_OR_SCENARIO_RE = /^#{3,4}\s+(Requirement|Scenario):/mu;
 const CHANGE_KINDS = new Set(["foundation", "business"]);
 const FOUNDATION_OBSERVABLE_KINDS = new Set([
   "workspace-script",
@@ -78,6 +83,16 @@ const PRIMARY_LAYERS = new Set([
   "security/negative",
 ]);
 
+const PROOF_EVIDENCE_MODES = new Set([
+  "durable-test",
+  "readiness-command",
+  "build-command",
+  "codegen-command",
+  "compose-config-readback",
+  "static-boundary-readback",
+  "manual-environment",
+]);
+
 const PROOF_SLICE_COLUMNS = [
   "Slice ID",
   "Runtime Row IDs",
@@ -89,6 +104,8 @@ const PROOF_SLICE_COLUMNS = [
   "Failure Signal",
   "Primary Layer",
   "Production Owner",
+  "Persistent Test Required",
+  "Proof Evidence Mode",
   "Primary Assertion Shape",
   "Fixture / Mock Boundary",
   "Regression Intent",
@@ -204,7 +221,7 @@ export function validateChange(options = {}) {
   const schemaName = readSchemaName(changeDir);
   const schemaKind = schemaName === "production-default-acceptance-driven" ? "default" : "obligation";
   const files = readChangeFiles(root, changeDir);
-  const trace = loadTracePlane(root, changeDir, files, schemaKind, issues, { complete });
+  const trace = loadTracePlane(root, changeDir, files, schemaKind, issues, { complete, schemaName });
   const changeContext = { changeKind: proposalChangeKind(trace.get("proposal")) };
   validateRenderedArtifacts(root, changeDir, files, trace, issues);
   validateProposalAuthorityTrace(root, change, files.byName["proposal.md"], trace.get("proposal"), schemaKind, issues);
@@ -228,6 +245,7 @@ export function validateChange(options = {}) {
         issues,
         trace.get("verification-proof-slices"),
         trace.traceContractVersion,
+        changeContext,
       )
     : new Map();
 
@@ -386,6 +404,13 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}
       addIssue(issues, "error", "VAL-TR-009", traceRel, "artifact-path 与 artifact 实际路径不一致。");
     }
     validateTraceSections(data, file, schemaKind, traceRel, issues);
+    if (
+      file.artifactId === "specs" &&
+      isNoDeltaSpecsTrace(`specs:${specTraceName(file.relPath)}`, data) &&
+      options.schemaName !== "production-obligation-atom-driven"
+    ) {
+      addIssue(issues, "error", "VAL-SP-015", traceRel, "no-delta specs marker 仅允许 production-obligation-atom-driven schema。");
+    }
     traces.set(file.artifactId === "specs" ? `specs:${specTraceName(file.relPath)}` : file.artifactId, data);
   }
   const shouldLoadProofSlices =
@@ -606,7 +631,7 @@ function validateRuntimeAcceptance(file, trace, issues) {
   return rows;
 }
 
-function validateVerification(file, runtimeRows, issues, proofSlicesTrace = null, traceContractVersion = "") {
+function validateVerification(file, runtimeRows, issues, proofSlicesTrace = null, traceContractVersion = "", changeContext = {}) {
   const requiredSections = [
     "## Verification Intent",
     "## Proof Slice Matrix",
@@ -653,7 +678,7 @@ function validateVerification(file, runtimeRows, issues, proofSlicesTrace = null
     slices.set(slice.id, slice);
   }
   if (traceContractVersion === TRACE_CONTRACT_PROOF_SLICES) {
-    const jsonSlices = validateProofSlicesTrace(proofSlicesTrace, slices, runtimeRows, issues);
+    const jsonSlices = validateProofSlicesTrace(proofSlicesTrace, slices, runtimeRows, issues, changeContext);
     return jsonSlices.size > 0 ? jsonSlices : slices;
   }
   return slices;
@@ -671,6 +696,8 @@ function proofSliceFromMarkdownRow(row, indexes) {
     failure: strip(row.cells[indexes["Failure Signal"]]),
     layer: strip(row.cells[indexes["Primary Layer"]]),
     owner: strip(row.cells[indexes["Production Owner"]]),
+    persistentTestRequired: strip(row.cells[indexes["Persistent Test Required"]]),
+    proofEvidenceMode: strip(row.cells[indexes["Proof Evidence Mode"]]),
     assertion: strip(row.cells[indexes["Primary Assertion Shape"]]),
     fixture: strip(row.cells[indexes["Fixture / Mock Boundary"]]),
     regression: strip(row.cells[indexes["Regression Intent"]]),
@@ -691,6 +718,8 @@ function proofSliceFromTraceRow(row) {
     failure: strip(row["failure-signal"]),
     layer: strip(row["primary-layer"]),
     owner: strip(row["production-owner"]),
+    persistentTestRequired: row["persistent-test-required"],
+    proofEvidenceMode: strip(row["proof-evidence-mode"]),
     assertion: strip(row["primary-assertion-shape"]),
     fixture: strip(row["fixture-mock-boundary"]),
     regression: strip(row["regression-intent"]),
@@ -725,7 +754,7 @@ function validateProofSliceModel(slice, ref, runtimeRows, issues) {
   }
 }
 
-function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
+function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues, changeContext = {}) {
   const slices = new Map();
   if (!trace) {
     return slices;
@@ -789,7 +818,8 @@ function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues) {
       addIssue(issues, "error", "VAL-PST-011", ref, `Proof Slice ${slice.id} 重复。`);
     }
     validateProofSliceModel(slice, ref, runtimeRows, issues);
-    validateProofSliceTestContract(row["test-contract"], slice.id, ref, issues);
+    validateProofSlicePersistence(row, slice, ref, changeContext, issues);
+    validateProofSliceTestContract(row["test-contract"], slice, ref, issues);
     slices.set(slice.id, slice);
 
     const markdown = markdownSlices.get(slice.id);
@@ -819,6 +849,7 @@ function validateProofSliceRequiredFields(row, ref, issues) {
     "failure-signal",
     "primary-layer",
     "production-owner",
+    "proof-evidence-mode",
     "primary-assertion-shape",
     "fixture-mock-boundary",
     "regression-intent",
@@ -827,6 +858,9 @@ function validateProofSliceRequiredFields(row, ref, issues) {
   if (idsFromValue(row["runtime-row-ids"], RUNTIME_ROW_RE).length === 0) {
     addIssue(issues, "error", "VAL-PST-014", ref, "Proof Slice row 缺少 runtime-row-ids。");
   }
+  if (typeof row["persistent-test-required"] !== "boolean") {
+    addIssue(issues, "error", "VAL-PST-014", ref, "Proof Slice row 缺少 boolean persistent-test-required。");
+  }
   for (const field of requiredScalarFields) {
     if (!strip(row[field])) {
       addIssue(issues, "error", "VAL-PST-014", ref, `Proof Slice row 缺少 ${field}。`);
@@ -834,16 +868,45 @@ function validateProofSliceRequiredFields(row, ref, issues) {
   }
 }
 
-function validateProofSliceTestContract(contract, sliceId, ref, issues) {
+function validateProofSlicePersistence(row, slice, ref, changeContext, issues) {
+  const persistent = row["persistent-test-required"];
+  const evidenceMode = strip(row["proof-evidence-mode"]);
+  if (!PROOF_EVIDENCE_MODES.has(evidenceMode)) {
+    addIssue(issues, "error", "VAL-PST-026", ref, `${slice.id} proof-evidence-mode 非法：${evidenceMode || "(empty)"}。`);
+  }
+  if (persistent === true && evidenceMode !== "durable-test") {
+    addIssue(issues, "error", "VAL-PST-026", ref, `${slice.id} persistent-test-required=true 时 proof-evidence-mode 必须为 durable-test。`);
+  }
+  if (persistent === false && evidenceMode === "durable-test") {
+    addIssue(issues, "error", "VAL-PST-026", ref, `${slice.id} persistent-test-required=false 时 proof-evidence-mode 不得为 durable-test。`);
+  }
+  if (changeContext.changeKind !== "foundation" && isManualGateNone(slice.manual) && persistent === false) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PST-027",
+      ref,
+      `${slice.id} 非 foundation change 的自动 Proof Slice 必须 persistent-test-required=true。`,
+    );
+  }
+}
+
+function validateProofSliceTestContract(contract, slice, ref, issues) {
+  const sliceId = slice.id;
   if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
     addIssue(issues, "error", "VAL-PST-020", ref, `${sliceId} 缺少 test-contract。`);
     return;
   }
-  if (strip(contract["primary-test-cardinality"]) !== "exactly-one") {
-    addIssue(issues, "error", "VAL-PST-021", ref, `${sliceId} primary-test-cardinality 必须为 exactly-one。`);
+  const expectedCardinality = slice.persistentTestRequired === false ? "none" : "exactly-one";
+  if (strip(contract["primary-test-cardinality"]) !== expectedCardinality) {
+    addIssue(issues, "error", "VAL-PST-021", ref, `${sliceId} primary-test-cardinality 必须为 ${expectedCardinality}。`);
   }
-  if (strip(contract["test-title-prefix"]) !== sliceId) {
+  const titlePrefix = strip(contract["test-title-prefix"]);
+  if (expectedCardinality === "exactly-one" && titlePrefix !== sliceId) {
     addIssue(issues, "error", "VAL-PST-022", ref, `${sliceId} test-title-prefix 必须等于 slice-id。`);
+  }
+  if (expectedCardinality === "none" && titlePrefix && titlePrefix !== sliceId) {
+    addIssue(issues, "error", "VAL-PST-022", ref, `${sliceId} test-title-prefix 如提供则必须等于 slice-id。`);
   }
   if (contract["allow-shared-setup"] !== true) {
     addIssue(issues, "error", "VAL-PST-023", ref, `${sliceId} allow-shared-setup 必须为 true。`);
@@ -882,6 +945,8 @@ function compareProofSliceMirror(jsonSlice, markdownSlice, ref, issues) {
     ["failure-signal", jsonSlice.failure, markdownSlice.failure],
     ["primary-layer", jsonSlice.layer, markdownSlice.layer],
     ["production-owner", jsonSlice.owner, markdownSlice.owner],
+    ["persistent-test-required", jsonSlice.persistentTestRequired, markdownSlice.persistentTestRequired],
+    ["proof-evidence-mode", jsonSlice.proofEvidenceMode, markdownSlice.proofEvidenceMode],
     ["primary-assertion-shape", jsonSlice.assertion, markdownSlice.assertion],
     ["fixture-mock-boundary", jsonSlice.fixture, markdownSlice.fixture],
     ["regression-intent", jsonSlice.regression, markdownSlice.regression],
@@ -1858,11 +1923,25 @@ function validateObligationSpecsTraceProjection(trace, registeredRows, files, is
     .map(([globalAtomId]) => globalAtomId);
   const coveredSpecProjectionIds = new Set();
   let sawSpecsTrace = false;
+  const specsEntries = [...trace.entries()].filter(([key]) => key.startsWith("specs:"));
+  const noDeltaEntries = specsEntries.filter(([key, data]) => isNoDeltaSpecsTrace(key, data));
+  const regularSpecsEntries = specsEntries.filter(([key, data]) => !isNoDeltaSpecsTrace(key, data));
+  const noDeltaEntry = noDeltaEntries[0] ?? null;
 
-  for (const [key, data] of trace.entries()) {
-    if (!key.startsWith("specs:")) {
-      continue;
-    }
+  if (noDeltaEntries.length > 1) {
+    addIssue(issues, "error", "VAL-SP-015", "trace/specs/**/*.trace.json", "no-delta specs marker 只能出现一次。");
+  }
+  if (noDeltaEntry) {
+    validateNoDeltaSpecsTrace(noDeltaEntry[0], noDeltaEntry[1], regularSpecsEntries, requiredSpecProjectionIds, files, issues);
+  }
+  if (!noDeltaEntry && requiredSpecProjectionIds.length === 0 && regularSpecsEntries.length > 0) {
+    addIssue(issues, "error", "VAL-SP-015", "trace/specs/**/*.trace.json", "没有 spec-requirement/spec-guard direct atom 时不得生成普通 delta specs；请使用 specs/no-spec-delta/README.md marker。");
+  }
+  if (!noDeltaEntry && requiredSpecProjectionIds.length === 0 && regularSpecsEntries.length === 0 && hasDownstreamArtifacts(files)) {
+    addIssue(issues, "error", "VAL-SP-015", "specs/no-spec-delta/README.md", "没有 spec-requirement/spec-guard direct atom 且已存在下游 artifact 时，必须生成 no-delta specs marker。");
+  }
+
+  for (const [key, data] of regularSpecsEntries) {
     sawSpecsTrace = true;
     const specFile = files?.byArtifact?.get(key);
     const anchors = specFile ? parseSpecMarkdownAnchors(specFile, issues) : null;
@@ -1931,6 +2010,74 @@ function validateObligationSpecsTraceProjection(trace, registeredRows, files, is
       issues,
     );
   }
+}
+
+function isNoDeltaSpecsTrace(key, data) {
+  return (
+    key === NO_DELTA_SPECS_TRACE_KEY ||
+    strip(data?.["artifact-path"]) === NO_DELTA_SPECS_ARTIFACT_PATH ||
+    strip(data?.["specs-completion-mode"]) === NO_DELTA_SPECS_COMPLETION_MODE ||
+    strip(asObject(data?.["delivery-plane"])["completion-mode"]) === NO_DELTA_SPECS_COMPLETION_MODE
+  );
+}
+
+function validateNoDeltaSpecsTrace(key, data, regularSpecsEntries, requiredSpecProjectionIds, files, issues) {
+  const traceRefPath = tracePathForArtifactPath(NO_DELTA_SPECS_ARTIFACT_PATH);
+  if (key !== NO_DELTA_SPECS_TRACE_KEY) {
+    addIssue(issues, "error", "VAL-SP-015", key, `no-delta specs trace key 必须为 ${NO_DELTA_SPECS_TRACE_KEY}。`);
+  }
+  if (strip(data["artifact-path"]) !== NO_DELTA_SPECS_ARTIFACT_PATH) {
+    addIssue(issues, "error", "VAL-SP-015", traceRefPath, `no-delta specs artifact-path 必须为 ${NO_DELTA_SPECS_ARTIFACT_PATH}。`);
+  }
+  if (strip(data["specs-completion-mode"]) !== NO_DELTA_SPECS_COMPLETION_MODE) {
+    addIssue(issues, "error", "VAL-SP-015", traceRefPath, `no-delta specs trace 必须声明 specs-completion-mode: ${NO_DELTA_SPECS_COMPLETION_MODE}。`);
+  }
+  if (strip(asObject(data["delivery-plane"])["completion-mode"]) !== NO_DELTA_SPECS_COMPLETION_MODE) {
+    addIssue(issues, "error", "VAL-SP-015", traceRefPath, `no-delta specs delivery-plane 必须声明 completion-mode: ${NO_DELTA_SPECS_COMPLETION_MODE}。`);
+  }
+  if (requiredSpecProjectionIds.length > 0) {
+    addIssue(issues, "error", "VAL-SP-015", traceRefPath, "存在 spec-requirement/spec-guard direct atom 时禁止使用 no-delta specs marker。");
+  }
+  if (regularSpecsEntries.length > 0) {
+    addIssue(issues, "error", "VAL-SP-015", traceRefPath, "no-delta specs marker 不得与普通 specs/<capability>/spec.md 共存。");
+  }
+  if (asArray(data["requirement-source-trace"]).length > 0) {
+    addIssue(issues, "error", "VAL-SP-015", `${key}#/requirement-source-trace`, "no-delta specs trace 的 requirement-source-trace 必须为空。");
+  }
+  validateNoDeltaSpecsGate(data, key, issues);
+  const specFile = files?.byArtifact?.get(key);
+  if (!specFile) {
+    addIssue(issues, "error", "VAL-SP-015", NO_DELTA_SPECS_ARTIFACT_PATH, "no-delta specs trace 缺少对应 marker Markdown artifact。");
+    return;
+  }
+  validateNoDeltaSpecsMarkdown(specFile, issues);
+}
+
+function validateNoDeltaSpecsGate(data, key, issues) {
+  const gate = asObject(data["production-alignment-gate"]);
+  const blockers = gate.blockers;
+  if (Array.isArray(blockers) && blockers.length > 0) {
+    addIssue(issues, "error", "VAL-SP-015", `${key}#/production-alignment-gate/blockers`, "no-delta specs trace 的 production-alignment-gate.blockers 必须为空。");
+  } else if (!Array.isArray(blockers)) {
+    const blockerText = strip(blockers);
+    if (blockerText && !/^(none|无)$/iu.test(blockerText)) {
+      addIssue(issues, "error", "VAL-SP-015", `${key}#/production-alignment-gate/blockers`, "no-delta specs trace 的 production-alignment-gate.blockers 必须为空、None 或 无。");
+    }
+  }
+}
+
+function validateNoDeltaSpecsMarkdown(file, issues) {
+  const bodyBeforeTrace = file.text.split(/\n## Trace Appendix\b/u, 1)[0] ?? file.text;
+  if (SPECS_DELTA_HEADER_RE.test(bodyBeforeTrace)) {
+    addIssue(issues, "error", "VAL-SP-015", file.repoRelPath, "no-delta specs marker 不得包含 ADDED/MODIFIED/REMOVED/RENAMED Requirements delta heading。");
+  }
+  if (SPECS_REQUIREMENT_OR_SCENARIO_RE.test(bodyBeforeTrace)) {
+    addIssue(issues, "error", "VAL-SP-015", file.repoRelPath, "no-delta specs marker 不得包含 Requirement 或 Scenario heading。");
+  }
+}
+
+function hasDownstreamArtifacts(files) {
+  return ["design.md", "runtime-acceptance.md", "verification.md", "tasks.md"].some((artifact) => Boolean(files?.byName?.[artifact]));
 }
 
 function validateSpecsTraceSourceFields(globalAtomId, proposalRow, row, ref, issues) {
@@ -3196,6 +3343,11 @@ function sameArray(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) return false;
   if (a.length !== b.length) return false;
   return a.every((value, index) => value === b[index]);
+}
+
+function isManualGateNone(value) {
+  const gate = strip(value).toLowerCase();
+  return !gate || gate === "none" || gate === "null";
 }
 
 function isOwnerListOrNonProduction(owner) {
