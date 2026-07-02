@@ -5,9 +5,9 @@ artifacts:
   - id: proposal
     generates: proposal.md
     description: default-style proposal，带轻量 change scope coverage
-    template: proposal.md
+    template: proposal.trace.template.jsonc
     instruction: |
-      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
+      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/proposal.trace.json 的 JSONC authoring guide，不是 proposal.md Markdown 模板。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires: []
 
   - id: specs

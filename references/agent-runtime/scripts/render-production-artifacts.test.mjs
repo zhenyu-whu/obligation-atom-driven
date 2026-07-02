@@ -25,6 +25,11 @@ test("renderer 从 trace fixture 渲染 proposal/spec/design/runtime/tasks", () 
     const result = renderChangeArtifact({ root, change: "render-all-change", ...item });
     assert.ok(result.markdown.startsWith(item.expected), `${item.artifact} should render from trace payload`);
     assert.match(result.markdown, /## Trace Appendix\n\nTrace file: `trace\//);
+    if (item.artifact === "proposal") {
+      assert.match(result.markdown, /## Change Plan Boundary\n\n- boundary 来自 trace。/);
+      assert.match(result.markdown, /## Impact\n\n- 无/);
+      assert.match(result.markdown, /## Rollout \/ Readiness\n\n- 无/);
+    }
   }
 });
 

@@ -36,14 +36,19 @@ const AC_ID_RE = /\bAC-\d{3}\b/g;
 const TASK_ID_RE = /\bAC-\d{3}\.\d+\b/g;
 const GA_ID_RE = /\bGA-\d{4}\b/g;
 const SI_ID_RE = /\bSI-\d{3}\b/g;
+const BI_ID_RE = /\bBI-\d{3}\b/g;
 const D_ID_RE = /\bD-\d{3}\b/g;
 const P_ID_RE = /\bP-\d{3}\b/g;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const DEFAULT_PROPOSAL_FORBIDDEN_AUTHORITY_RE =
+  /openspec\/orchestrate|final-packet-index|obligation-atom-index|capability-anchors|global-atom-index/iu;
 const DEPRECATED_FOUNDATION_REFERENCE_RE = /foundation-reference|foundation-runtime-substrate/iu;
 const NO_DELTA_SPECS_TRACE_KEY = "specs:no-spec-delta/README";
 const SPECS_DELTA_HEADER_RE = /^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\b/mu;
 const SPECS_REQUIREMENT_OR_SCENARIO_RE = /^#{3,4}\s+(Requirement|Scenario):/mu;
 const CHANGE_KINDS = new Set(["foundation", "business"]);
+const DEFAULT_INPUT_TYPES = new Set(["user-request", "existing-spec", "code-baseline", "external-doc", "issue", "design"]);
+const DEFAULT_ARTIFACT_HANDLINGS = new Set(["spec", "guard", "design", "proof", "context"]);
 const FOUNDATION_OBSERVABLE_KINDS = new Set([
   "workspace-script",
   "app-skeleton-startup",
@@ -1246,7 +1251,14 @@ function validateSourceScopeTrace(trace, schemaKind, files, issues) {
 }
 
 function validateProposalAuthorityTrace(root, change, proposalFile, proposal, schemaKind, issues) {
-  if (schemaKind !== "obligation" || !proposal) {
+  if (!proposal) {
+    return;
+  }
+  if (schemaKind === "default") {
+    validateDefaultProposalTrace(proposal, proposalFile, issues);
+    return;
+  }
+  if (schemaKind !== "obligation") {
     return;
   }
 
@@ -1350,6 +1362,216 @@ function validateProposalAuthorityTrace(root, change, proposalFile, proposal, sc
   validateProposalProductionSourceCoverage(proposal, packetRows, issues);
   validateProposalAlignmentGate(proposal, packetRows, issues);
   validateProposalDeliveryPlaneLeakage(proposalFile, issues);
+}
+
+function validateDefaultProposalTrace(proposal, proposalFile, issues) {
+  const baselineRows = validateDefaultBaselineInputReadSet(proposal, issues);
+  const scopeRows = validateDefaultChangeScopeCoverage(proposal, issues);
+  validateDefaultProposalAlignmentGate(proposal, baselineRows, scopeRows, issues);
+  validateDefaultProposalAuthorityLeakage(proposal, proposalFile, issues);
+}
+
+function validateDefaultBaselineInputReadSet(proposal, issues) {
+  const rows = new Map();
+  if (!Array.isArray(proposal["baseline-input-read-set"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-019",
+      "trace/proposal.trace.json#/baseline-input-read-set",
+      "baseline-input-read-set 必须是数组，且每行包含一个 exact BI ID 与必填字段。",
+    );
+    return rows;
+  }
+  const requiredFields = ["input-type", "source", "read-purpose", "interpretation-result"];
+  for (const [index, row] of asArray(proposal["baseline-input-read-set"]).entries()) {
+    const ref = traceRef("proposal", "baseline-input-read-set", index);
+    const ids = idsFromValue(row["input-id"], BI_ID_RE);
+    if (ids.length !== 1) {
+      addIssue(issues, "error", "VAL-PR-019", ref, "baseline-input-read-set 每行必须通过 input-id 包含一个 exact BI-### ID。");
+      continue;
+    }
+    const inputId = ids[0];
+    if (rows.has(inputId)) {
+      addIssue(issues, "error", "VAL-PR-019", ref, `${inputId} 在 baseline-input-read-set 中重复。`);
+    }
+    for (const field of requiredFields) {
+      if (!strip(row[field])) {
+        addIssue(issues, "error", "VAL-PR-019", ref, `${inputId} 缺少必填字段 ${field}。`);
+      }
+    }
+    const inputType = strip(row["input-type"]);
+    if (inputType && !DEFAULT_INPUT_TYPES.has(inputType)) {
+      addIssue(issues, "error", "VAL-PR-019", ref, `${inputId} input-type 非法：${inputType}。`);
+    }
+    rows.set(inputId, row);
+  }
+  return rows;
+}
+
+function validateDefaultChangeScopeCoverage(proposal, issues) {
+  const rows = new Map();
+  if (!Array.isArray(proposal["change-scope-coverage"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-020",
+      "trace/proposal.trace.json#/change-scope-coverage",
+      "change-scope-coverage 必须是数组，且每行包含一个 exact SI ID 与必填字段。",
+    );
+    return rows;
+  }
+  const requiredFields = ["source", "source-fact", "artifact-handling", "capability", "propose-use", "downstream-coverage-expectation"];
+  for (const [index, row] of asArray(proposal["change-scope-coverage"]).entries()) {
+    const ref = traceRef("proposal", "change-scope-coverage", index);
+    if (Object.hasOwn(row, "global-atom-id") || collectIds(row, GA_ID_RE).length > 0) {
+      addIssue(issues, "error", "VAL-PR-020", ref, "default proposal change-scope-coverage 不得使用 global-atom-id 或 GA-####。");
+    }
+    const ids = idsFromValue(row["scope-item-id"], SI_ID_RE);
+    if (ids.length !== 1) {
+      addIssue(issues, "error", "VAL-PR-020", ref, "change-scope-coverage 每行必须通过 scope-item-id 包含一个 exact SI-### ID。");
+      continue;
+    }
+    const scopeItemId = ids[0];
+    if (rows.has(scopeItemId)) {
+      addIssue(issues, "error", "VAL-PR-020", ref, `${scopeItemId} 在 change-scope-coverage 中重复。`);
+    }
+    for (const field of requiredFields) {
+      if (!strip(row[field])) {
+        addIssue(issues, "error", "VAL-PR-020", ref, `${scopeItemId} 缺少必填字段 ${field}。`);
+      }
+    }
+    const handling = strip(row["artifact-handling"]);
+    if (handling && !DEFAULT_ARTIFACT_HANDLINGS.has(handling)) {
+      addIssue(issues, "error", "VAL-PR-020", ref, `${scopeItemId} artifact-handling 非法：${handling}。`);
+    }
+    rows.set(scopeItemId, row);
+  }
+  return rows;
+}
+
+function validateDefaultProposalAlignmentGate(proposal, baselineRows, scopeRows, issues) {
+  const gate = asObject(proposal["proposal-alignment-gate"]);
+  const scopeItems = asObject(gate["scope-items"]);
+  validateGateObjectIds(
+    scopeItems,
+    [...scopeRows.keys()],
+    SI_ID_RE,
+    "VAL-PR-021",
+    "trace/proposal.trace.json#/proposal-alignment-gate/scope-items",
+    "proposal-alignment-gate.scope-items 必须与 change-scope-coverage exact SI set 一致",
+    issues,
+    "id-list-source",
+  );
+
+  const baselineInputs = asObject(gate["baseline-inputs-read"]);
+  validateGateObjectIds(
+    baselineInputs,
+    [...baselineRows.keys()],
+    BI_ID_RE,
+    "VAL-PR-021",
+    "trace/proposal.trace.json#/proposal-alignment-gate/baseline-inputs-read",
+    "proposal-alignment-gate.baseline-inputs-read 必须与 baseline-input-read-set exact BI set 一致",
+    issues,
+    "read-set-source",
+  );
+
+  validateDefaultHandlingCoverage(gate, scopeRows, issues);
+  validateDefaultCapabilityCoverage(gate, scopeRows, issues);
+
+  const orphanScopeItems = asArray(gate["orphan-scope-items"]);
+  if (orphanScopeItems.length > 0) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-021",
+      "trace/proposal.trace.json#/proposal-alignment-gate/orphan-scope-items",
+      "proposal-alignment-gate.orphan-scope-items 必须为空。",
+    );
+  }
+}
+
+function validateDefaultHandlingCoverage(gate, scopeRows, issues) {
+  if (!Array.isArray(gate["artifact-handling-coverage"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-021",
+      "trace/proposal.trace.json#/proposal-alignment-gate/artifact-handling-coverage",
+      "artifact-handling-coverage 必须是按 artifact-handling 分组的数组。",
+    );
+    return;
+  }
+  const expected = groupIdsByField(scopeRows, "artifact-handling");
+  const seen = new Set();
+  for (const [index, row] of asArray(gate["artifact-handling-coverage"]).entries()) {
+    const ref = traceRef("proposal", "proposal-alignment-gate/artifact-handling-coverage", index);
+    const handling = strip(row["artifact-handling"]);
+    if (!DEFAULT_ARTIFACT_HANDLINGS.has(handling)) {
+      addIssue(issues, "error", "VAL-PR-021", ref, `artifact-handling-coverage artifact-handling 非法或缺失：${handling || "(empty)"}。`);
+      continue;
+    }
+    seen.add(handling);
+    const ids = idsFromValue(row.ids, SI_ID_RE);
+    compareIdSets(expected.get(handling) ?? [], ids, "VAL-PR-021", ref, `${handling} handling coverage 必须与 change-scope-coverage 分组一致`, issues);
+    validateCountEqualsIds(row.count, ids, "VAL-PR-021", ref, "artifact-handling-coverage.count", issues);
+  }
+  compareIdSets([...expected.keys()], [...seen], "VAL-PR-021", "trace/proposal.trace.json#/proposal-alignment-gate/artifact-handling-coverage", "artifact-handling-coverage 分组 key 必须与 change-scope-coverage 一致", issues);
+}
+
+function validateDefaultCapabilityCoverage(gate, scopeRows, issues) {
+  if (!Array.isArray(gate["capability-increment-coverage"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-021",
+      "trace/proposal.trace.json#/proposal-alignment-gate/capability-increment-coverage",
+      "capability-increment-coverage 必须是按 capability 分组的数组。",
+    );
+    return;
+  }
+  const expected = groupIdsByField(scopeRows, "capability");
+  const seen = new Set();
+  for (const [index, row] of asArray(gate["capability-increment-coverage"]).entries()) {
+    const ref = traceRef("proposal", "proposal-alignment-gate/capability-increment-coverage", index);
+    const capability = strip(row.capability);
+    if (!capability) {
+      addIssue(issues, "error", "VAL-PR-021", ref, "capability-increment-coverage 每行必须包含 capability。");
+      continue;
+    }
+    seen.add(capability);
+    const expectedIds = expected.get(capability) ?? [];
+    const count = Number(row["scope-item-count"]);
+    if (!Number.isFinite(count) || count !== expectedIds.length) {
+      addIssue(issues, "error", "VAL-PR-021", ref, `${capability} scope-item-count 必须等于该 capability 的 SI 数量 ${expectedIds.length}。`);
+    }
+  }
+  compareIdSets([...expected.keys()], [...seen], "VAL-PR-021", "trace/proposal.trace.json#/proposal-alignment-gate/capability-increment-coverage", "capability-increment-coverage capability 集合必须与 change-scope-coverage 一致", issues);
+}
+
+function validateDefaultProposalAuthorityLeakage(proposal, proposalFile, issues) {
+  const traceText = JSON.stringify(proposal ?? {});
+  if (DEFAULT_PROPOSAL_FORBIDDEN_AUTHORITY_RE.test(traceText) || GA_ID_RE.test(traceText)) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-022",
+      "trace/proposal.trace.json",
+      "production-default-acceptance-driven proposal 不得依赖 openspec/orchestrate、final packet、global atom index、capability anchors 或 GA-####。",
+    );
+  }
+  if (!proposalFile) {
+    return;
+  }
+  const bodyBeforeTrace = proposalFile.text.split(/\n## Trace Appendix\b/u, 1)[0] ?? proposalFile.text;
+  const forbidden = /Scope Items:|scope coverage|proposal-alignment-gate|alignment gate|change-scope-coverage|artifact-handling-coverage/iu;
+  if (forbidden.test(bodyBeforeTrace) || DEFAULT_PROPOSAL_FORBIDDEN_AUTHORITY_RE.test(bodyBeforeTrace) || GA_ID_RE.test(bodyBeforeTrace)) {
+    addIssue(issues, "error", "VAL-PR-022", proposalFile.repoRelPath, "default proposal Delivery Plane 不得泄漏 scope coverage、alignment gate、orchestrate authority 或 GA coverage。");
+  }
+  const siIds = unique(bodyBeforeTrace.match(SI_ID_RE) ?? []);
+  if (siIds.length > 2) {
+    addIssue(issues, "error", "VAL-PR-022", proposalFile.repoRelPath, "default proposal Delivery Plane 不得包含批量 SI coverage 列表；完整覆盖应只写入 JSON trace。");
+  }
 }
 
 function loadSourceAlignedHandoffAuthority(root, change, preconditions, issues) {
@@ -2013,6 +2235,129 @@ function validateProposalAlignmentGate(proposal, packetRows, issues, expectedCha
   if (Number.isFinite(gateCount) && gateCount !== gateIds.length) {
     addIssue(issues, "error", "VAL-PR-010", "trace/proposal.trace.json#/proposal-alignment-gate/direct-atoms", `direct-atoms.count 必须等于 ids 数量 ${gateIds.length}。`);
   }
+  validateObligationProposalAlignmentGateGroups(proposal, packetRows, gate, issues);
+}
+
+function validateObligationProposalAlignmentGateGroups(proposal, packetRows, gate, issues) {
+  const registerRows = proposalRegisterRowsById(proposal["change-atom-coverage-register"], "global-atom-id", GA_ID_RE);
+  const projectionGroups = groupIdsByField(registerRows, "artifact-projection");
+  validateObligationProjectionCoverage(gate, projectionGroups, issues);
+
+  const readSetIds = idsFromValue(asArray(proposal["source-window-read-set"]).map((row) => asObject(row)["global-atom-id"]), GA_ID_RE);
+  validateGateObjectIds(
+    asObject(gate["source-windows-re-read"]),
+    readSetIds,
+    GA_ID_RE,
+    "VAL-PR-023",
+    "trace/proposal.trace.json#/proposal-alignment-gate/source-windows-re-read",
+    "proposal-alignment-gate.source-windows-re-read 必须与 source-window-read-set exact GA set 一致",
+    issues,
+    "read-set-source",
+  );
+
+  const nonDirectRows = proposalRegisterRowsById(proposal["owner-scoped-non-direct-boundary-register"], "global-atom-id", GA_ID_RE);
+  const nonDirectIds = [...nonDirectRows.keys()];
+  validateGateObjectIds(
+    asObject(gate["owner-scoped-non-direct-atoms"]),
+    nonDirectIds,
+    GA_ID_RE,
+    "VAL-PR-023",
+    "trace/proposal.trace.json#/proposal-alignment-gate/owner-scoped-non-direct-atoms",
+    "proposal-alignment-gate.owner-scoped-non-direct-atoms 必须与 owner-scoped-non-direct-boundary-register exact GA set 一致",
+    issues,
+    "downstream-trace-policy",
+  );
+
+  const capabilityGroups = groupIdsByField(registerRows, "owner-capability");
+  validateObligationCapabilityCoverage(gate, capabilityGroups, issues);
+
+  const orphanDirectAtoms = asArray(gate["orphan-direct-atoms"]);
+  if (orphanDirectAtoms.length > 0) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-023",
+      "trace/proposal.trace.json#/proposal-alignment-gate/orphan-direct-atoms",
+      "proposal-alignment-gate.orphan-direct-atoms 必须为空。",
+    );
+  }
+
+  compareIdSets(
+    [...packetRows.keys()],
+    [...registerRows.keys()],
+    "VAL-PR-023",
+    "trace/proposal.trace.json#/proposal-alignment-gate",
+    "proposal alignment gate 分组必须来自 direct register",
+    issues,
+  );
+}
+
+function validateObligationProjectionCoverage(gate, projectionGroups, issues) {
+  if (!Array.isArray(gate["artifact-projection-coverage"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-023",
+      "trace/proposal.trace.json#/proposal-alignment-gate/artifact-projection-coverage",
+      "artifact-projection-coverage 必须是按 artifact-projection 分组的数组。",
+    );
+    return;
+  }
+  const seen = new Set();
+  for (const [index, row] of asArray(gate["artifact-projection-coverage"]).entries()) {
+    const ref = traceRef("proposal", "proposal-alignment-gate/artifact-projection-coverage", index);
+    const projection = strip(row["artifact-projection"]);
+    if (!projection) {
+      addIssue(issues, "error", "VAL-PR-023", ref, "artifact-projection-coverage 每行必须包含 artifact-projection。");
+      continue;
+    }
+    seen.add(projection);
+    const ids = idsFromValue(row.ids, GA_ID_RE);
+    compareIdSets(projectionGroups.get(projection) ?? [], ids, "VAL-PR-023", ref, `${projection} projection coverage 必须与 change-atom-coverage-register 分组一致`, issues);
+    validateCountEqualsIds(row.count, ids, "VAL-PR-023", ref, "artifact-projection-coverage.count", issues);
+  }
+  compareIdSets([...projectionGroups.keys()], [...seen], "VAL-PR-023", "trace/proposal.trace.json#/proposal-alignment-gate/artifact-projection-coverage", "artifact-projection-coverage 分组 key 必须与 proposal register 一致", issues);
+}
+
+function validateObligationCapabilityCoverage(gate, capabilityGroups, issues) {
+  if (!Array.isArray(gate["capability-increment-coverage"])) {
+    addIssue(
+      issues,
+      "error",
+      "VAL-PR-023",
+      "trace/proposal.trace.json#/proposal-alignment-gate/capability-increment-coverage",
+      "capability-increment-coverage 必须是按 owner-capability 分组的数组。",
+    );
+    return;
+  }
+  const seen = new Set();
+  for (const [index, row] of asArray(gate["capability-increment-coverage"]).entries()) {
+    const ref = traceRef("proposal", "proposal-alignment-gate/capability-increment-coverage", index);
+    const capability = strip(row.capability);
+    if (!capability) {
+      addIssue(issues, "error", "VAL-PR-023", ref, "capability-increment-coverage 每行必须包含 capability。");
+      continue;
+    }
+    seen.add(capability);
+    const expectedIds = capabilityGroups.get(capability) ?? [];
+    const count = Number(row["direct-atom-count"]);
+    if (!Number.isFinite(count) || count !== expectedIds.length) {
+      addIssue(issues, "error", "VAL-PR-023", ref, `${capability} direct-atom-count 必须等于该 capability 的 direct atom 数量 ${expectedIds.length}。`);
+    }
+  }
+  compareIdSets([...capabilityGroups.keys()], [...seen], "VAL-PR-023", "trace/proposal.trace.json#/proposal-alignment-gate/capability-increment-coverage", "capability-increment-coverage capability 集合必须与 proposal register owner-capability 一致", issues);
+}
+
+function proposalRegisterRowsById(rows, idField, regex) {
+  const result = new Map();
+  for (const row of asArray(rows)) {
+    const object = asObject(row);
+    const ids = idsFromValue(object[idField], regex);
+    if (ids.length === 1) {
+      result.set(ids[0], object);
+    }
+  }
+  return result;
 }
 
 function validateProposalFoundationReferenceReadSet(proposal, issues) {
@@ -3454,6 +3799,41 @@ function compareIdSets(expected, actual, ruleId, ref, label, issues) {
     if (extra.length > 0) parts.push(`多余：${extra.join(", ")}`);
     addIssue(issues, "error", ruleId, ref, `${label}；${parts.join("；")}。`);
   }
+}
+
+function validateGateObjectIds(gateObject, expectedIds, regex, ruleId, ref, label, issues, sourceField = "id-list-source") {
+  if (!gateObject || typeof gateObject !== "object" || Array.isArray(gateObject)) {
+    addIssue(issues, "error", ruleId, ref, `${label}；gate section 必须是对象。`);
+    return [];
+  }
+  if (!Array.isArray(gateObject.ids)) {
+    addIssue(issues, "error", ruleId, ref, `${label}；ids 必须是数组。`);
+  }
+  if (!strip(gateObject[sourceField])) {
+    addIssue(issues, "error", ruleId, ref, `${label}；必须包含 ${sourceField}。`);
+  }
+  const ids = idsFromValue(gateObject.ids, regex);
+  compareIdSets(expectedIds, ids, ruleId, ref, label, issues);
+  validateCountEqualsIds(gateObject.count, ids, ruleId, ref, "count", issues);
+  return ids;
+}
+
+function validateCountEqualsIds(countValue, ids, ruleId, ref, label, issues) {
+  const count = Number(countValue);
+  if (!Number.isFinite(count) || count !== ids.length) {
+    addIssue(issues, "error", ruleId, ref, `${label} 必须等于 ids 数量 ${ids.length}。`);
+  }
+}
+
+function groupIdsByField(rows, field) {
+  const groups = new Map();
+  for (const [id, row] of rows.entries()) {
+    const key = strip(row[field]);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(id);
+  }
+  return groups;
 }
 
 function sameSet(a, b) {

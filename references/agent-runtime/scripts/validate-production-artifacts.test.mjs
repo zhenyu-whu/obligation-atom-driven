@@ -209,11 +209,209 @@ test("proposal overlay contract documents canonical obligation trace fields", ()
   }
 });
 
+test("proposal contracts document upstream input and trace generation rules", () => {
+  const common = fs.readFileSync(firstExistingPath([
+    path.join(process.cwd(), "openspec", "schemas", "_production-contracts", "artifacts", "proposal.md"),
+    path.join(process.cwd(), "references", "profiles", "_production-contracts", "artifacts", "proposal.md"),
+  ]), "utf8");
+  for (const required of ["Upstream Input Model", "Trace Generation Algorithm", "Delivery Plane Projection Rules"]) {
+    assert.match(common, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+  }
+
+  const defaultOverlay = fs.readFileSync(firstExistingPath([
+    path.join(process.cwd(), "openspec", "schemas", "_production-contracts", "overlays", "production-default-acceptance-driven", "proposal.md"),
+    path.join(process.cwd(), "references", "profiles", "_production-contracts", "overlays", "production-default-acceptance-driven", "proposal.md"),
+  ]), "utf8");
+  for (const required of ["baseline-input-read-set[]", "change-scope-coverage[]", "proposal-alignment-gate.scope-items", "artifact-handling-coverage"]) {
+    assert.match(defaultOverlay, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+  }
+
+  const obligationOverlay = fs.readFileSync(firstExistingPath([
+    path.join(process.cwd(), "openspec", "schemas", "_production-contracts", "overlays", "production-obligation-atom-driven", "proposal.md"),
+    path.join(process.cwd(), "references", "profiles", "_production-contracts", "overlays", "production-obligation-atom-driven", "proposal.md"),
+  ]), "utf8");
+  for (const required of ["上游输入权威", "artifact-projection-coverage[]", "source-windows-re-read", "capability-increment-coverage"]) {
+    assert.match(obligationOverlay, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+  }
+});
+
 function firstExistingPath(paths) {
   const found = paths.find((candidate) => fs.existsSync(candidate));
   assert.ok(found, `expected one existing path from ${paths.join(", ")}`);
   return found;
 }
+
+test("default proposal minimal partial 校验通过", () => {
+  const root = makeChange("default-valid-proposal-change", defaultProposalFiles());
+  const result = validateChange({ root, change: "default-valid-proposal-change", complete: false });
+
+  assert.equal(result.errorCount, 0, JSON.stringify(result.issues, null, 2));
+  assert.equal(result.warningCount, 0, JSON.stringify(result.issues, null, 2));
+});
+
+test("default proposal baseline-input-read-set 结构错误 hard fail", () => {
+  const cases = [
+    {
+      name: "missing-field",
+      mutate: (trace) => {
+        delete trace["baseline-input-read-set"][0].source;
+      },
+    },
+    {
+      name: "duplicate-bi",
+      mutate: (trace) => {
+        trace["baseline-input-read-set"].push({ ...trace["baseline-input-read-set"][0] });
+      },
+    },
+    {
+      name: "invalid-input-type",
+      mutate: (trace) => {
+        trace["baseline-input-read-set"][0]["input-type"] = "orchestrate";
+      },
+    },
+  ];
+  for (const item of cases) {
+    const files = defaultProposalFiles();
+    item.mutate(files.traces["proposal.trace.json"]);
+    refreshDefaultProposalMarkdown(files);
+    const root = makeChange(`default-baseline-${item.name}-change`, files);
+    const result = validateChange({ root, change: `default-baseline-${item.name}-change`, complete: false });
+    assertRule(result, "VAL-PR-019");
+  }
+});
+
+test("default proposal change-scope-coverage 结构错误 hard fail", () => {
+  const cases = [
+    {
+      name: "missing-field",
+      mutate: (trace) => {
+        delete trace["change-scope-coverage"][0]["source-fact"];
+      },
+    },
+    {
+      name: "duplicate-si",
+      mutate: (trace) => {
+        trace["change-scope-coverage"].push({ ...trace["change-scope-coverage"][0] });
+      },
+    },
+    {
+      name: "invalid-handling",
+      mutate: (trace) => {
+        trace["change-scope-coverage"][0]["artifact-handling"] = "runtime";
+      },
+    },
+    {
+      name: "ga-register",
+      mutate: (trace) => {
+        trace["change-scope-coverage"][0]["global-atom-id"] = "GA-0001";
+      },
+    },
+  ];
+  for (const item of cases) {
+    const files = defaultProposalFiles();
+    item.mutate(files.traces["proposal.trace.json"]);
+    refreshDefaultProposalMarkdown(files);
+    const root = makeChange(`default-scope-${item.name}-change`, files);
+    const result = validateChange({ root, change: `default-scope-${item.name}-change`, complete: false });
+    assertRule(result, "VAL-PR-020");
+  }
+});
+
+test("default proposal alignment gate set/count 错误 hard fail", () => {
+  const cases = [
+    {
+      name: "scope-items",
+      mutate: (trace) => {
+        trace["proposal-alignment-gate"]["scope-items"].ids = ["SI-999"];
+      },
+    },
+    {
+      name: "handling-count",
+      mutate: (trace) => {
+        trace["proposal-alignment-gate"]["artifact-handling-coverage"][0].count = 2;
+      },
+    },
+    {
+      name: "baseline-inputs",
+      mutate: (trace) => {
+        trace["proposal-alignment-gate"]["baseline-inputs-read"].ids = [];
+      },
+    },
+    {
+      name: "orphan-scope-items",
+      mutate: (trace) => {
+        trace["proposal-alignment-gate"]["orphan-scope-items"] = ["SI-001"];
+      },
+    },
+  ];
+  for (const item of cases) {
+    const files = defaultProposalFiles();
+    item.mutate(files.traces["proposal.trace.json"]);
+    refreshDefaultProposalMarkdown(files);
+    const root = makeChange(`default-gate-${item.name}-change`, files);
+    const result = validateChange({ root, change: `default-gate-${item.name}-change`, complete: false });
+    assertRule(result, "VAL-PR-021");
+  }
+});
+
+test("default proposal 禁止 orchestrate / GA authority 与 Delivery Plane coverage 泄漏", () => {
+  const cases = [
+    {
+      name: "trace-orchestrate",
+      mutate: (files) => {
+        files.traces["proposal.trace.json"]["baseline-input-read-set"][0].source = "openspec/orchestrate/phase-works/phase-5/final-packet-index.json";
+      },
+    },
+    {
+      name: "trace-ga",
+      mutate: (files) => {
+        files.traces["proposal.trace.json"]["change-scope-coverage"][0]["source-fact"] = "错误引用 GA-0001。";
+      },
+    },
+    {
+      name: "delivery-scope-items",
+      mutate: (files) => {
+        files.artifacts["proposal.md"] = "## Why\n\nScope Items: SI-001, SI-002, SI-003\n";
+      },
+    },
+  ];
+  for (const item of cases) {
+    const files = defaultProposalFiles();
+    item.mutate(files);
+    if (!files.artifacts["proposal.md"].includes("Scope Items:")) {
+      refreshDefaultProposalMarkdown(files);
+    }
+    const root = makeChange(`default-forbidden-${item.name}-change`, files);
+    const result = validateChange({ root, change: `default-forbidden-${item.name}-change`, complete: false });
+    assertRule(result, "VAL-PR-022");
+  }
+});
+
+test("obligation proposal alignment gate 分组 count 错误 hard fail", () => {
+  const cases = [
+    {
+      name: "projection-count",
+      mutate: (trace) => {
+        trace["proposal-alignment-gate"]["artifact-projection-coverage"][0].count = 2;
+      },
+    },
+    {
+      name: "source-window-count",
+      mutate: (trace) => {
+        trace["proposal-alignment-gate"]["source-windows-re-read"].count = 2;
+      },
+    },
+  ];
+  for (const item of cases) {
+    const files = standardFiles({ proposal: true });
+    files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
+    files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
+    item.mutate(files.traces["proposal.trace.json"]);
+    const root = makeChange(`obligation-gate-${item.name}-change`, files);
+    const result = validateChange({ root, change: `obligation-gate-${item.name}-change`, complete: false });
+    assertRule(result, "VAL-PR-023");
+  }
+});
 
 test("proposal 出现 foundation reference read-set hard fail", () => {
   const files = standardFiles({ proposal: true, proposalProjection: "design-obligation" });
@@ -1288,8 +1486,9 @@ function makeChange(change, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-validator-"));
   const changeDir = path.join(root, "openspec", "changes", change);
   const traceDir = path.join(changeDir, "trace");
+  const schemaName = files.schemaName ?? "production-obligation-atom-driven";
   fs.mkdirSync(traceDir, { recursive: true });
-  fs.writeFileSync(path.join(changeDir, ".openspec.yaml"), "schema: production-obligation-atom-driven\n");
+  fs.writeFileSync(path.join(changeDir, ".openspec.yaml"), `schema: ${schemaName}\n`);
 
   const preparedTraces = {};
   const traceEntries = [];
@@ -1336,7 +1535,7 @@ function makeChange(change, files) {
             ? { "render-contract-version": files.manifestRenderContractVersion }
             : {}),
           change,
-          "schema-name": "production-obligation-atom-driven",
+          "schema-name": schemaName,
           artifacts: traceEntries,
         },
         null,
@@ -1388,6 +1587,27 @@ function standardFiles(options = {}) {
     ...(options.newContract || usesRenderContract ? { manifestTraceContractVersion: "proof-slices-v1" } : {}),
     ...(usesRenderContract ? { manifestRenderContractVersion: "trace-render-v1" } : {}),
   };
+}
+
+function defaultProposalFiles() {
+  const trace = defaultProposalTrace();
+  const files = {
+    schemaName: "production-default-acceptance-driven",
+    writeAuthority: false,
+    manifestTraceContractVersion: "proof-slices-v1",
+    manifestRenderContractVersion: "trace-render-v1",
+    artifacts: {
+      "proposal.md": renderDeliveryBody(trace),
+    },
+    traces: {
+      "proposal.trace.json": trace,
+    },
+  };
+  return files;
+}
+
+function refreshDefaultProposalMarkdown(files) {
+  files.artifacts["proposal.md"] = renderDeliveryBody(files.traces["proposal.trace.json"]);
 }
 
 function addRenderDeliveryPayload(artifacts, traces, options = {}) {
@@ -1868,7 +2088,122 @@ function proposalTrace(options = {}) {
         ids: ["GA-0001"],
         "id-list-source": "final-change-packet-order",
       },
+      "artifact-projection-coverage": [
+        {
+          "artifact-projection": artifactProjection,
+          count: 1,
+          ids: ["GA-0001"],
+          "downstream-expectation": "下游 artifact 按 projection 覆盖。",
+        },
+      ],
+      "owner-scoped-non-direct-atoms": {
+        count: 0,
+        ids: [],
+        "relation-summary": {},
+        "downstream-trace-policy": "do-not-propagate-ga",
+      },
+      "source-windows-re-read": {
+        count: 1,
+        ids: ["GA-0001"],
+        "read-set-source": "source-window-read-set",
+      },
       "orphan-direct-atoms": [],
+      "capability-increment-coverage": [
+        {
+          capability: ownerCapability,
+          "change-kind": changeKind,
+          "direct-atom-count": 1,
+          advancement: changeKind === "foundation" ? "foundation" : "new-capability",
+          "spec-delta-expected": artifactProjection === "spec-requirement" || artifactProjection === "spec-guard",
+          "coverage-note": "测试 capability 覆盖。",
+        },
+      ],
+      blockers: [],
+    },
+  };
+}
+
+function defaultProposalTrace() {
+  return {
+    "trace-schema": "openspec-trace-v1",
+    "artifact-id": "proposal",
+    "artifact-path": "proposal.md",
+    "change-name": "%CHANGE%",
+    "schema-name": "production-default-acceptance-driven",
+    "agent-role": "proposal-writer",
+    "delivery-plane": {
+      why: ["- default proposal 来自用户请求。"],
+      "change-plan-boundary": [
+        "- Closed-loop outcome：交付 default capability 的可观察行为边界。",
+        "- In scope：用户请求中的默认能力。",
+        "- Out of scope：未登记的 provider、route 和运维范围。",
+        "- Dependencies：无。",
+      ],
+      "what-changes": ["- 新增 default capability 的用户可观察行为。"],
+      capabilities: {
+        "new-capabilities": [
+          {
+            name: "default-capability",
+            summary: "交付 default capability 的需求、设计和验证边界。",
+          },
+        ],
+        "modified-capabilities": [],
+      },
+      "non-goals": ["- 不扩展未登记 provider。"],
+      impact: ["- 影响 default app/API 边界。"],
+      "rollout-readiness": ["- 无 migration。"],
+    },
+    "baseline-input-read-set": [
+      {
+        "input-id": "BI-001",
+        "input-type": "user-request",
+        source: "用户请求：新增 default capability。",
+        "read-purpose": "界定当前 change 的用户输入边界。",
+        "interpretation-result": "当前 change 只覆盖 default capability 的最小行为。",
+      },
+    ],
+    "change-scope-coverage": [
+      {
+        "scope-item-id": "SI-001",
+        source: "用户请求：新增 default capability。",
+        "source-fact": "新增 default capability 的用户可观察行为。",
+        "artifact-handling": "spec",
+        capability: "default-capability",
+        "propose-use": "进入 proposal Why/What/Capability 边界。",
+        "downstream-coverage-expectation": "下游 specs/design/runtime-acceptance/tasks/verification 必须覆盖该 scope item。",
+      },
+    ],
+    "proposal-alignment-gate": {
+      "proposal-input-mode": "user-request",
+      "change-slug": "%CHANGE%",
+      "scope-items": {
+        count: 1,
+        ids: ["SI-001"],
+        "id-list-source": "change-scope-coverage",
+      },
+      "artifact-handling-coverage": [
+        {
+          "artifact-handling": "spec",
+          count: 1,
+          ids: ["SI-001"],
+          "downstream-expectation": "spec handling 进入 specs/design/runtime/tasks/verification。",
+        },
+      ],
+      "baseline-inputs-read": {
+        count: 1,
+        ids: ["BI-001"],
+        "read-set-source": "baseline-input-read-set",
+      },
+      "orphan-scope-items": [],
+      "capability-increment-coverage": [
+        {
+          capability: "default-capability",
+          advancement: "new-capability",
+          "scope-item-count": 1,
+          "spec-delta-expected": true,
+          "coverage-note": "default-capability 由 SI-001 覆盖。",
+        },
+      ],
       blockers: [],
     },
   };

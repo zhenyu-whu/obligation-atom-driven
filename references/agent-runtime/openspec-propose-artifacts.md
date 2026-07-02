@@ -77,7 +77,8 @@
 2. `production-default-acceptance-driven` 适用于明确 change 名、需求、修复或后续修改。若用户只给自然语言描述，按该描述派生 kebab-case slug；仍无法判断 change boundary 时才提出简短澄清问题。
 3. 创建或继续目标 change 后，主 Agent 必须运行 `openspec status --change "<name>" --json`，按 status 中的 ready artifacts 和 dependency graph 推进。不得在本文档中固定 artifact 处理次序；不得跳过 schema graph 中的 dependency。
 4. 对每个 ready artifact，必须运行 `openspec instructions <artifact-id> --change "<name>" --json`，并把完整 instructions JSON 作为 writer 输入的一部分。
-5. 每个 artifact 的内容读写边界由 selected schema instruction 和 contract bundle 共同约束；本文档不复制 artifact 内容契约。
+5. 对 proposal artifact，instructions JSON 中的 `template` 是 `trace/proposal.trace.json` 的 JSONC authoring guide，不是 `outputPath` / `proposal.md` 的 Markdown 模板；writer 必须输出严格 JSON trace，再由 renderer 生成 Markdown。
+6. 每个 artifact 的内容读写边界由 selected schema instruction 和 contract bundle 共同约束；本文档不复制 artifact 内容契约。
 
 ## Contract Bundle Resolution
 
@@ -100,10 +101,11 @@
 
 1. Writer 和 repair-writer 写入任一 production artifact 前，必须先建立或更新当前 artifact 的 JSON trace sections。verification 还必须按 contract 写 `trace/verification.proof-slices.json`。
 2. Writer/repair-writer 只能直接写当前 artifact 的 trace/proof-slices JSON，不得直接写或手工修改 Markdown artifact。
-3. 写完 trace 后必须调用 renderer：`node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>" | --no-delta-specs] --write`。
-4. Writer 在调用 renderer 前必须基于 trace 做 set-diff 自查；自查结论不得写入 artifact 正文。
-5. repair-writer 必须重新读取最新上游 trace/sidecar JSON、contract bundle 和 validator/reviewer blocker 后重建当前 trace-backed ID 集，并重新调用 renderer。
-6. 主 Agent 在 writer/repair-writer 自然返回前不得读取当前 artifact 中间落盘状态；返回后也不得把过程摘要当作 validator 或 reviewer 的 oracle。
+3. Proposal writer 使用 schema `template` 时，必须把 JSONC authoring guide 中的注释、占位符和示例值替换为严格 JSON；`trace/proposal.trace.json` 不得包含 JSONC 注释、占位符、trailing comma 或 Markdown section body。
+4. 写完 trace 后必须调用 renderer：`node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>" | --no-delta-specs] --write`。
+5. Writer 在调用 renderer 前必须基于 trace 做 set-diff 自查；自查结论不得写入 artifact 正文。
+6. repair-writer 必须重新读取最新上游 trace/sidecar JSON、contract bundle 和 validator/reviewer blocker 后重建当前 trace-backed ID 集，并重新调用 renderer。
+7. 主 Agent 在 writer/repair-writer 自然返回前不得读取当前 artifact 中间落盘状态；返回后也不得把过程摘要当作 validator 或 reviewer 的 oracle。
 
 ## Partial / Complete Static Validation
 
