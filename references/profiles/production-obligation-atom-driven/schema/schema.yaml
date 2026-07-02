@@ -1,42 +1,13 @@
 name: production-obligation-atom-driven
 version: 18
-description: 面向生产实现的 obligation atom 工作流：proposal -> specs -> design -> runtime-acceptance -> verification -> tasks；writer 只写 JSON trace sections，renderer 再生成 Delivery Plane、Trace Appendix 与 manifest digest；artifact 末尾只保留 Trace Appendix pointer；tasks AC 主体包含 resolved runtime contract
+description: 面向生产实现的 obligation atom 工作流；artifact graph 由本 schema 定义，artifact 内容合同由 _production-contracts 定义，trace-first 编排由 agent-runtime 定义
 artifacts:
   - id: proposal
     generates: proposal.md
     description: 带 final change obligation atom 覆盖登记表的初始 proposal
     template: proposal.md
     instruction: |
-      创建或维护 proposal.md。
-
-      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
-
-      - openspec/schemas/_production-contracts/common/chinese.md
-      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
-      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
-      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
-      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
-      - openspec/schemas/_production-contracts/profiles/production-obligation-atom-driven.md
-      - openspec/schemas/_production-contracts/artifacts/proposal.md
-      - openspec/schemas/_production-contracts/overlays/production-obligation-atom-driven/proposal.md
-
-      本 schema 使用 final change packet 与 global obligation atom index 作为 proposal 权威输入。
-      所有 source/scope trace 使用 exact `GA-####`，不得重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
-
-      生成规则：
-      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
-      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
-      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
-      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
-      - Partial validator hard pass 后才启动只读 `proposal-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
-      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
-
-      最终检查：
-      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
-      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
-      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
+      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires: []
 
   - id: specs
@@ -44,38 +15,7 @@ artifacts:
     description: 从 proposal obligation atoms 派生的详细规格
     template: spec.md
     instruction: |
-      创建或维护 specs/**/*.md。
-
-      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
-
-      - openspec/schemas/_production-contracts/common/chinese.md
-      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
-      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
-      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
-      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
-      - openspec/schemas/_production-contracts/profiles/production-obligation-atom-driven.md
-      - openspec/schemas/_production-contracts/artifacts/specs.md
-      - openspec/schemas/_production-contracts/overlays/production-obligation-atom-driven/specs.md
-
-      本 schema 使用 final change packet 与 global obligation atom index 作为 proposal 权威输入。
-      所有 source/scope trace 使用 exact `GA-####`，不得重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
-
-      生成规则：
-      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
-      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
-      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - 当 proposal direct atoms 中没有 `spec-requirement` / `spec-guard` 时，writer 必须写 `trace/specs/no-spec-delta/README.trace.json` 并运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact specs --no-delta-specs --write` 生成 `specs/no-spec-delta/README.md`；不得创建空 `specs/<capability>/spec.md`。
-      - 当存在任一 `spec-requirement` / `spec-guard` direct atom 时，禁止使用 no-delta marker；必须按 capability 写 `trace/specs/<capability>.trace.json` 并用 `--capability "<capability>"` 渲染正常 delta spec。
-      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
-      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
-      - Partial validator hard pass 后才启动只读 `specs-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
-      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
-
-      最终检查：
-      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
-      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
-      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
+      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
 
@@ -84,35 +24,7 @@ artifacts:
     description: 由 obligation atoms 支撑实现细节的技术设计文档
     template: design.md
     instruction: |
-      创建或维护 design.md。
-
-      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
-
-      - openspec/schemas/_production-contracts/common/chinese.md
-      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
-      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
-      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
-      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
-      - openspec/schemas/_production-contracts/profiles/production-obligation-atom-driven.md
-      - openspec/schemas/_production-contracts/artifacts/design.md
-
-      本 schema 使用 final change packet 与 global obligation atom index 作为 proposal 权威输入。
-      所有 source/scope trace 使用 exact `GA-####`，不得重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
-
-      生成规则：
-      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
-      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
-      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
-      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
-      - Partial validator hard pass 后才启动只读 `design-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
-      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
-
-      最终检查：
-      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
-      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
-      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
+      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -122,36 +34,7 @@ artifacts:
     description: canonical runtime coverage registry，定义供 tasks.md 与 verification.md 共同引用的 RS/OP/ST/CH rows
     template: runtime-acceptance.md
     instruction: |
-      创建或维护 runtime-acceptance.md。
-
-      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
-
-      - openspec/schemas/_production-contracts/common/chinese.md
-      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
-      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
-      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
-      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
-      - openspec/schemas/_production-contracts/profiles/production-obligation-atom-driven.md
-      - openspec/schemas/_production-contracts/artifacts/runtime-acceptance.md
-      - openspec/schemas/_production-contracts/overlays/production-obligation-atom-driven/runtime-acceptance.md
-
-      本 schema 使用 final change packet 与 global obligation atom index 作为 proposal 权威输入。
-      所有 source/scope trace 使用 exact `GA-####`，不得重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
-
-      生成规则：
-      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
-      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
-      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
-      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
-      - Partial validator hard pass 后才启动只读 `runtime-acceptance-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
-      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
-
-      最终检查：
-      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
-      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
-      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
+      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -162,35 +45,7 @@ artifacts:
     description: slice-only 独立测试意图、Proof Slice 原子测试义务和测试前一致性预检 artifact
     template: verification.md
     instruction: |
-      创建或维护 verification.md。
-
-      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
-
-      - openspec/schemas/_production-contracts/common/chinese.md
-      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
-      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
-      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
-      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
-      - openspec/schemas/_production-contracts/profiles/production-obligation-atom-driven.md
-      - openspec/schemas/_production-contracts/artifacts/verification.md
-
-      本 schema 使用 final change packet 与 global obligation atom index 作为 proposal 权威输入。
-      所有 source/scope trace 使用 exact `GA-####`，不得重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
-
-      生成规则：
-      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
-      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
-      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
-      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
-      - Partial validator hard pass 后才启动只读 `verification-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
-      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
-
-      最终检查：
-      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
-      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
-      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
+      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -202,36 +57,7 @@ artifacts:
     description: 生产实现计划与运行时验收覆盖模型
     template: tasks.md
     instruction: |
-      创建或维护 tasks.md。
-
-      本 artifact 的详细生产约束不在 `schema.yaml` 内重复展开；`schema.yaml` 只保留 OpenSpec 默认生成入口。写入前必须读取并遵守以下 contract bundle：
-
-      - openspec/schemas/_production-contracts/common/chinese.md
-      - openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md
-      - openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md
-      - openspec/schemas/_production-contracts/common/source-scope-boundary.md
-      - openspec/schemas/_production-contracts/common/reviewer-output-protocol.md
-      - openspec/schemas/_production-contracts/profiles/production-obligation-atom-driven.md
-      - openspec/schemas/_production-contracts/artifacts/tasks.md
-      - openspec/schemas/_production-contracts/overlays/production-obligation-atom-driven/tasks.md
-
-      本 schema 使用 final change packet 与 global obligation atom index 作为 proposal 权威输入。
-      所有 source/scope trace 使用 exact `GA-####`，不得重新编号、使用 ranges 或从非权威 orchestrate/report 产物扩展 scope。
-
-      生成规则：
-      - 先读取 `openspec instructions <artifact-id> --change "<change-slug>" --json` 返回的 context、rules、template、dependencies 和 outputPath。
-      - 再读取上方 contract bundle，并把 bundle 作为本 artifact 的强制约束来源。
-      - 读取所有已完成的 dependency artifacts；只在 contract 允许的范围内读取 source/scope/baseline。
-      - writer/repair-writer 只能直接写当前 artifact 的 JSON trace sections（verification 还包括 proof-slices sidecar），然后必须运行 `node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>"] --write` 生成 artifact、短 `## Trace Appendix` pointer 和 manifest digest；不得手工写入 Markdown artifact，不得把 context、rules、contract 文本或内部自查说明复制进 artifact 正文。
-      - Writer、repair-writer 或 reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录，不得读取中间 artifact、运行 validator、审查 partial trace 或直接修订 artifact。
-      - Writer 或当前 artifact 的 repair-writer 自然返回后，Agent Runtime 才能运行 partial static validator；validator hard error 必须分派当前 artifact 的 repair-writer 修复。
-      - Partial validator hard pass 后才启动只读 `tasks-reviewer` 使用同一 contract bundle 复核；reviewer 只能输出 Pass 或 Blocker，reviewer blocker 必须分派当前 artifact 的 repair-writer 修复。
-      - reviewer Pass 且 validator hard pass 前，不得继续依赖该 artifact 生成下游 artifact。
-
-      最终检查：
-      - Delivery Plane / JSON Trace Plane 布局符合 common contract。
-      - 没有 source/scope 外行为、orphan source/scope item、range、测试执行字段、evidence/deposit 字段或 artifact/process oracle。
-      - artifact-local reviewer finding 已关闭，validator warning 已处理或有 reviewer 认可的 false positive 说明。
+      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs

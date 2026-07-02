@@ -399,19 +399,12 @@ function loadTracePlane(root, changeDir, files, schemaKind, issues, options = {}
       addIssue(issues, "error", "VAL-TR-003", `${file.repoRelPath}`, `Trace file 不存在：${pointer.path}。`);
       continue;
     }
-    const digest = sha256File(tracePath);
-    if (pointer.digest !== digest) {
-      addIssue(issues, "error", "VAL-TR-004", `${file.repoRelPath}`, `Trace digest 不匹配，应为 ${digest}。`);
-    }
     const manifestEntry = findManifestEntry(manifest, file.relPath, pointer.path);
     if (!manifestEntry) {
       addIssue(issues, "error", "VAL-TR-005", "trace/manifest.json", `manifest 缺少 artifact ${file.relPath}。`);
     } else {
       if (manifestEntry["trace-path"] !== pointer.path) {
         addIssue(issues, "error", "VAL-TR-006", "trace/manifest.json", `${file.relPath} 的 trace-path 与 artifact pointer 不一致。`);
-      }
-      if (manifestEntry["trace-digest"] !== digest) {
-        addIssue(issues, "error", "VAL-TR-007", "trace/manifest.json", `${file.relPath} 的 trace-digest 与实际文件不一致。`);
       }
     }
     const data = readJson(tracePath, root, issues);
@@ -466,7 +459,6 @@ function validateRenderedArtifacts(root, changeDir, files, trace, issues) {
         trace: artifactTrace,
         proofSlicesTrace,
         tracePath,
-        traceDigest: sha256File(path.join(changeDir, tracePath)),
       });
       if (file.text !== expected) {
         addIssue(
@@ -512,7 +504,6 @@ function loadProofSlicesTrace(root, changeDir, manifest, issues) {
     );
     return null;
   }
-  const digest = sha256File(fullPath);
   const manifestEntry = findManifestTraceEntry(manifest, PROOF_SLICES_TRACE_PATH);
   if (!manifestEntry) {
     addIssue(issues, "error", "VAL-PST-002", "trace/manifest.json", `manifest 缺少 ${PROOF_SLICES_TRACE_PATH}。`);
@@ -524,15 +515,6 @@ function loadProofSlicesTrace(root, changeDir, manifest, issues) {
         "VAL-PST-003",
         "trace/manifest.json",
         `${PROOF_SLICES_TRACE_PATH} 的 trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`,
-      );
-    }
-    if (manifestEntry["trace-digest"] !== digest) {
-      addIssue(
-        issues,
-        "error",
-        "VAL-PST-004",
-        "trace/manifest.json",
-        `${PROOF_SLICES_TRACE_PATH} 的 trace-digest 与实际文件不一致。`,
       );
     }
   }
@@ -556,15 +538,14 @@ function parseTracePointer(file, issues) {
   }
   const traceFile = tail.map((line) => line.match(/^Trace file:\s+`([^`]+)`\s*$/)?.[1]).find(Boolean);
   const traceSchema = tail.map((line) => line.match(/^Trace schema:\s+`([^`]+)`\s*$/)?.[1]).find(Boolean);
-  const traceDigest = tail.map((line) => line.match(/^Trace digest:\s+`([^`]+)`\s*$/)?.[1]).find(Boolean);
-  if (!traceFile || !traceSchema || !traceDigest) {
-    addIssue(issues, "error", "VAL-TR-012", file.repoRelPath, "Trace Appendix 指针必须包含 Trace file/schema/digest。");
+  if (!traceFile || !traceSchema) {
+    addIssue(issues, "error", "VAL-TR-012", file.repoRelPath, "Trace Appendix 指针必须包含 Trace file/schema。");
     return null;
   }
   if (traceSchema !== TRACE_SCHEMA) {
     addIssue(issues, "error", "VAL-TR-013", file.repoRelPath, `Trace schema 必须为 ${TRACE_SCHEMA}。`);
   }
-  return { path: traceFile, schema: traceSchema, digest: traceDigest };
+  return { path: traceFile, schema: traceSchema };
 }
 
 function validateTraceSections(data, file, schemaKind, traceRel, issues) {

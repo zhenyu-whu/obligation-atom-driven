@@ -1,6 +1,6 @@
 # Obligation Runtime Acceptance Overlay
 
-- `runtime-acceptance.md` 只来自当前 change 的 proposal/spec/design 中可观察运行行为。它不是实现细节或 proof-only handoff 的物化门禁。
+- `trace/runtime-acceptance.trace.json` 只来自当前 change 的 proposal/spec/design traces 中可观察运行行为。它不是实现细节或 proof-only handoff 的物化门禁。
 - `trace/runtime-acceptance.trace.json` 的 `runtime-upstream-coverage-map` 只覆盖当前 change 中会产生或约束可观察运行行为的 proposal direct `GA-####`、in-scope spec scenario 和 design decision/guard。
 - 每个 covered direct `GA-####` 必须映射到主体具体 runtime row，或有当前 change source-backed not-applicable reason。
 - Proposal direct `GA-####` 不得只出现在 `runtime-coverage-source-map` 或 checklist。

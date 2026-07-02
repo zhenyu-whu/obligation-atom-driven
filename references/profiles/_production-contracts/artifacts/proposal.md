@@ -11,7 +11,7 @@
 - 建立 material source/scope item 列表，并给每个 item 分配 artifact projection/handling 和 downstream coverage expectation。
 - 对需要精确行为、边界、failure path、verification expectation 的 source/scope item，按 profile contract 做 focused source/baseline read。
 - 基于 source/scope item 建立 trace-backed register model、capability boundary model、focused read set、projection/handling、downstream coverage expectation、non-goal/boundary inventory 和 `delivery-plane` render payload。
-- writer 只写 `trace/proposal.trace.json`；`proposal.md`、Trace Appendix 和 manifest digest 必须由 renderer 从 trace 写入。
+- writer 只写 `trace/proposal.trace.json`；`proposal.md`、Trace Appendix 和 manifest registry entry 必须由 renderer 从 trace 写入。
 
 ## Delivery Plane
 

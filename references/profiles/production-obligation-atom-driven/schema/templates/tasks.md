@@ -1,5 +1,5 @@
 <!--
-Writer note: writer/repair-writer 只能写当前 artifact 的 JSON trace sections；随后运行 render-production-artifacts.mjs --write 从 trace 生成本 Delivery Plane、Trace Appendix 与 manifest digest。
+Writer note: writer/repair-writer 只能写当前 artifact 的 JSON trace sections；随后运行 render-production-artifacts.mjs --write 从 trace 生成本 Delivery Plane、Trace Appendix 与 manifest registry entry。
 
 本文件主体是 Delivery Plane：implementation worker 默认从 AC sections 的 Resolved Runtime Contract 和 checkbox tasks 执行。
 外置 JSON trace 是审计平面，只供主 agent、archive、stabilizer 和 final reviewer 做 coverage / projection 检查；trace row 不是额外 executable work。
@@ -49,4 +49,3 @@ Proof Contract:
 
 Trace file: `trace/tasks.trace.json`
 Trace schema: `openspec-trace-v1`
-Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

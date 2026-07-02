@@ -6,19 +6,19 @@
 
 ## 写入前
 
-- 读取 `runtime-acceptance.md` 的 canonical rows。
-- 必要时只为一致性核对读取 proposal、实际生成的 delta specs 或 `specs/no-spec-delta/README.md` marker，以及 design；不得用它们在 verification 中重新建立 source/scope mapping。marker 存在时不得从 specs 派生测试 oracle。
+- 读取 `trace/runtime-acceptance.trace.json` 的 canonical row index、delivery-plane canonical rows 和 runtime coverage map。
+- 必要时只为一致性核对读取 `trace/proposal.trace.json`、实际生成的 `trace/specs/*.trace.json` 或 `trace/specs/no-spec-delta/README.trace.json`，以及 `trace/design.trace.json`；不得用它们在 verification 中重新建立 source/scope mapping。no-delta trace 存在时不得从 specs 派生测试 oracle。
 - 索引每个 `RS-/OP-/ST-/CH-` row 的 row type、scope role、runtime obligation、observable fact、default path policy、external boundary、failure/branch/default/no-scope boundary。
 - 对每个 required / preserve / proof-only runtime row 抽取所有独立可失败分支；每个分支生成一个 Proof Slice，或给出 source/scope-backed manual/not-applicable reason。Proof Slice 必须一一覆盖 runtime acceptance 分支，但是否生成持久测试由 slice 自身的 persistence 字段决定。
 - 当 `proposal-alignment-gate.change-kind` 为 `foundation` 时，Proof Slice 只能从有效 foundation runtime rows 派生；不得为 not-applicable、pure design/reference/guard/future rows 生成 required Proof Slice。
 - 建立 trace-backed runtime row branch inventory、manual/not-applicable inventory、proof slice model、Markdown Proof Slice Matrix mirror rows、Planned Test Placement Matrix mirror rows、runtime coverage reconciliation、slice consistency checklist inputs 和 `delivery-plane` render payload。
-- writer 只写 `trace/verification.trace.json` 和 `trace/verification.proof-slices.json`；`verification.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed Proof Slice ID 集写入。
+- writer 只写 `trace/verification.trace.json` 和 `trace/verification.proof-slices.json`；`verification.md`、Trace Appendix 和 manifest registry entry 必须由 renderer 从同一 trace-backed Proof Slice ID 集写入。
 - Proof Slice JSON 是 canonical 测试义务模型，verification.md matrix 必须由它镜像生成。
 
 ## Proof Slice JSON Canonical Model
 
 - 新 change 必须在 `trace/manifest.json` 写入 `trace-contract-version: "proof-slices-v1"`。
-- 新 change 必须生成 `trace/verification.proof-slices.json`，其 `trace-schema` 固定为 `openspec-proof-slices-v1`，并在 `trace/manifest.json` 登记 `trace-path`、`trace-schema` 和 `trace-digest`。
+- 新 change 必须生成 `trace/verification.proof-slices.json`，其 `trace-schema` 固定为 `openspec-proof-slices-v1`；`trace/manifest.json` 如保留，只登记 `trace-path` 和 `trace-schema` 等非权威 registry metadata。
 - `trace/verification.proof-slices.json` 顶层必须包含：`artifact-id`、`artifact-path`、`change-name`、`schema-name`、`source-interface`、`proof-slice-summary`、`proof-slices`。
 - 每个 `proof-slices[]` row 必须包含 Markdown `Proof Slice Matrix` 的全部语义字段：`slice-id`、`runtime-row-ids`、`primary-runtime-row-id`、`primitive-type`、`branch-variant`、`observable-surface`、`oracle-fragment`、`failure-signal`、`primary-layer`、`production-owner`、`persistent-test-required`、`proof-evidence-mode`、`primary-assertion-shape`、`fixture-mock-boundary`、`regression-intent`、`manual-environment-gate`。
 - `persistent-test-required` 必须是 boolean。`proof-evidence-mode` 只能是 `durable-test`、`readiness-command`、`build-command`、`codegen-command`、`compose-config-readback`、`static-boundary-readback`、`manual-environment`。
@@ -36,7 +36,7 @@
 ## Proof Slice Matrix
 
 - `Proof Slice Matrix` 必须是 `trace/verification.proof-slices.json` 的完整镜像；writer 不得手工维护两套不同 truth。
-- reviewer 和 validator 必须逐字段比对 Markdown matrix 与 JSON canonical row；任一漂移都是 artifact blocker。
+- reviewer 和 validator 必须逐字段比对 renderer 输出的 Markdown matrix 与 JSON canonical row；任一漂移都是 artifact blocker。
 
 - Columns 必须包含：`Slice ID`、`Runtime Row IDs`、`Primary Runtime Row ID`、`Primitive Type`、`Branch / Variant`、`Observable Surface`、`Oracle Fragment`、`Failure Signal`、`Primary Layer`、`Production Owner`、`Persistent Test Required`、`Proof Evidence Mode`、`Primary Assertion Shape`、`Fixture / Mock Boundary`、`Regression Intent`、`Manual / Environment Gate`。
 - `Slice ID` 使用 `PS-###`，文件内唯一。
@@ -72,12 +72,12 @@
 - 每行必须列出 expected Proof Slice IDs、missing Proof Slice IDs、coverage status 和 gap/not-covered reason。
 - `Coverage Status = covered` 仅当 missing 为 `None`，expected slices 全部存在于 `trace/verification.proof-slices.json` 且均为原子 slice。
 - `manual` / `not-applicable` 必须通过对应 runtime row 的 source/scope role、default path、external boundary 或 no-scope boundary 解释。
-- artifact 末尾只保留短 `## Trace Appendix` 指针块。该指针仍指向 `trace/verification.trace.json`；`trace/verification.proof-slices.json` 由 manifest 登记，不在 artifact 正文写入测试路径、测试命令或 evidence。
+- artifact 末尾只保留短 `## Trace Appendix` 指针块。该指针仍指向 `trace/verification.trace.json`；`trace/verification.proof-slices.json` 由 validator 直接按约定路径读取，并可由 manifest registry 登记，不在 artifact 正文写入测试路径、测试命令或 evidence。
 
 ## Reviewer Focus
 
-- 是否只从 runtime-acceptance 推导 oracle。
-- `trace/verification.proof-slices.json` 是否存在、登记 manifest digest，并与 `Proof Slice Matrix` 完全一致。
+- 是否只从 `trace/runtime-acceptance.trace.json` 推导 oracle。
+- `trace/verification.proof-slices.json` 是否存在，并与 `Proof Slice Matrix` 完全一致。
 - `test-contract.placement` 是否存在，并与 `Planned Test Placement Matrix` 完全一致；durable slice 是否规划到合法 layer 子树，non-persistent slice 是否使用 `N/A + nonpersistent-evidence`。
 - 是否遗漏或合并 runtime row 显式分支。
 - `persistent-test-required` 与 `proof-evidence-mode` 是否满足 change-kind、manual gate 和 test-contract 约束。

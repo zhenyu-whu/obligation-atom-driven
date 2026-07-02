@@ -1,4 +1,4 @@
-<!-- Writer note: writer/repair-writer 只能写当前 artifact 的 JSON trace sections；随后运行 render-production-artifacts.mjs --write 从 trace 生成本 Delivery Plane、Trace Appendix 与 manifest digest。 -->
+<!-- Writer note: writer/repair-writer 只能写当前 artifact 的 JSON trace sections；随后运行 render-production-artifacts.mjs --write 从 trace 生成本 Delivery Plane、Trace Appendix 与 manifest registry entry。 -->
 
 ## Verification Intent
 
@@ -69,4 +69,3 @@ Manual / Environment Gate 无门禁时写 None；有门禁时必须能通过对�
 
 Trace file: `trace/verification.trace.json`
 Trace schema: `openspec-trace-v1`
-Trace digest: `<sha256-to-be-filled-after-trace-json-is-written>`

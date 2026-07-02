@@ -21,7 +21,7 @@
 
 - `verification.md` 只定义 Proof Slice、oracle、layer/harness/fixture 意图和禁止测试对象。
 - `verification.md` 不得定义具体测试文件、固定命令、runner selector、evidence directory、执行状态或 regression deposit。
-- Proof Slice 的 oracle 必须来自 `runtime-acceptance.md` canonical rows 的 runtime obligation、observable fact、default path、external boundary、failure/branch/no-scope 字段，不得来自当前实现细节、测试文件结构、artifact 文本结构或 apply evidence。
+- Proof Slice 的 oracle 必须来自 `trace/runtime-acceptance.trace.json` canonical rows 的 runtime obligation、observable fact、default path、external boundary、failure/branch/no-scope 字段，不得来自当前实现细节、测试文件结构、artifact 文本结构或 apply evidence。
 
 ## Tasks 边界
 

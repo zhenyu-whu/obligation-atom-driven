@@ -6,16 +6,16 @@
 
 ## 写入前
 
-- 读取 proposal 和所有实际生成的 delta specs；若 specs artifact 是 no-delta marker，则读取 `specs/no-spec-delta/README.md` 与对应 trace 作为 specs completion，不从中派生 spec scenario。
-- 使用 proposal 和实际 specs 完成态的 JSON trace 作为 source/scope-reading interface。
+- 读取 `trace/proposal.trace.json` 和所有实际生成的 `trace/specs/*.trace.json`；若 specs artifact 是 no-delta marker，则只读取 `trace/specs/no-spec-delta/README.trace.json` 判定 specs completion，不从中派生 spec scenario。
+- 使用 proposal trace 和实际 specs 完成态 trace 作为 source/scope-reading interface；不得从 `proposal.md` 或 `specs/**/*.md` 推导 design obligation。
 - 当 design 需要 exact behavior、architecture/module boundary、data/API shape、auth/security、async/worker、UI/prototype fidelity、observability、deployment 或 verification detail 时，只读取已登记 source/scope window 或 baseline。
 - 起草前建立 design coverage map：每个 in-scope scenario、material design obligation、guard 和需要 implementation placement 的 source/scope item 必须映射到 design decision、guard handling 或 explicit blocker。
 - 建立 trace-backed design coverage map、decision index、implementation placement map、guard handling map、spec scenario design map、proof expectation handoff、production alignment gate inputs 和 `delivery-plane` render payload。
-- writer 只写 `trace/design.trace.json`；`design.md`、Trace Appendix 和 manifest digest 必须由 renderer 从 trace 写入；Delivery Plane 不得另行维护 source/scope coverage 表。
+- writer 只写 `trace/design.trace.json`；`design.md`、Trace Appendix 和 manifest registry entry 必须由 renderer 从 trace 写入；Delivery Plane 不得另行维护 source/scope coverage 表。
 
 ## Delivery Plane
 
-- Design 必须 source/scope-backed；无法追溯到 proposal/specs、profile 权威输入或 focused source/baseline 的设计选择必须删除或记录为 open question。
+- Design 必须 source/scope-backed；无法追溯到 proposal/specs traces、profile 权威输入或 focused source/baseline 的设计选择必须删除或记录为 open question。
 - 当 source/scope 定义行为但未定义 exact implementation shape 时，选择最小 production-compatible shape，并说明拒绝的 scope-expanding alternative。
 - 不得把生产行为替换成 placeholder、diagnostic、mock-only、static-only、fixture-only、registry-only 或 sandbox-only 行为，除非 proposal 明确标记为 deferred、non-goal、context 或 proof-only。
 - Design 必须覆盖 architecture/runtime/module boundaries、routing/navigation、data ownership、transactions、auth/security、async processing、realtime streams、storage、provider boundaries、rendering chain、deployment 和 verification strategy。

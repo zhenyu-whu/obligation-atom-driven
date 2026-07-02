@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -114,7 +113,7 @@ test("renderer 将 design decision 数组字段渲染为块级可读内容", () 
   assert.match(result.markdown, /\n- executor 只保留 adapter seam。/);
 });
 
-test("renderer --write 更新 artifact 和 manifest digest 且重复运行稳定", () => {
+test("renderer --write 更新 artifact 和 manifest registry 且重复运行稳定", () => {
   const root = makeRenderChange("render-write-change");
   const artifactPath = path.join(root, "openspec", "changes", "render-write-change", "verification.md");
   const manifestPath = path.join(root, "openspec", "changes", "render-write-change", "trace", "manifest.json");
@@ -133,8 +132,8 @@ test("renderer --write 更新 artifact 和 manifest digest 且重复运行稳定
   const manifest = JSON.parse(secondManifest);
   assert.equal(manifest["trace-contract-version"], "proof-slices-v1");
   assert.equal(manifest["render-contract-version"], RENDER_CONTRACT_VERSION);
-  assertManifestDigest(manifest, "trace/verification.trace.json", root);
-  assertManifestDigest(manifest, "trace/verification.proof-slices.json", root);
+  assertManifestEntry(manifest, "trace/verification.trace.json");
+  assertManifestEntry(manifest, "trace/verification.proof-slices.json");
 });
 
 test("renderer --no-delta-specs --write 生成 no-delta marker 与 manifest entry", () => {
@@ -159,7 +158,7 @@ test("renderer --no-delta-specs --write 生成 no-delta marker 与 manifest entr
   assert.ok(entry);
   assert.equal(entry["artifact-id"], "specs");
   assert.equal(entry["trace-path"], "trace/specs/no-spec-delta/README.trace.json");
-  assertManifestDigest(manifest, "trace/specs/no-spec-delta/README.trace.json", root, change);
+  assertManifestEntry(manifest, "trace/specs/no-spec-delta/README.trace.json");
 });
 
 function makeRenderChange(change) {
@@ -407,10 +406,8 @@ function writeTrace(traceDir, relPath, value) {
   fs.writeFileSync(fullPath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function assertManifestDigest(manifest, tracePath, root, change = "render-write-change") {
+function assertManifestEntry(manifest, tracePath) {
   const entry = manifest.artifacts.find((artifact) => artifact["trace-path"] === tracePath);
   assert.ok(entry, `missing manifest entry for ${tracePath}`);
-  const fullPath = path.join(root, "openspec", "changes", change, tracePath);
-  const digest = `sha256-${crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex")}`;
-  assert.equal(entry["trace-digest"], digest);
+  assert.equal(entry["trace-digest"], undefined);
 }

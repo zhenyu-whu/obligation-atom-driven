@@ -76,7 +76,7 @@ test("renderer 从 trace delivery payload 生成 artifact 且输出稳定", () =
 
   assert.equal(first.markdown, second.markdown);
   assert.equal(first.markdown, fs.readFileSync(path.join(root, "openspec", "changes", "render-runtime-change", "runtime-acceptance.md"), "utf8"));
-  assert.match(first.markdown, /Trace digest: `sha256-[a-f0-9]{64}`/);
+  assert.doesNotMatch(first.markdown, /Trace digest:/);
 });
 
 test("renderer 缺少 delivery payload hard fail", () => {
@@ -1030,16 +1030,13 @@ test("非 kebab-case key hard fail", () => {
   assertRule(result, "VAL-TR-016");
 });
 
-test("缺 manifest、缺 trace file、digest mismatch hard fail", () => {
+test("缺 manifest、缺 trace file hard fail", () => {
   const root = makeChange("trace-pointer-change", standardFiles());
   fs.rmSync(path.join(root, "openspec", "changes", "trace-pointer-change", "trace", "manifest.json"));
   fs.rmSync(path.join(root, "openspec", "changes", "trace-pointer-change", "trace", "runtime-acceptance.trace.json"));
-  const tasksPath = path.join(root, "openspec", "changes", "trace-pointer-change", "tasks.md");
-  fs.writeFileSync(tasksPath, fs.readFileSync(tasksPath, "utf8").replace(/sha256-[a-f0-9]+/, "sha256-deadbeef"));
   const result = validateChange({ root, change: "trace-pointer-change", complete: true });
   assertRule(result, "VAL-TR-001");
   assertRule(result, "VAL-TR-003");
-  assertRule(result, "VAL-TR-004");
 });
 
 test("artifact 保留完整 Markdown trace table hard fail", () => {
@@ -1306,29 +1303,24 @@ function makeChange(change, files) {
   for (const [artifactPath, body] of Object.entries(files.artifacts)) {
     const traceName = traceNameForArtifact(artifactPath);
     const tracePath = path.join(traceDir, traceName);
-    const digest = fs.existsSync(tracePath) ? sha256File(tracePath) : "sha256-missing";
     const fullPath = path.join(changeDir, artifactPath);
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     const content = body.includes("## Trace Appendix")
       ? body
-      : `${body.trimEnd()}\n\n## Trace Appendix\n\nTrace file: \`trace/${traceName}\`\nTrace schema: \`openspec-trace-v1\`\nTrace digest: \`${digest}\`\n`;
+      : `${body.trimEnd()}\n\n## Trace Appendix\n\nTrace file: \`trace/${traceName}\`\nTrace schema: \`openspec-trace-v1\`\n`;
     fs.writeFileSync(fullPath, content);
     traceEntries.push({
       "artifact-id": artifactIdForArtifact(artifactPath),
       "artifact-path": artifactPath,
       "trace-path": `trace/${traceName}`,
-      "trace-digest": digest,
     });
   }
   if (files.manifestTraceContractVersion === "proof-slices-v1") {
-    const proofSlicesPath = path.join(traceDir, "verification.proof-slices.json");
-    const digest = fs.existsSync(proofSlicesPath) ? sha256File(proofSlicesPath) : "sha256-missing";
     traceEntries.push({
       "artifact-id": "verification",
       "artifact-path": "verification.md",
       "trace-path": "trace/verification.proof-slices.json",
       "trace-schema": "openspec-proof-slices-v1",
-      "trace-digest": digest,
     });
   }
   if (files.writeManifest !== false) {

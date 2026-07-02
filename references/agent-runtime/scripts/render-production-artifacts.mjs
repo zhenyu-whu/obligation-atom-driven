@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,12 +41,10 @@ export function renderChangeArtifact(options = {}) {
     artifact === "verification" && fs.existsSync(path.join(changeDir, PROOF_SLICES_TRACE_PATH))
       ? readJson(path.join(changeDir, PROOF_SLICES_TRACE_PATH))
       : null;
-  const traceDigest = sha256File(traceFullPath);
   const markdown = renderArtifactMarkdown({
     trace,
     proofSlicesTrace,
     tracePath,
-    traceDigest,
   });
 
   if (options.write) {
@@ -57,7 +54,6 @@ export function renderChangeArtifact(options = {}) {
     updateManifest(changeDir, {
       artifactPath,
       tracePath,
-      traceDigest,
       proofSlicesTrace: artifact === "verification" ? proofSlicesTrace : null,
     });
   }
@@ -65,7 +61,6 @@ export function renderChangeArtifact(options = {}) {
   return {
     artifactPath,
     tracePath,
-    traceDigest,
     markdown,
   };
 }
@@ -76,9 +71,8 @@ export function renderArtifactMarkdown(options = {}) {
     throw new RenderContractError("VAL-RENDER-002", "trace", "renderer 输入必须包含 trace object。");
   }
   const tracePath = options.tracePath ?? tracePathForArtifactPath(strip(trace["artifact-path"]));
-  const traceDigest = options.traceDigest ?? "";
   const body = renderDeliveryBody(trace, options.proofSlicesTrace);
-  return `${body.trimEnd()}\n\n## Trace Appendix\n\nTrace file: \`${tracePath}\`\nTrace schema: \`${TRACE_SCHEMA}\`\nTrace digest: \`${traceDigest}\`\n`;
+  return `${body.trimEnd()}\n\n## Trace Appendix\n\nTrace file: \`${tracePath}\`\nTrace schema: \`${TRACE_SCHEMA}\`\n`;
 }
 
 export function renderDeliveryBody(trace, proofSlicesTrace = null) {
@@ -644,16 +638,13 @@ function updateManifest(changeDir, rendered) {
     "artifact-path": rendered.artifactPath,
     "trace-path": rendered.tracePath,
     "trace-schema": TRACE_SCHEMA,
-    "trace-digest": rendered.traceDigest,
   });
   if (rendered.proofSlicesTrace) {
-    const proofFullPath = path.join(changeDir, PROOF_SLICES_TRACE_PATH);
     upsertManifestEntry(manifest, {
       "artifact-id": "verification",
       "artifact-path": "verification.md",
       "trace-path": PROOF_SLICES_TRACE_PATH,
       "trace-schema": PROOF_SLICES_TRACE_SCHEMA,
-      "trace-digest": sha256File(proofFullPath),
     });
   }
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -695,10 +686,6 @@ function requireScalar(value, ref) {
 
 function readJson(fullPath) {
   return JSON.parse(fs.readFileSync(fullPath, "utf8"));
-}
-
-function sha256File(fullPath) {
-  return `sha256-${crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex")}`;
 }
 
 function strip(value) {

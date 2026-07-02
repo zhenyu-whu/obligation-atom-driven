@@ -6,11 +6,11 @@
 
 ## 写入前
 
-- 读取 proposal、所有实际生成的 delta specs 或 `specs/no-spec-delta/README.md` marker、design 和 runtime-acceptance。
-- 索引 source/scope rows、artifact projection/handling、spec scenarios、design obligations、canonical runtime rows、AC sections、checkbox task IDs 和 coverage table references。
+- 读取 `trace/proposal.trace.json`、所有实际生成的 `trace/specs/*.trace.json` 或 `trace/specs/no-spec-delta/README.trace.json`、`trace/design.trace.json` 和 `trace/runtime-acceptance.trace.json`。
+- 索引 source/scope rows、artifact projection/handling、spec scenarios、design obligations、canonical runtime rows、AC sections、checkbox task IDs 和 coverage table references；不得从上游 Markdown Delivery Plane 推导 AC 或 task 语义。
 - 建立 runtime provision graph：每个 runtime row 由 baseline、current-change AC、future change 或 explicit negative boundary 提供；AC sections 必须按 graph 拓扑排序。
 - 建立 trace-backed runtime provision graph、AC section model、checkbox task model、acceptance-driven coverage model、runtime acceptance index、runtime acceptance projection 和 `delivery-plane` render payload。
-- writer 只写 `trace/tasks.trace.json`；`tasks.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed AC/task/runtime row projection 集写入。
+- writer 只写 `trace/tasks.trace.json`；`tasks.md`、Trace Appendix 和 manifest registry entry 必须由 renderer 从同一 trace-backed AC/task/runtime row projection 集写入。
 - 写入前必须基于 trace 对 runtime row 全量集合做 projection set-diff，确认 required/preserve/proof-only rows 均有正确 owner AC、task projection 或 source/scope-backed not-applicable reason。
 
 ## AC Creation Gate
