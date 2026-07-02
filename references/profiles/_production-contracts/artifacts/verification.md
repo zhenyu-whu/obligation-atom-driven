@@ -11,7 +11,7 @@
 - 索引每个 `RS-/OP-/ST-/CH-` row 的 row type、scope role、runtime obligation、observable fact、default path policy、external boundary、failure/branch/default/no-scope boundary。
 - 对每个 required / preserve / proof-only runtime row 抽取所有独立可失败分支；每个分支生成一个 Proof Slice，或给出 source/scope-backed manual/not-applicable reason。Proof Slice 必须一一覆盖 runtime acceptance 分支，但是否生成持久测试由 slice 自身的 persistence 字段决定。
 - 当 `proposal-alignment-gate.change-kind` 为 `foundation` 时，Proof Slice 只能从有效 foundation runtime rows 派生；不得为 not-applicable、pure design/reference/guard/future rows 生成 required Proof Slice。
-- 建立 trace-backed runtime row branch inventory、manual/not-applicable inventory、proof slice model、Markdown matrix mirror rows、runtime coverage reconciliation、slice consistency checklist inputs 和 `delivery-plane` render payload。
+- 建立 trace-backed runtime row branch inventory、manual/not-applicable inventory、proof slice model、Markdown Proof Slice Matrix mirror rows、Planned Test Placement Matrix mirror rows、runtime coverage reconciliation、slice consistency checklist inputs 和 `delivery-plane` render payload。
 - writer 只写 `trace/verification.trace.json` 和 `trace/verification.proof-slices.json`；`verification.md`、Trace Appendix 和 manifest digest 必须由 renderer 从同一 trace-backed Proof Slice ID 集写入。
 - Proof Slice JSON 是 canonical 测试义务模型，verification.md matrix 必须由它镜像生成。
 
@@ -26,6 +26,10 @@
 - `persistent-test-required: false` 时，`proof-evidence-mode` 不得为 `durable-test`，`test-contract.primary-test-cardinality` 必须为 `none`；如提供 `test-title-prefix`，仍必须等于 `slice-id`。
 - business change 中，若 `manual-environment-gate` 为 `None` / 空 / `null`，Proof Slice 默认必须 `persistent-test-required: true`。foundation change 可按 slice 标记 `persistent-test-required: false`，但仍必须给出非持久 evidence mode。
 - 每个 `proof-slices[]` row 必须包含 `test-contract`，固定包含：`primary-test-cardinality`、`test-title-prefix`、`allow-shared-setup: true`、`allow-multi-slice-primary-test: false`、`waiver-required-for-multi-slice: true`。
+- 每个 `test-contract` 必须包含 `placement` object，并固定包含 `planned-test-directory`、`placement-basis`、`placement-reason`。`placement-basis` 只能是 `existing-tests-directory`、`planned-layer-subdirectory`、`workspace-tests-directory`、`nonpersistent-evidence`。
+- `persistent-test-required: true` 时，`placement.planned-test-directory` 必须是基于当前 repo layout、`Production Owner` 和 `Primary Layer` 规划的外置 `tests/` 目录 glob，必须以 `/**` 结尾；不得写具体测试文件、`.spec.*` / `.test.*`、固定命令、runner selector、evidence path 或 `openspec-results/**` / `test-results/**`。
+- `persistent-test-required: true` 的 layer 默认子树：`unit -> tests/unit/**`，`component -> tests/component/**`，`route/API -> tests/api/**` 或 `tests/contract/**`，`DB/integration -> tests/integration/**`，`contract -> tests/contract/**`，`worker/job -> tests/worker/**`，`realtime/SSE -> tests/integration/**`，`browser/e2e` / `visual/responsive -> tests/e2e/**`，`security/negative -> tests/security/**` 或能真实触达边界的 layer 子树。
+- `persistent-test-required: false` 时，`placement.planned-test-directory` 固定为 `N/A`，`placement.placement-basis` 固定为 `nonpersistent-evidence`；该 slice 不得进入 `proof-test-results[]`，apply 阶段只能通过 `proof-evidence-results[]` 验证。
 - 若确需合并多个 Proof Slice 到同一 primary test，必须在 `test-contract` 中显式设置 `allow-multi-slice-primary-test: true` 并提供 `multi-slice-waiver`，包含 `slice-ids` 和中文 `reason`；普通 operation/state/failure/security/layout/observability 分支不得使用 waiver。
 - JSON object key 必须使用 kebab-case。解释性字段值必须遵守中文约束。
 
@@ -42,7 +46,15 @@
 - `Primitive Type` 只能是 `operation`、`state`、`failure`、`negative-boundary`、`layout`、`observability`、`fixture-variant`、`authorization`。
 - `Primary Layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
 - `Production Owner` 必须是单一 production code boundary token，不得包含 owner list、测试路径或 evidence 路径。
-- Propose 阶段不得写测试路径、固定命令、runner selector 或 evidence path，也不得要求 `Production Owner + Primary Layer` 映射到已存在或 planned `tests/**` 目录；`Production Owner` 只表示 planned production boundary。持久测试的真实落点由 apply 阶段 test agent 根据当前 repo layout、Production Owner、Primary Layer 和最佳测试实践推断，并由 `proof-test-map.json` 与 placement audit 校验禁区路径、runner 触达和证据闭环。
+- Propose 阶段只允许在 `test-contract.placement` 和 renderer 生成的 placement matrix 中写目录级 planned test directory glob；不得写具体测试文件、固定命令、runner selector、evidence path 或执行状态。`Production Owner` 仍只表示 planned production boundary，不得写成测试目录。
+
+## Planned Test Placement Matrix
+
+- `Planned Test Placement Matrix` 必须是 `trace/verification.proof-slices.json` 中 `test-contract.placement` 的完整镜像；writer 不得手工维护两套不同 truth。
+- Columns 必须包含：`Slice ID`、`Persistent Test Required`、`Proof Evidence Mode`、`Planned Test Directory`、`Placement Basis`、`Placement Reason`。
+- 对 `persistent-test-required=true` 的 slice，`Planned Test Directory` 必须是目录 glob，必须以 `/**` 结尾，且必须落在外置 `tests/` 子树中，并匹配该 slice 的 `Primary Layer` 默认子树。
+- 对 `persistent-test-required=false` 的 slice，`Planned Test Directory` 固定为 `N/A`，`Placement Basis` 固定为 `nonpersistent-evidence`。
+- 该 matrix 只规划目录级落点，不是执行计划；不得出现具体 test/spec 文件名、测试命令、runner selector、`openspec-results/**`、`test-results/**` 或其它 evidence path。
 
 ## 原子性要求
 
@@ -66,8 +78,9 @@
 
 - 是否只从 runtime-acceptance 推导 oracle。
 - `trace/verification.proof-slices.json` 是否存在、登记 manifest digest，并与 `Proof Slice Matrix` 完全一致。
+- `test-contract.placement` 是否存在，并与 `Planned Test Placement Matrix` 完全一致；durable slice 是否规划到合法 layer 子树，non-persistent slice 是否使用 `N/A + nonpersistent-evidence`。
 - 是否遗漏或合并 runtime row 显式分支。
 - `persistent-test-required` 与 `proof-evidence-mode` 是否满足 change-kind、manual gate 和 test-contract 约束。
 - Reconciliation 是否真实闭合。
 - `Primary Layer` 是否为合法枚举，`Production Owner` 是否为单一 planned production boundary token，且未写成测试路径、命令、runner、evidence 或 deposit 路径。
-- 是否写入测试路径、命令、runner、evidence、deposit 或 artifact/process oracle。
+- 是否写入具体测试文件、命令、runner、evidence、deposit 或 artifact/process oracle；目录级 planned test glob 只能出现在 placement 字段和 renderer 生成的 placement matrix 中。

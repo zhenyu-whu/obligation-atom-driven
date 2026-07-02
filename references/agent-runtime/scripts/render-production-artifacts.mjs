@@ -380,6 +380,10 @@ function renderVerificationDelivery(delivery, proofSlicesTrace) {
       const runtimeRows = asArray(slice["runtime-row-ids"]).join(", ");
       return `| ${cell(slice["slice-id"])} | ${cell(runtimeRows)} | ${cell(slice["primary-runtime-row-id"])} | ${cell(slice["primitive-type"])} | ${cell(slice["branch-variant"])} | ${cell(slice["observable-surface"])} | ${cell(slice["oracle-fragment"])} | ${cell(slice["failure-signal"])} | ${cell(slice["primary-layer"])} | ${cell(slice["production-owner"])} | ${cell(slice["persistent-test-required"])} | ${cell(slice["proof-evidence-mode"])} | ${cell(slice["primary-assertion-shape"])} | ${cell(slice["fixture-mock-boundary"])} | ${cell(slice["regression-intent"])} | ${cell(slice["manual-environment-gate"])} |`;
   });
+  const placementRows = asArray(proofSlicesTrace["proof-slices"]).map((slice) => {
+    const placement = asObject(asObject(slice["test-contract"]).placement);
+    return `| ${cell(slice["slice-id"])} | ${cell(slice["persistent-test-required"])} | ${cell(slice["proof-evidence-mode"])} | ${cell(placement["planned-test-directory"])} | ${cell(placement["placement-basis"])} | ${cell(placement["placement-reason"])} |`;
+  });
   return `## Verification Intent
 
 ${renderIntentList(delivery["verification-intent"], [
@@ -393,6 +397,12 @@ ${renderIntentList(delivery["verification-intent"], [
 | Slice ID | Runtime Row IDs | Primary Runtime Row ID | Primitive Type | Branch / Variant | Observable Surface | Oracle Fragment | Failure Signal | Primary Layer | Production Owner | Persistent Test Required | Proof Evidence Mode | Primary Assertion Shape | Fixture / Mock Boundary | Regression Intent | Manual / Environment Gate |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${proofRows.join("\n")}
+
+## Planned Test Placement Matrix
+
+| Slice ID | Persistent Test Required | Proof Evidence Mode | Planned Test Directory | Placement Basis | Placement Reason |
+| --- | --- | --- | --- | --- | --- |
+${placementRows.join("\n")}
 
 ## Layer / Harness / Fixture Notes
 

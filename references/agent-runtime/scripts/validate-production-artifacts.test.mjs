@@ -487,8 +487,6 @@ test("no-delta marker 仅允许 obligation schema hard fail", () => {
 
 test("有 spec-level direct atom 但缺 specs trace hard fail", () => {
   const files = standardFiles({ proposal: true });
-  files.artifacts = { "proposal.md": files.artifacts["proposal.md"] };
-  files.traces = { "proposal.trace.json": files.traces["proposal.trace.json"] };
   const root = makeChange("spec-direct-missing-specs-change", files);
   const result = validateChange({ root, change: "spec-direct-missing-specs-change", complete: false });
 
@@ -914,12 +912,12 @@ test("proof-slices-v1 JSON slice owner list hard fail", () => {
   assertRule(result, "VAL-PST-030");
 });
 
-test("proof-slices-v1 propose 阶段不校验 owner/layer tests 目录落点", () => {
+test("proof-slices-v1 propose 阶段校验合法目录级测试落点", () => {
   const cases = [
-    { change: "proof-slices-web-db-placement-change", owner: "apps/web", layer: "DB/integration" },
-    { change: "proof-slices-web-contract-placement-change", owner: "apps/web", layer: "contract" },
-    { change: "proof-slices-control-api-placement-change", owner: "apps/control-api", layer: "route/API" },
-    { change: "proof-slices-k8s-placement-change", owner: "infra/k8s", layer: "contract" },
+    { change: "proof-slices-web-db-placement-change", owner: "apps/web", layer: "DB/integration", directory: "apps/web/tests/integration/**" },
+    { change: "proof-slices-web-contract-placement-change", owner: "apps/web", layer: "contract", directory: "apps/web/tests/contract/**" },
+    { change: "proof-slices-control-api-placement-change", owner: "apps/control-api", layer: "route/API", directory: "apps/control-api/tests/api/**" },
+    { change: "proof-slices-k8s-placement-change", owner: "infra/k8s", layer: "contract", directory: "infra/k8s/tests/contract/**" },
   ];
 
   for (const item of cases) {
@@ -927,12 +925,75 @@ test("proof-slices-v1 propose 阶段不校验 owner/layer tests 目录落点", (
     const root = makeChange(item.change, files);
     const result = validateChange({ root, change: item.change, complete: true });
 
-    assert.ok(
-      !result.issues.some((issue) => issue.ruleId === "VAL-PS-009"),
-      `did not expect VAL-PS-009 for ${item.owner} + ${item.layer}, got ${JSON.stringify(result.issues, null, 2)}`,
-    );
     assert.equal(result.errorCount, 0, `${item.owner} + ${item.layer}: ${JSON.stringify(result.issues, null, 2)}`);
   }
+});
+
+test("proof-slices-v1 durable slice 缺少 test-contract.placement hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  delete files.traces["verification.proof-slices.json"]["proof-slices"][0]["test-contract"].placement;
+  files.artifacts["verification.md"] = renderDeliveryBody(
+    files.traces["verification.trace.json"],
+    files.traces["verification.proof-slices.json"],
+  );
+  const root = makeChange("proof-slices-missing-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-missing-placement-change", complete: true });
+
+  assertRule(result, "VAL-PST-031");
+});
+
+test("proof-slices-v1 durable planned-test-directory 具体测试文件 hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/web",
+    layer: "component",
+    directory: "apps/web/tests/component/foo.spec.ts",
+  });
+  const root = makeChange("proof-slices-concrete-test-file-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-concrete-test-file-placement-change", complete: true });
+
+  assertRule(result, "VAL-PST-036");
+  assertRule(result, "VAL-VF-003");
+});
+
+test("proof-slices-v1 component planned 到 e2e 子树 hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/web",
+    layer: "component",
+    directory: "apps/web/tests/e2e/**",
+  });
+  const root = makeChange("proof-slices-component-e2e-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-component-e2e-placement-change", complete: true });
+
+  assertRule(result, "VAL-PST-038");
+});
+
+test("proof-slices-v1 route API planned 到 owner 根 tests hard fail", () => {
+  const files = withSingleProofSlicePlacement(standardFiles({ newContract: true }), {
+    owner: "apps/control-api",
+    layer: "route/API",
+    directory: "apps/control-api/tests/**",
+  });
+  const root = makeChange("proof-slices-api-root-tests-placement-change", files);
+  const result = validateChange({ root, change: "proof-slices-api-root-tests-placement-change", complete: true });
+
+  assertRule(result, "VAL-PST-037");
+});
+
+test("proof-slices-v1 verification planned directory glob 允许但具体测试文件仍 hard fail", () => {
+  const files = standardFiles({ newContract: true });
+  const validRoot = makeChange("proof-slices-planned-glob-verification-change", files);
+  const validResult = validateChange({ root: validRoot, change: "proof-slices-planned-glob-verification-change", complete: true });
+  assert.equal(validResult.errorCount, 0, JSON.stringify(validResult.issues, null, 2));
+
+  const invalidFiles = standardFiles({ newContract: true });
+  invalidFiles.artifacts["verification.md"] = verificationBody({
+    placementRows: [
+      "| PS-001 | true | durable-test | apps/web/tests/security/foo.spec.ts | existing-tests-directory | security proof 使用 apps/web security tests。 |",
+    ],
+  });
+  const invalidRoot = makeChange("proof-slices-concrete-file-verification-change", invalidFiles);
+  const invalidResult = validateChange({ root: invalidRoot, change: "proof-slices-concrete-file-verification-change", complete: true });
+  assertRule(invalidResult, "VAL-VF-003");
 });
 
 test("proof-slices-v1 非法 Primary Layer 仍 hard fail", () => {
@@ -1177,6 +1238,11 @@ test("verification proof slice 未被 reconciliation 引用 hard fail", () => {
       "allow-shared-setup": true,
       "allow-multi-slice-primary-test": false,
       "waiver-required-for-multi-slice": true,
+      placement: {
+        "planned-test-directory": "apps/web/tests/component/**",
+        "placement-basis": "planned-layer-subdirectory",
+        "placement-reason": "component proof 使用 apps/web component tests。",
+      },
     },
   });
   files.traces["verification.proof-slices.json"]["proof-slice-summary"]["proof-slice-count"] = 2;
@@ -1203,6 +1269,11 @@ test("疑似非原子 slice 继续输出 warning", () => {
   proofSlice["primary-layer"] = "route/API";
   proofSlice["primary-assertion-shape"] = "interactive assertions";
   proofSlice["fixture-mock-boundary"] = "DB fixture";
+  proofSlice["test-contract"].placement = {
+    "planned-test-directory": "apps/web/tests/api/**",
+    "placement-basis": "planned-layer-subdirectory",
+    "placement-reason": "route/API proof 使用 apps/web api tests。",
+  };
   files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primitive-types-used"] = ["operation"];
   files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primary-layers-used"] = ["route/API"];
   files.traces["verification.trace.json"]["delivery-plane"] = verificationDelivery();
@@ -1344,6 +1415,14 @@ function withSingleProofSlicePlacement(files, options) {
     proofSlice["primary-layer"] = options.layer;
     proofSlice["production-owner"] = options.owner;
     proofSlice["manual-environment-gate"] = manual;
+    proofSlice["test-contract"] = {
+      ...proofSlice["test-contract"],
+      placement: {
+        "planned-test-directory": options.directory ?? plannedDirectoryForLayer(options.owner, options.layer),
+        "placement-basis": options.basis ?? "existing-tests-directory",
+        "placement-reason": options.reason ?? `${options.layer} proof 使用 ${options.owner} 对应 tests 子树。`,
+      },
+    };
     files.traces["verification.proof-slices.json"]["proof-slice-summary"]["primary-layers-used"] = [
       options.layer,
     ];
@@ -1365,6 +1444,13 @@ function setSingleProofSlicePersistence(files, options) {
     proofSlice["test-contract"] = {
       ...proofSlice["test-contract"],
       "primary-test-cardinality": options.cardinality,
+      placement: options.persistent === false
+        ? {
+            "planned-test-directory": "N/A",
+            "placement-basis": "nonpersistent-evidence",
+            "placement-reason": "foundation / non-persistent slice 使用非持久 proof evidence。",
+          }
+        : proofSlice["test-contract"].placement,
     };
   }
   files.traces["verification.trace.json"]["delivery-plane"] = verificationDelivery();
@@ -1373,6 +1459,33 @@ function setSingleProofSlicePersistence(files, options) {
     files.traces["verification.proof-slices.json"],
   );
   return files;
+}
+
+function plannedDirectoryForLayer(owner, layer) {
+  const ownerRoot = owner || "apps/web";
+  switch (layer) {
+    case "unit":
+      return `${ownerRoot}/tests/unit/**`;
+    case "component":
+      return `${ownerRoot}/tests/component/**`;
+    case "route/API":
+      return `${ownerRoot}/tests/api/**`;
+    case "DB/integration":
+      return `${ownerRoot}/tests/integration/**`;
+    case "contract":
+      return `${ownerRoot}/tests/contract/**`;
+    case "worker/job":
+      return `${ownerRoot}/tests/worker/**`;
+    case "realtime/SSE":
+      return `${ownerRoot}/tests/integration/**`;
+    case "browser/e2e":
+    case "visual/responsive":
+      return `${ownerRoot}/tests/e2e/**`;
+    case "security/negative":
+      return `${ownerRoot}/tests/security/**`;
+    default:
+      return `${ownerRoot}/tests/component/**`;
+  }
 }
 
 function deliveryPayloadForArtifact(artifactPath, options = {}) {
@@ -1572,6 +1685,9 @@ function verificationBody(options = {}) {
   const proofRows =
     options.proofRows ??
     ["| PS-001 | RS-001 | RS-001 | authorization | actor resolution | auth surface | 登录态解析到内部 actor。 | actor 缺失。 | security/negative | apps/web | true | durable-test | authorization result | session fixture | high | None |"];
+  const placementRows =
+    options.placementRows ??
+    ["| PS-001 | true | durable-test | apps/web/tests/security/** | existing-tests-directory | security proof 使用 apps/web security tests。 |"];
   return `## Verification Intent
 
 - Scope: 测试。
@@ -1583,6 +1699,12 @@ function verificationBody(options = {}) {
 | Slice ID | Runtime Row IDs | Primary Runtime Row ID | Primitive Type | Branch / Variant | Observable Surface | Oracle Fragment | Failure Signal | Primary Layer | Production Owner | Persistent Test Required | Proof Evidence Mode | Primary Assertion Shape | Fixture / Mock Boundary | Regression Intent | Manual / Environment Gate |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${proofRows.join("\n")}
+
+## Planned Test Placement Matrix
+
+| Slice ID | Persistent Test Required | Proof Evidence Mode | Planned Test Directory | Placement Basis | Placement Reason |
+| --- | --- | --- | --- | --- | --- |
+${placementRows.join("\n")}
 
 ## Layer / Harness / Fixture Notes
 
@@ -2082,6 +2204,11 @@ function proofSlicesTrace() {
           "allow-shared-setup": true,
           "allow-multi-slice-primary-test": false,
           "waiver-required-for-multi-slice": true,
+          placement: {
+            "planned-test-directory": "apps/web/tests/security/**",
+            "placement-basis": "existing-tests-directory",
+            "placement-reason": "security proof 使用 apps/web security tests。",
+          },
         },
       },
     ],

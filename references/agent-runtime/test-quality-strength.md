@@ -39,9 +39,9 @@
 
 ## Test Placement Routing
 
-1. 只有 `persistent-test-required=true` 的 Proof Slice 需要选择持久测试落点。test agent 必须根据当前 repo layout、单一 `Production Owner`、`Primary Layer` 和本节最佳实践推断合理外置 `tests/**` 目录；不得依赖 propose 阶段预先写死的路径，也不得用固定 `Production Owner + Primary Layer` 表做 artifact hard fail。
-2. 新增或修改的持久测试必须写入外置 `tests/**` placement；可以是 workspace-level `tests/**`、app/package/infra 内部的 `tests/**`，或当前 repo 已建立且 runner 可触达的等价外置 tests 结构。不得写入 production source tree。
-3. Layer 驱动的默认实践：`unit` 使用 `tests/unit/**`；`component` 使用 `tests/component/**`；`route/API` 使用 `tests/api/**` 或 `tests/contract/**`；`DB/integration` 使用 `tests/integration/**`；`contract` 使用 `tests/contract/**`；`worker/job` 使用 `tests/worker/**` 或 owner-local `tests/**`；`realtime/SSE` 使用 `tests/integration/**`；`browser/e2e` 和 `visual/responsive` 使用 `tests/e2e/**`；`security/negative` 落在能真实触达被测 boundary 的对应 tests 子树。
+1. 只有 `persistent-test-required=true` 的 Proof Slice 需要持久测试落点。propose 阶段必须在 `trace/verification.proof-slices.json` 的 `test-contract.placement.planned-test-directory` 中规划目录级 glob；test agent 必须消费该 canonical planned directory，不得自行改写 `verification.md` 或把实际文件放到其它 layer 子树。
+2. 新增或修改的持久测试必须写入 planned-test-directory 所覆盖的外置 `tests/**` placement；该值必须是目录 glob、以 `/**` 结尾，可以是 workspace-level `tests/<layer>/**`、app/package/infra 内部的 `tests/<layer>/**`，或当前 repo 已建立且 runner 可触达的等价外置 tests 结构。不得写入 production source tree。
+3. Layer 驱动的默认实践：`unit` 使用 `tests/unit/**`；`component` 使用 `tests/component/**`；`route/API` 使用 `tests/api/**` 或 `tests/contract/**`；`DB/integration` 使用 `tests/integration/**`；`contract` 使用 `tests/contract/**`；`worker/job` 使用 `tests/worker/**`；`realtime/SSE` 使用 `tests/integration/**`；`browser/e2e` 和 `visual/responsive` 使用 `tests/e2e/**`；`security/negative` 使用 `tests/security/**` 或能真实触达被测 boundary 的对应 layer 子树。
 4. `Production Owner` 只用于 proof trace，是 production code boundary，不是测试目录、协作边界列表、runner selector 或 evidence 目录；协作依赖只影响 harness/mock/default-path 说明，不扩大 owner。
 5. test-only helper、fixture、seed helper、readback helper 和 Playwright helper 应放在对应 `tests/**` support module 或测试文件同目录的 test-only helper；不得进入 production runtime 目录，也不得从 production package main entrypoint 导出。
 6. forbidden placement 一律 hard fail：`openspec-results/**`、`test-results/**`、`openspec/changes/**`、`tests/runtime/**`、一次性 `scripts/**`、production source tree 内随手新增的 `.test.*` / `.spec.*`、非外置 tests 的 `__tests__/**`。
@@ -50,6 +50,7 @@
 9. 新增或修改 runner include 时，不得加入 production source tree 下的 `.test.*`、`.spec.*` 或 `__tests__/**` 来触达错误落位。
 10. broad workspace command 只能作为补充，不能替代持久测试的 focused/containing-suite command，也不能替代非持久 Proof Slice 的 evidence result。
 11. `persistent-test-required=true` 的 primary test title 必须以 exact `PS-###` 开头，并且默认只包含这一个 PS ID。共享 setup、seed、fixture、helper、`beforeEach` 和参数化数据允许；共享 primary test identity 不允许。
+12. 如果 planned-test-directory 与真实 repo layout 不可用，或实际最小充分层与 canonical planned directory 冲突，test agent 必须输出 `Artifact Consistency Blocker` 或在 source/scope-compatible 情况下请求 repair verification；不得用 owner 根 `tests/**`、错误 layer 子树或 e2e broad test 代替 component/API/DB 等 planned layer。
 
 ## Harness 要求
 
@@ -78,8 +79,8 @@
 
 ## 持久测试与运行入口
 
-1. 对 `persistent-test-required=true` 的 slice，新增或修改的测试必须按 `Test Placement Routing` 放在外置 `tests/**` 长期 test/spec 文件中。不得只放在 forbidden placement、`tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
-2. 对 `persistent-test-required=false` 的 slice，test agent 不生成测试代码；必须按 `proof-evidence-mode` 执行或确认对应非持久 evidence，并在 `proof-test-map.json` 的 `proof-evidence-results[]` 中记录 `slice-id`、`proof-evidence-mode`、`status`、实际命令和退出码，或 manual environment completion reason。
+1. 对 `persistent-test-required=true` 的 slice，新增或修改的测试必须按 `Test Placement Routing` 放在 `test-contract.placement.planned-test-directory` 下的长期 test/spec 文件中。不得只放在 forbidden placement、owner 根 `tests/**`、错误 layer 子树、`tests/runtime/**`、`openspec-results/**`、`test-results/**`、`openspec/changes/**` 或一次性脚本中。
+2. 对 `persistent-test-required=false` 的 slice，test agent 不生成测试代码，不得写入 `proof-test-results[]`；必须按 `proof-evidence-mode` 执行或确认对应非持久 evidence，并在 `proof-test-map.json` 的 `proof-evidence-results[]` 中记录 `slice-id`、`proof-evidence-mode`、`status`、实际命令和退出码，或 manual environment completion reason。
 3. `readiness-command`、`build-command`、`codegen-command`、`compose-config-readback` 和 `static-boundary-readback` 的 `passed` evidence 必须记录实际 command 且 exit status 为 0；`manual-environment` 必须记录 source/scope-backed manual reason 和完成状态。
 4. test agent 必须运行能实际触达相关持久测试或非持久 evidence 的命令，并在 apply result 记录命令、退出状态和关键结果。
 5. broad workspace command 可以作为补充，但不能替代能定位相关 oracle 的持久测试命令或非持久 evidence result；只执行 discovery/listing 或错误 runner 不算通过。
@@ -98,7 +99,7 @@
 
 ## 结果判定
 
-1. `Passed`：对 `persistent-test-required=true` 的 atomic Proof Slice，标准测试已生成或确认存在，满足本文档质量门禁，实际命令通过，实际测试路径不在 forbidden placement，runner/entry 能触达该测试，`proof-test-map.json` 记录 exactly-one primary test 且 mapping audit 通过，且未新增 forbidden placement、错误 runner include 或 test-only production route；对 `persistent-test-required=false` 的 Proof Slice，`proof-test-map.json` 记录 exactly-one `proof-evidence-results[]` 且 status 为 passed 或 manual environment completed。required runtime row 的所有 expected Proof Slice 都满足后，该 row 才可汇总为 covered。
+1. `Passed`：对 `persistent-test-required=true` 的 atomic Proof Slice，标准测试已生成或确认存在，满足本文档质量门禁，实际命令通过，实际测试路径落在 canonical `planned-test-directory` 下且不在 forbidden placement，runner/entry 能触达该测试，`proof-test-map.json` 记录 exactly-one primary test 且 mapping audit 通过，且未新增 forbidden placement、错误 layer 子树、错误 runner include 或 test-only production route；对 `persistent-test-required=false` 的 Proof Slice，`proof-test-map.json` 记录 exactly-one `proof-evidence-results[]` 且 status 为 passed 或 manual environment completed，并且没有 `proof-test-results[]`。required runtime row 的所有 expected Proof Slice 都满足后，该 row 才可汇总为 covered。
 2. `Authoring Blocker`：无法按本文档生成标准测试，原因是生产代码缺少合适 public/runtime boundary、稳定 observable surface、可控 dependency boundary、错误信号，或只能通过 implementation-detail/static/artifact proof 覆盖。
 3. `Execution Failure`：标准测试已经能按本文档生成，oracle 表达正确，但测试命令失败、runner/entry 未触达、环境隔离失败或生产行为不满足 oracle。
 4. `Artifact Consistency Blocker` 仍只限 Phase 2 定义的 artifact/oracle 问题；当前实现不支持 oracle、测试难写或测试失败都不是 artifact consistency blocker。

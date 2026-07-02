@@ -13,6 +13,12 @@ import {
   renderArtifactMarkdown,
   tracePathForArtifactPath,
 } from "./render-production-artifacts.mjs";
+import {
+  isForbiddenPlannedTestDirectory,
+  isPlannedDirectoryAllowedForLayer,
+  isPlannedDirectoryGlob,
+  placementFor,
+} from "./proof-slice-placement-policy.mjs";
 
 const TRACE_SCHEMA = "openspec-trace-v1";
 const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
@@ -93,6 +99,13 @@ const PROOF_EVIDENCE_MODES = new Set([
   "manual-environment",
 ]);
 
+const PLACEMENT_BASES = new Set([
+  "existing-tests-directory",
+  "planned-layer-subdirectory",
+  "workspace-tests-directory",
+  "nonpersistent-evidence",
+]);
+
 const PROOF_SLICE_COLUMNS = [
   "Slice ID",
   "Runtime Row IDs",
@@ -110,6 +123,15 @@ const PROOF_SLICE_COLUMNS = [
   "Fixture / Mock Boundary",
   "Regression Intent",
   "Manual / Environment Gate",
+];
+
+const PLANNED_PLACEMENT_COLUMNS = [
+  "Slice ID",
+  "Persistent Test Required",
+  "Proof Evidence Mode",
+  "Planned Test Directory",
+  "Placement Basis",
+  "Placement Reason",
 ];
 
 const FORBIDDEN_ARTIFACT_FIELDS = [
@@ -649,7 +671,7 @@ function validateVerification(file, runtimeRows, issues, proofSlicesTrace = null
       addIssue(issues, "error", "VAL-VF-002", file.repoRelPath, `verification.md 不得包含 ${forbidden}。`);
     }
   }
-  if (/(^|\s)(?:tests\/|test-results\/|openspec-results\/|\.test\.[cm]?[jt]sx?|\.spec\.[cm]?[jt]sx?)/iu.test(file.text)) {
+  if (containsForbiddenVerificationTestPath(file.text)) {
     addIssue(issues, "error", "VAL-VF-003", file.repoRelPath, "verification.md 不得写入具体测试路径、测试文件名或 evidence/apply 产物路径。");
   }
 
@@ -678,10 +700,52 @@ function validateVerification(file, runtimeRows, issues, proofSlicesTrace = null
     slices.set(slice.id, slice);
   }
   if (traceContractVersion === TRACE_CONTRACT_PROOF_SLICES) {
-    const jsonSlices = validateProofSlicesTrace(proofSlicesTrace, slices, runtimeRows, issues, changeContext);
+    const placementRows = parsePlannedPlacementRows(file, issues);
+    const jsonSlices = validateProofSlicesTrace(proofSlicesTrace, slices, placementRows, runtimeRows, issues, changeContext);
     return jsonSlices.size > 0 ? jsonSlices : slices;
   }
   return slices;
+}
+
+function containsForbiddenVerificationTestPath(text) {
+  return (
+    /(?:openspec-results|test-results|openspec\/changes)\//iu.test(text) ||
+    /(?:^|[\s`|])\S*\.(?:test|spec)\.[cm]?[jt]sx?(?:\b|$)/iu.test(text) ||
+    /(?:^|[\s`|])(?:pnpm|npm|yarn|bun|npx|node)\s+(?:exec\s+)?(?:vitest|playwright|jest|cypress|test|run)\b/iu.test(text)
+  );
+}
+
+function parsePlannedPlacementRows(file, issues) {
+  const rows = new Map();
+  const table = getTableAfterHeading(file, "## Planned Test Placement Matrix");
+  if (!table) {
+    addIssue(issues, "error", "VAL-PP-001", file.repoRelPath, "缺少 Planned Test Placement Matrix 表格。");
+    return rows;
+  }
+  const indexes = requireColumns(table, PLANNED_PLACEMENT_COLUMNS, file.repoRelPath, "VAL-PP-002", issues);
+  if (!indexes) {
+    return rows;
+  }
+
+  for (const row of table.rows) {
+    const placement = {
+      id: strip(row.cells[indexes["Slice ID"]]),
+      persistentTestRequired: strip(row.cells[indexes["Persistent Test Required"]]),
+      proofEvidenceMode: strip(row.cells[indexes["Proof Evidence Mode"]]),
+      directory: strip(row.cells[indexes["Planned Test Directory"]]),
+      basis: strip(row.cells[indexes["Placement Basis"]]),
+      reason: strip(row.cells[indexes["Placement Reason"]]),
+      line: row.line,
+    };
+    if (!/^PS-\d{3}$/.test(placement.id)) {
+      continue;
+    }
+    if (rows.has(placement.id)) {
+      addIssue(issues, "error", "VAL-PP-003", `${file.repoRelPath}:${row.line}`, `Planned Test Placement ${placement.id} 重复。`);
+    }
+    rows.set(placement.id, placement);
+  }
+  return rows;
 }
 
 function proofSliceFromMarkdownRow(row, indexes) {
@@ -724,6 +788,7 @@ function proofSliceFromTraceRow(row) {
     fixture: strip(row["fixture-mock-boundary"]),
     regression: strip(row["regression-intent"]),
     manual: strip(row["manual-environment-gate"]),
+    placement: placementFor(row),
   };
 }
 
@@ -754,7 +819,7 @@ function validateProofSliceModel(slice, ref, runtimeRows, issues) {
   }
 }
 
-function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues, changeContext = {}) {
+function validateProofSlicesTrace(trace, markdownSlices, placementRows, runtimeRows, issues, changeContext = {}) {
   const slices = new Map();
   if (!trace) {
     return slices;
@@ -828,11 +893,22 @@ function validateProofSlicesTrace(trace, markdownSlices, runtimeRows, issues, ch
     } else {
       compareProofSliceMirror(slice, markdown, ref, issues);
     }
+    const placement = placementRows.get(slice.id);
+    if (!placement) {
+      addIssue(issues, "error", "VAL-PP-004", ref, `${slice.id} 缺少 Planned Test Placement Matrix 镜像行。`);
+    } else {
+      compareProofSlicePlacementMirror(slice, placement, ref, issues);
+    }
   }
 
   for (const sliceId of markdownSlices.keys()) {
     if (!slices.has(sliceId)) {
       addIssue(issues, "error", "VAL-PST-013", PROOF_SLICES_TRACE_PATH, `${sliceId} 存在于 verification.md 但缺少 JSON canonical row。`);
+    }
+  }
+  for (const sliceId of placementRows.keys()) {
+    if (!slices.has(sliceId)) {
+      addIssue(issues, "error", "VAL-PP-006", PROOF_SLICES_TRACE_PATH, `${sliceId} 存在于 Planned Test Placement Matrix 但缺少 JSON canonical row。`);
     }
   }
   return slices;
@@ -897,6 +973,7 @@ function validateProofSliceTestContract(contract, slice, ref, issues) {
     addIssue(issues, "error", "VAL-PST-020", ref, `${sliceId} 缺少 test-contract。`);
     return;
   }
+  validateProofSlicePlacementContract(contract.placement, slice, ref, issues);
   const expectedCardinality = slice.persistentTestRequired === false ? "none" : "exactly-one";
   if (strip(contract["primary-test-cardinality"]) !== expectedCardinality) {
     addIssue(issues, "error", "VAL-PST-021", ref, `${sliceId} primary-test-cardinality 必须为 ${expectedCardinality}。`);
@@ -934,6 +1011,57 @@ function validateProofSliceTestContract(contract, slice, ref, issues) {
   }
 }
 
+function validateProofSlicePlacementContract(placement, slice, ref, issues) {
+  const sliceId = slice.id;
+  if (!placement || typeof placement !== "object" || Array.isArray(placement)) {
+    addIssue(issues, "error", "VAL-PST-031", ref, `${sliceId} 缺少 test-contract.placement。`);
+    return;
+  }
+
+  const plannedDirectory = strip(placement["planned-test-directory"]);
+  const basis = strip(placement["placement-basis"]);
+  const reason = strip(placement["placement-reason"]);
+  if (!plannedDirectory) {
+    addIssue(issues, "error", "VAL-PST-032", ref, `${sliceId} test-contract.placement 缺少 planned-test-directory。`);
+  }
+  if (!basis) {
+    addIssue(issues, "error", "VAL-PST-032", ref, `${sliceId} test-contract.placement 缺少 placement-basis。`);
+  } else if (!PLACEMENT_BASES.has(basis)) {
+    addIssue(issues, "error", "VAL-PST-033", ref, `${sliceId} placement-basis 非法：${basis}。`);
+  }
+  if (!reason) {
+    addIssue(issues, "error", "VAL-PST-032", ref, `${sliceId} test-contract.placement 缺少 placement-reason。`);
+  }
+
+  if (slice.persistentTestRequired === false) {
+    if (plannedDirectory !== "N/A") {
+      addIssue(issues, "error", "VAL-PST-034", ref, `${sliceId} persistent-test-required=false 时 planned-test-directory 必须为 N/A。`);
+    }
+    if (basis !== "nonpersistent-evidence") {
+      addIssue(issues, "error", "VAL-PST-034", ref, `${sliceId} persistent-test-required=false 时 placement-basis 必须为 nonpersistent-evidence。`);
+    }
+    return;
+  }
+
+  if (plannedDirectory === "N/A") {
+    addIssue(issues, "error", "VAL-PST-035", ref, `${sliceId} persistent-test-required=true 时 planned-test-directory 不得为 N/A。`);
+  }
+  if (basis === "nonpersistent-evidence") {
+    addIssue(issues, "error", "VAL-PST-035", ref, `${sliceId} persistent-test-required=true 时 placement-basis 不得为 nonpersistent-evidence。`);
+  }
+  if (!isPlannedDirectoryGlob(plannedDirectory)) {
+    addIssue(issues, "error", "VAL-PST-036", ref, `${sliceId} planned-test-directory 必须是外置 tests/ 子树目录 glob，并以 /** 结尾。`);
+    return;
+  }
+  if (isForbiddenPlannedTestDirectory(plannedDirectory)) {
+    addIssue(issues, "error", "VAL-PST-037", ref, `${sliceId} planned-test-directory 是 forbidden placement：${plannedDirectory}。`);
+    return;
+  }
+  if (!isPlannedDirectoryAllowedForLayer(plannedDirectory, slice.layer)) {
+    addIssue(issues, "error", "VAL-PST-038", ref, `${sliceId} planned-test-directory 与 Primary Layer ${slice.layer || "(empty)"} 不匹配。`);
+  }
+}
+
 function compareProofSliceMirror(jsonSlice, markdownSlice, ref, issues) {
   const checks = [
     ["runtime-row-ids", jsonSlice.runtimeRowIds, markdownSlice.runtimeRowIds],
@@ -956,6 +1084,21 @@ function compareProofSliceMirror(jsonSlice, markdownSlice, ref, issues) {
     const same = Array.isArray(left) || Array.isArray(right) ? sameArray(left, right) : strip(left) === strip(right);
     if (!same) {
       addIssue(issues, "error", "VAL-PST-030", ref, `${jsonSlice.id} 的 ${field} 与 verification.md 镜像不一致。`);
+    }
+  }
+}
+
+function compareProofSlicePlacementMirror(jsonSlice, markdownPlacement, ref, issues) {
+  const checks = [
+    ["persistent-test-required", jsonSlice.persistentTestRequired, markdownPlacement.persistentTestRequired],
+    ["proof-evidence-mode", jsonSlice.proofEvidenceMode, markdownPlacement.proofEvidenceMode],
+    ["planned-test-directory", jsonSlice.placement.directory, markdownPlacement.directory],
+    ["placement-basis", jsonSlice.placement.basis, markdownPlacement.basis],
+    ["placement-reason", jsonSlice.placement.reason, markdownPlacement.reason],
+  ];
+  for (const [field, left, right] of checks) {
+    if (strip(left) !== strip(right)) {
+      addIssue(issues, "error", "VAL-PP-005", ref, `${jsonSlice.id} 的 ${field} 与 Planned Test Placement Matrix 镜像不一致。`);
     }
   }
 }
@@ -1113,7 +1256,10 @@ function validateSourceScopeTrace(trace, schemaKind, files, issues) {
   }
 
   if (schemaKind === "obligation") {
-    validateObligationSpecsTraceProjection(trace, registeredRows, files, issues);
+    const hasSpecsTrace = [...trace.keys()].some((key) => key.startsWith("specs:"));
+    if (hasSpecsTrace || hasDownstreamArtifacts(files)) {
+      validateObligationSpecsTraceProjection(trace, registeredRows, files, issues);
+    }
     validateDesignTrace(trace.get("design"), files.byName["design.md"], trace, registeredRows, issues);
   }
 }

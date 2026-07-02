@@ -141,7 +141,7 @@ export function auditProofTestMapping(options = {}) {
     }
     const file = strip(row.file);
     if (!isPlacementAllowed(file, slice) || isForbiddenTestPlacement(file)) {
-      addIssue(issues, "error", "MAP-TM-008", ref, `${sliceId} 测试文件落位在 forbidden placement 或非外置 tests 目录：${file || "(empty)"}。`);
+      addIssue(issues, "error", "MAP-TM-008", ref, `${sliceId} 测试文件必须落在 planned-test-directory 下，且不得使用 forbidden placement：${file || "(empty)"}。`);
     }
     if (!isDiscovered(discoveredTests, row)) {
       addIssue(issues, "error", "MAP-TM-009", ref, `${sliceId} 映射的 test-title 未被 runner list 发现。`);

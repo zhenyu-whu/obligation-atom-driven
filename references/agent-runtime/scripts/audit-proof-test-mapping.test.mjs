@@ -96,21 +96,91 @@ test("proof-test-map placement 错误 hard fail", () => {
   assertRule(result, "MAP-TM-008");
 });
 
-test("proof-test-map 不再按 owner/layer 固定目录 hard fail", () => {
-  const root = makeProofMappingChange("owner-layer-flex-map", {
+test("component proof 实际文件落在 e2e 子树 hard fail", () => {
+  const root = makeProofMappingChange("component-e2e-map", {
     sliceOverrides: {
-      "primary-layer": "contract",
-      "production-owner": "workspace-root",
+      "primary-layer": "component",
+      "production-owner": "apps/web",
+      "test-contract": {
+        placement: {
+          "planned-test-directory": "apps/web/tests/component/**",
+          "placement-basis": "planned-layer-subdirectory",
+          "placement-reason": "component proof 使用 apps/web component tests。",
+        },
+      },
     },
+    results: [proofResult("PS-001", { file: "apps/web/tests/e2e/foo.spec.ts" })],
+    discoveredTests: [
+      {
+        runner: "vitest",
+        file: "apps/web/tests/e2e/foo.spec.ts",
+        title: "PS-001 actor denial",
+      },
+    ],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "component-e2e-map",
+    discoveredTests: [
+      {
+        runner: "vitest",
+        file: "apps/web/tests/e2e/foo.spec.ts",
+        title: "PS-001 actor denial",
+      },
+    ],
+  });
+  assertRule(result, "MAP-TM-008");
+});
+
+test("route API proof 实际文件落在 owner 根 tests hard fail", () => {
+  const root = makeProofMappingChange("api-root-tests-map", {
+    sliceOverrides: {
+      "primary-layer": "route/API",
+      "production-owner": "apps/control-api",
+      "test-contract": {
+        placement: {
+          "planned-test-directory": "apps/control-api/tests/api/**",
+          "placement-basis": "existing-tests-directory",
+          "placement-reason": "route/API proof 使用 apps/control-api api tests。",
+        },
+      },
+    },
+    results: [proofResult("PS-001", { file: "apps/control-api/tests/foo.spec.ts" })],
+    discoveredTests: [
+      {
+        runner: "vitest",
+        file: "apps/control-api/tests/foo.spec.ts",
+        title: "PS-001 actor denial",
+      },
+    ],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "api-root-tests-map",
+    discoveredTests: [
+      {
+        runner: "vitest",
+        file: "apps/control-api/tests/foo.spec.ts",
+        title: "PS-001 actor denial",
+      },
+    ],
+  });
+  assertRule(result, "MAP-TM-008");
+});
+
+test("non-persistent proof 不得进入 proof-test-results", () => {
+  const root = makeProofMappingChange("nonpersistent-test-result-map", {
+    sliceOverrides: nonPersistentSliceOverrides(),
     results: [proofResult("PS-001")],
+    evidenceResults: [proofEvidenceResult("PS-001")],
     discoveredTests: [discovered("PS-001 actor denial")],
   });
   const result = auditProofTestMapping({
     root,
-    change: "owner-layer-flex-map",
+    change: "nonpersistent-test-result-map",
     discoveredTests: [discovered("PS-001 actor denial")],
   });
-  assert.equal(result.errorCount, 0);
+  assertRule(result, "MAP-TM-014");
 });
 
 test("browser proof 缺少 containing-file validation hard fail", () => {
@@ -219,6 +289,11 @@ function proofSlices(sliceOverrides = {}) {
     "allow-shared-setup": true,
     "allow-multi-slice-primary-test": false,
     "waiver-required-for-multi-slice": true,
+    placement: {
+      "planned-test-directory": "packages/domain/tests/contract/**",
+      "placement-basis": "existing-tests-directory",
+      "placement-reason": "contract proof 使用 packages/domain contract tests。",
+    },
   };
   const baseSlice = {
     "slice-id": "PS-001",
@@ -264,6 +339,11 @@ function nonPersistentSliceOverrides() {
     "proof-evidence-mode": "readiness-command",
     "test-contract": {
       "primary-test-cardinality": "none",
+      placement: {
+        "planned-test-directory": "N/A",
+        "placement-basis": "nonpersistent-evidence",
+        "placement-reason": "非持久 readiness evidence。",
+      },
     },
   };
 }
@@ -310,6 +390,13 @@ function browserSliceOverrides() {
     "primary-layer": "browser/e2e",
     "production-owner": "apps/web",
     "primary-assertion-shape": "browser readback",
+    "test-contract": {
+      placement: {
+        "planned-test-directory": "apps/web/tests/e2e/**",
+        "placement-basis": "existing-tests-directory",
+        "placement-reason": "browser proof 使用 apps/web e2e tests。",
+      },
+    },
   };
 }
 

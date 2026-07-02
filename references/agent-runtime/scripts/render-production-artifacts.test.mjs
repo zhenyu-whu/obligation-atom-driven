@@ -35,6 +35,8 @@ test("renderer 从 proof-slices sidecar 渲染 verification matrix", () => {
 
   assert.match(result.markdown, /## Proof Slice Matrix/);
   assert.match(result.markdown, /\| PS-001 \| RS-001 \| RS-001 \| authorization \| actor resolution \|/);
+  assert.match(result.markdown, /## Planned Test Placement Matrix/);
+  assert.match(result.markdown, /\| PS-001 \| true \| durable-test \| apps\/web\/tests\/security\/\*\* \| existing-tests-directory \|/);
   assert.match(result.markdown, /Trace file: `trace\/verification.trace.json`/);
 });
 
@@ -382,6 +384,18 @@ function proofSlicesTrace() {
         "fixture-mock-boundary": "session fixture",
         "regression-intent": "high",
         "manual-environment-gate": "None",
+        "test-contract": {
+          "primary-test-cardinality": "exactly-one",
+          "test-title-prefix": "PS-001",
+          "allow-shared-setup": true,
+          "allow-multi-slice-primary-test": false,
+          "waiver-required-for-multi-slice": true,
+          placement: {
+            "planned-test-directory": "apps/web/tests/security/**",
+            "placement-basis": "existing-tests-directory",
+            "placement-reason": "security proof 使用 apps/web security tests。",
+          },
+        },
       },
     ],
   };
