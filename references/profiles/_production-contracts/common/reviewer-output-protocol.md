@@ -32,6 +32,7 @@ Reviewer 只能输出 `Pass` 或 `Blocker`。
 
 - 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 `repair-writer` 修订 artifacts，不得直接修改 artifacts。
 - 主 Agent 必须等待 repair-writer 自然返回最终完成或明确 blocker；repair-writer 运行期间只能执行必要的编排等待和状态记录。
+- repair-writer 只要修改了允许范围内的 artifact trace、renderer 产物或 manifest registry entry，就必须在自然返回前按 `openspec/agent-runtime/openspec-propose-artifacts.md` 的 Propose Checkpoint Commit Policy 创建 checkpoint commit；无 diff 时必须报告 `skipped: no diff`。
 - 每次 repair-writer 修订后必须重新运行对应静态 validator；hard error 必须先由当前 artifact 的 `repair-writer` 修复。
 - 同一 artifact reviewer 必须重新审查，直到 `Pass`。
 - Reviewer finding 不使用人为稳定编号；使用 artifact path、contract section、row ID 和业务锚点定位。

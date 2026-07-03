@@ -1,5 +1,5 @@
 name: production-obligation-atom-driven
-version: 20
+version: 21
 description: 面向生产实现的 obligation atom 工作流；artifact graph 由本 schema 定义，artifact 内容合同由 _production-contracts 定义，trace-first 编排由 agent-runtime 定义
 artifacts:
   - id: proposal

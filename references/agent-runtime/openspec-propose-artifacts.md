@@ -107,6 +107,19 @@
 6. repair-writer 必须重新读取最新上游 trace JSON、legacy sidecar JSON（仅旧 `proof-slices-v1` change 需要）、contract bundle 和 validator/reviewer blocker 后重建当前 trace-backed ID 集，并重新调用 renderer。
 7. 主 Agent 在 writer/repair-writer 自然返回前不得读取当前 artifact 中间落盘状态；返回后也不得把过程摘要当作 validator 或 reviewer 的 oracle。
 
+## Propose Checkpoint Commit Policy
+
+1. Propose checkpoint commit 是 propose-stage 过程审计轨迹，不代表 artifact 正确、validator 通过、reviewer 通过、apply-ready 或 ready-to-archive。
+2. 写入型 propose-stage agent 只包括 `<artifact-id>-writer` 和 `<artifact-id>-repair-writer`。artifact reviewer、integration reviewer、validator、只读 auditor 和主 Agent 的只读编排步骤不得为自己创建 propose checkpoint commit。
+3. 每个 writer 或 repair-writer 只要修改了允许范围内的文件，必须在自然返回前创建 checkpoint commit；无 diff 时不 commit，但必须在最终报告和 propose-result 中记录 `skipped: no diff`。
+4. checkpoint commit 必须覆盖该 writer/repair-writer 本轮实际修改的 trace JSON、renderer 产物、manifest registry entry，以及该 agent 明确报告的其它允许路径。禁止使用 `git add -A`、`git add .` 或任何会隐式纳入未报告路径的 stage 命令。
+5. writer/repair-writer 只能 stage 自身最终报告中的 touched files，且这些路径必须位于当前 change 的 artifact 输出范围内，例如 `openspec/changes/<change-slug>/trace/**`、`openspec/changes/<change-slug>/proposal.md`、`openspec/changes/<change-slug>/design.md`、`openspec/changes/<change-slug>/runtime-acceptance.md`、`openspec/changes/<change-slug>/verification.md`、`openspec/changes/<change-slug>/tasks.md`、`openspec/changes/<change-slug>/specs/**` 和 `openspec/changes/<change-slug>/.openspec/**` 中的 renderer registry 文件。不得把无关 repo 文件、实现文件、测试文件、`openspec-results/**`、其它 change 或 schema/runtime 文件纳入该 checkpoint。
+6. checkpoint commit 必须使用 `git commit --no-verify`，以便中间 artifact、validator hard error 前状态、reviewer blocker 修复前状态和明确 blocker 状态也能被审计记录。commit message 格式固定为 `openspec(<change-slug>): propose checkpoint <agent-role> <artifact-id> [<status>]`。
+7. commit body 必须记录 agent identity、phase=`propose`、artifact id、status、changed files、trace paths、renderer command、validator/reviewer blocker 摘要和 no-diff / blocker 说明。
+8. writer/repair-writer 如果发现待 stage 文件在本 agent 启动前已有未提交改动，必须说明如何适配既有改动；无法确认安全归属、存在重叠冲突或 checkpoint commit 创建失败时，必须返回 `Propose Checkpoint Commit Blocker`，不得声称 artifact 完成。
+9. 主 Agent 收到 writer/repair-writer 返回后，必须验证该 agent 已按最终报告创建 checkpoint commit，或明确记录 `skipped: no diff`。缺少 required checkpoint commit 时，不得运行 partial validator、启动 reviewer、分派下游 writer 或继续 repair loop；必须先把问题作为 `Propose Checkpoint Commit Blocker` 处理。
+10. 每个 checkpoint commit 的 SHA、message、artifact id、agent role、status、changed files 和 notes 必须写入 `openspec-results/<change-slug>/propose-result.md` 的 `Checkpoint Commits` 表。checkpoint commit 不得写入 JSON trace、Markdown artifact、proof-slice model，也不得作为 artifact 语义、validator pass 或 reviewer pass 的依据。
+
 ## Partial / Complete Static Validation
 
 1. Partial static validator 指不带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。它只验证当前 change 目录中已经存在的 artifacts 及其已声明 trace，不得要求尚未生成的下游 artifact、sidecar trace 或 apply-required artifact 提前存在。
@@ -120,10 +133,10 @@
 1. Artifact 必须按 `openspec status --change "<name>" --json` 返回的 schema dependency graph 处理；不得按本文档中的示例、记忆或固定顺序处理。
 2. 每个 artifact 必须使用对应 writer 和 reviewer subagent。默认命名为 `<artifact-id>-writer`、`<artifact-id>-reviewer` 和 `<artifact-id>-repair-writer`；`verification` reviewer 必须聚焦 Proof Slice 粒度、runtime row 分支枚举和 reconciliation 真实性。
 3. Writer、repair-writer、reviewer 和 integration reviewer 都必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建对应 subagent，必须停止并报告 blocker，不得降级为主 Agent 自检或低配模型。
-4. Writer 输入必须包含：change 名称、schema 名称、完整 `openspec instructions ... --json` 输出、已完成 dependency trace/sidecar JSON 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set、renderer CLI 命令和本文档路径。
+4. Writer 输入必须包含：change 名称、schema 名称、完整 `openspec instructions ... --json` 输出、已完成 dependency trace/sidecar JSON 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set、renderer CLI 命令、propose checkpoint commit policy 和本文档路径。
 5. 任一 writer、repair-writer、reviewer 或 integration reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录；不得读取当前 artifact 中间状态、运行 validator、接手修复/复核，或向正在运行的 subagent 注入中途发现。
-6. Writer 或 repair-writer 自然返回最终完成或明确 blocker 前，主 Agent 不得运行 partial validator、启动 reviewer 或继续生成依赖该 artifact 的下游 artifact。
-7. Writer 或 repair-writer 完成后，partial validator hard error 必须由当前 artifact 的 repair-writer 修复；warning 必须传给 artifact reviewer。
+6. Writer 或 repair-writer 自然返回最终完成或明确 blocker，且 required checkpoint commit 处理闭合前，主 Agent 不得运行 partial validator、启动 reviewer 或继续生成依赖该 artifact 的下游 artifact。
+7. Writer 或 repair-writer 完成且 checkpoint commit 处理闭合后，partial validator hard error 必须由当前 artifact 的 repair-writer 修复；warning 必须传给 artifact reviewer。
 8. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace JSON、必要 upstream dependency trace JSON、legacy sidecar JSON（仅旧 `proof-slices-v1` change 需要）、contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。
 9. Reviewer 不得读取当前实现、测试文件、Markdown Delivery Plane、`openspec-results/**` apply evidence、`apply-result.md`、`proof-test-map.json`、evidence 或 apply 阶段产物来推导 oracle。Reviewer 只能输出 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、trace anchor、contract source path + section heading、问题描述和修复方向。
 10. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 repair-writer，等待其自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续下游 artifact。
@@ -134,11 +147,12 @@
 1. Propose runtime 必须写入或更新 `openspec-results/<change-slug>/propose-result.md`。该文件是过程审计记录，不得替代 artifact、JSON trace、validator、reviewer、apply evidence 或 archive proof。
 2. 主 Agent 创建 change 后必须初始化 propose result，并至少记录 change 名称、schema 名称、创建日期、选择来源、active/archive 盘点摘要、source handoff / baseline 输入摘要、source/scope ID 集合、schema dependency graph 摘要和结果文件路径。
 3. 每次 writer、repair-writer、partial validator、artifact reviewer、full validator 和 integration reviewer 自然返回后，主 Agent 必须在 propose result 中追加或更新记录。记录只能使用自然返回报告、validator 输出、reviewer 输出、最终落盘 trace 路径和 renderer 状态。
-4. Propose result 至少包含 `Artifact Runs` 表，字段为 `sequence`、`artifact-id`、`agent-role`、`agent-id`、`status`、`validator`、`reviewer`、`trace-paths`、`notes`。同一 artifact 多轮 repair/review 必须保留轮次。
-5. Propose result 必须包含 `Blocker / Repair Log` 表，记录所有 writer blocker、validator hard error、reviewer blocker、integration blocker、修复 agent、最小修复摘要、复跑 validator 结果和复审结论。无 blocker 时也必须显式写 `None`。
-6. Propose result 必须包含 `Final Gates` 小节，记录 partial validators、full validator、artifact reviewer pass、integration reviewer pass、`openspec status --change "<change-slug>"` 摘要和是否 apply-ready。未满足所有门禁前，`apply-ready` 必须写为 `no` 并说明未满足项。
-7. Propose result 不得写入测试计划、实际测试命令、测试文件、evidence/deposit、Proof Slice 通过结果或任何 apply-stage evidence 结论。
-8. 若 propose result 与 artifact / trace / validator 结论冲突，必须以 artifact / trace / validator 为准并报告 `Artifact Consistency Blocker`。
+4. Propose result 至少包含 `Artifact Runs` 表，字段为 `sequence`、`artifact-id`、`agent-role`、`agent-id`、`status`、`checkpoint`、`validator`、`reviewer`、`trace-paths`、`notes`。同一 artifact 多轮 repair/review 必须保留轮次。
+5. Propose result 必须包含 `Checkpoint Commits` 表，字段为 `sequence`、`artifact-id`、`agent-role`、`agent-id`、`status`、`commit-sha`、`changed-files`、`notes`；无 diff、跳过或失败的 checkpoint 也必须记录 sequence 和 reason。
+6. Propose result 必须包含 `Blocker / Repair Log` 表，记录所有 writer blocker、checkpoint blocker、validator hard error、reviewer blocker、integration blocker、修复 agent、最小修复摘要、复跑 validator 结果和复审结论。无 blocker 时也必须显式写 `None`。
+7. Propose result 必须包含 `Final Gates` 小节，记录 writer/repair checkpoint closure、partial validators、full validator、artifact reviewer pass、integration reviewer pass、`openspec status --change "<change-slug>"` 摘要和是否 apply-ready。未满足所有门禁前，`apply-ready` 必须写为 `no` 并说明未满足项。
+8. Propose result 不得写入测试计划、实际测试命令、测试文件、evidence/deposit、Proof Slice 通过结果或任何 apply-stage evidence 结论。
+9. 若 propose result 与 artifact / trace / validator 结论冲突，必须以 artifact / trace / validator 为准并报告 `Artifact Consistency Blocker`。
 
 ## Complete Validation / Integration Reviewer
 

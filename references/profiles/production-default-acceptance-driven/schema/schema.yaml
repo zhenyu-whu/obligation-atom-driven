@@ -1,5 +1,5 @@
 name: production-default-acceptance-driven
-version: 16
+version: 17
 description: 面向 Greenfield 完成后的生产演进工作流；artifact graph 由本 schema 定义，artifact 内容合同由 _production-contracts 定义，trace-first 编排由 agent-runtime 定义
 artifacts:
   - id: proposal
