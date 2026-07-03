@@ -99,12 +99,12 @@
 
 ## Trace-First Writer Gate
 
-1. Writer 和 repair-writer 写入任一 production artifact 前，必须先建立或更新当前 artifact 的 JSON trace sections。verification 还必须按 contract 写 `trace/verification.proof-slices.json`。
-2. Writer/repair-writer 只能直接写当前 artifact 的 trace/proof-slices JSON，不得直接写或手工修改 Markdown artifact。
+1. Writer 和 repair-writer 写入任一 production artifact 前，必须先建立或更新当前 artifact 的 JSON trace sections。verification 必须按 contract 把 Proof Slice canonical model 写入 `trace/verification.trace.json#/proof-slice-model`，不得为新 change 创建 `trace/verification.proof-slices.json`。
+2. Writer/repair-writer 只能直接写当前 artifact 的 trace JSON，不得直接写或手工修改 Markdown artifact。
 3. Proposal writer 使用 schema `template` 时，必须把 JSONC authoring guide 中的注释、占位符和示例值替换为严格 JSON；`trace/proposal.trace.json` 不得包含 JSONC 注释、占位符、trailing comma 或 Markdown section body。
 4. 写完 trace 后必须调用 renderer：`node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact "<artifact-id>" [--capability "<capability>" | --no-delta-specs] --write`。
 5. Writer 在调用 renderer 前必须基于 trace 做 set-diff 自查；自查结论不得写入 artifact 正文。
-6. repair-writer 必须重新读取最新上游 trace/sidecar JSON、contract bundle 和 validator/reviewer blocker 后重建当前 trace-backed ID 集，并重新调用 renderer。
+6. repair-writer 必须重新读取最新上游 trace JSON、legacy sidecar JSON（仅旧 `proof-slices-v1` change 需要）、contract bundle 和 validator/reviewer blocker 后重建当前 trace-backed ID 集，并重新调用 renderer。
 7. 主 Agent 在 writer/repair-writer 自然返回前不得读取当前 artifact 中间落盘状态；返回后也不得把过程摘要当作 validator 或 reviewer 的 oracle。
 
 ## Partial / Complete Static Validation
@@ -112,8 +112,8 @@
 1. Partial static validator 指不带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。它只验证当前 change 目录中已经存在的 artifacts 及其已声明 trace，不得要求尚未生成的下游 artifact、sidecar trace 或 apply-required artifact 提前存在。
 2. 每次 writer 或 repair-writer 自然返回后，主 Agent 必须运行 partial validator。
 3. Partial validator 必须检查已存在 artifact 的 `## Trace Appendix` 指针、trace 文件、manifest registry entry、`render-contract-version`、renderer exact output、JSON key 格式、当前 artifact 必需 trace sections，以及已存在 traces 之间可解析的交叉引用；不得要求或校验 production artifact 内容摘要。
-4. `trace-contract-version: "proof-slices-v1"` 可从 proposal 阶段写入 manifest；它不表示 proposal/specs/design/runtime partial 阶段必须预先创建 verification sidecar trace。只有 `verification.md` 已存在或运行 complete validator 时，`trace/verification.proof-slices.json` 才是必需文件。
-5. Complete validator 指带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。它必须要求 selected schema 的 apply-required artifacts 全部存在，并校验完整 trace plane、verification proof-slices sidecar、runtime/verification/tasks reconciliation 和跨 artifact 闭环。
+4. `trace-contract-version: "verification-inline-proof-slices-v1"` 可从 proposal 阶段写入 manifest；它不表示 proposal/specs/design/runtime partial 阶段必须预先创建 verification trace。只有 `verification.md` 已存在或运行 complete validator 时，`trace/verification.trace.json#/proof-slice-model` 才是必需 model。旧 `proof-slices-v1` change 仍按 legacy sidecar 兼容读取。
+5. Complete validator 指带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。它必须要求 selected schema 的 apply-required artifacts 全部存在，并校验完整 trace plane、verification proof-slice-model、runtime/verification/tasks reconciliation 和跨 artifact 闭环。
 
 ## Artifact Writer / Reviewer Loop
 
@@ -124,7 +124,7 @@
 5. 任一 writer、repair-writer、reviewer 或 integration reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录；不得读取当前 artifact 中间状态、运行 validator、接手修复/复核，或向正在运行的 subagent 注入中途发现。
 6. Writer 或 repair-writer 自然返回最终完成或明确 blocker 前，主 Agent 不得运行 partial validator、启动 reviewer 或继续生成依赖该 artifact 的下游 artifact。
 7. Writer 或 repair-writer 完成后，partial validator hard error 必须由当前 artifact 的 repair-writer 修复；warning 必须传给 artifact reviewer。
-8. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace/sidecar JSON、必要 upstream dependency trace/sidecar JSON、contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。
+8. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace JSON、必要 upstream dependency trace JSON、legacy sidecar JSON（仅旧 `proof-slices-v1` change 需要）、contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。
 9. Reviewer 不得读取当前实现、测试文件、Markdown Delivery Plane、`openspec-results/**` apply evidence、`apply-result.md`、`proof-test-map.json`、evidence 或 apply 阶段产物来推导 oracle。Reviewer 只能输出 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、trace anchor、contract source path + section heading、问题描述和修复方向。
 10. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 repair-writer，等待其自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续下游 artifact。
 11. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、trace section/row、contract section、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。

@@ -5,9 +5,9 @@
 ## 适用边界
 
 1. test agent 必须在 Phase 2 Oracle Precheck 通过后读取本文档，再开始写测试。
-2. test agent 的测试目标只能来自 `trace/verification.proof-slices.json` 的 required Proof Slice、`verification.md` 的 Proof Slice Matrix 镜像、`trace/verification.trace.json` / `runtime-coverage-reconciliation`，以及其引用的 runtime-acceptance canonical rows；不得从 source/scope basis 重新发明测试目标。
+2. test agent 的测试目标只能来自 `trace/verification.trace.json#/proof-slice-model/proof-slices` 的 required Proof Slice、`verification.md` 的 Proof Slice Matrix 镜像、同一 trace 的 `runtime-coverage-reconciliation`，以及其引用的 runtime-acceptance canonical rows；旧 `proof-slices-v1` change 可读取 legacy sidecar。不得从 source/scope basis 重新发明测试目标。
 3. `tasks.md` 只能作为生产实现和 runtime acceptance projection 的上下文，不得作为测试 oracle 来源；canonical runtime row truth 来自 `runtime-acceptance.md`。
-4. Proof Slice 定义原子证明义务和 oracle，是 test agent 的测试生成、确认或 evidence 记录单位；新格式以 `trace/verification.proof-slices.json` 为 canonical source。`persistent-test-required=true` 的 slice 必须生成或确认持久测试；`persistent-test-required=false` 的 slice 不生成测试代码，但必须记录非持久 proof evidence result。
+4. Proof Slice 定义原子证明义务和 oracle，是 test agent 的测试生成、确认或 evidence 记录单位；新格式以 `trace/verification.trace.json#/proof-slice-model/proof-slices` 为 canonical source。`persistent-test-required=true` 的 slice 必须生成或确认持久测试；`persistent-test-required=false` 的 slice 不生成测试代码，但必须记录非持久 proof evidence result。
 5. `runtime` 是 Runtime Acceptance 的验收语义，不是测试层级、测试类型或默认测试目录。
 6. 不得把具体执行计划、测试编号、固定命令、证据目录、CI 状态或回归沉淀状态写回 `tasks.md` 或 `verification.md`；`verification.md` 只承载测试意图、oracle、Proof Slice、层级理由、harness 预期和 mock/fixture/default-path 边界。
 7. apply result 可以记录摘要；详细实际测试文件、实际命令、运行结果、非持久 evidence result、Runtime Row 与 Proof Slice 覆盖关系必须写入 `openspec-results/<change>/proof-test-map.json`。
@@ -39,7 +39,7 @@
 
 ## Test Placement Routing
 
-1. 只有 `persistent-test-required=true` 的 Proof Slice 需要持久测试落点。propose 阶段必须在 `trace/verification.proof-slices.json` 的 `test-contract.placement.planned-test-directory` 中规划目录级 glob；test agent 必须消费该 canonical planned directory，不得自行改写 `verification.md` 或把实际文件放到其它 layer 子树。
+1. 只有 `persistent-test-required=true` 的 Proof Slice 需要持久测试落点。propose 阶段必须在 `trace/verification.trace.json#/proof-slice-model/proof-slices[]/test-contract/placement/planned-test-directory` 中规划目录级 glob；test agent 必须消费该 canonical planned directory，不得自行改写 `verification.md` 或把实际文件放到其它 layer 子树。
 2. 新增或修改的持久测试必须写入 planned-test-directory 所覆盖的外置 `tests/**` placement；该值必须是目录 glob、以 `/**` 结尾，可以是 workspace-level `tests/<layer>/**`、app/package/infra 内部的 `tests/<layer>/**`，或当前 repo 已建立且 runner 可触达的等价外置 tests 结构。不得写入 production source tree。
 3. Layer 驱动的默认实践：`unit` 使用 `tests/unit/**`；`component` 使用 `tests/component/**`；`route/API` 使用 `tests/api/**` 或 `tests/contract/**`；`DB/integration` 使用 `tests/integration/**`；`contract` 使用 `tests/contract/**`；`worker/job` 使用 `tests/worker/**`；`realtime/SSE` 使用 `tests/integration/**`；`browser/e2e` 和 `visual/responsive` 使用 `tests/e2e/**`；`security/negative` 使用 `tests/security/**` 或能真实触达被测 boundary 的对应 layer 子树。
 4. `Production Owner` 只用于 proof trace，是 production code boundary，不是测试目录、协作边界列表、runner selector 或 evidence 目录；协作依赖只影响 harness/mock/default-path 说明，不扩大 owner。
@@ -67,7 +67,7 @@
 2. 测试应具备重构稳定性：只要外部契约不变，重命名私有函数、重排内部组件、拆分 service 或替换实现算法时测试不应失败。
 3. 不得把私有 helper、mock 调用次数、非契约 DOM 层级、className、快照全文、`data-testid` 存在、按钮 presence-only、静态 markup、源文件文本扫描或 artifact/config/text scan 作为 required behavior primary proof。
 4. 每个 `persistent-test-required=true` Proof Slice 默认对应一个 primary test case。互相独立的 operation、state、failure/retry、auth/security、layout、observability、fixture variant、viewport 或 redaction branch 必须拆成独立 test case 或参数化展开 case。共享同一个 `Primary Runtime Row ID` 不代表可以合并多个原子行为。
-5. 一个 `it` / `test` 不得串联多个独立 Proof Slice 或独立分支来伪装覆盖；失败信号必须能定位到对应 Proof Slice 或行为分支。只有 `trace/verification.proof-slices.json` 和 `proof-test-map.json` 同时提供 explicit multi-slice waiver 时，才允许一个 primary test 覆盖多个 PS。
+5. 一个 `it` / `test` 不得串联多个独立 Proof Slice 或独立分支来伪装覆盖；失败信号必须能定位到对应 Proof Slice 或行为分支。只有 `trace/verification.trace.json#/proof-slice-model` 和 `proof-test-map.json` 同时提供 explicit multi-slice waiver 时，才允许一个 primary test 覆盖多个 PS。
 
 ## Mock 与 Fixture
 

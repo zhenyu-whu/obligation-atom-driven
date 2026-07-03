@@ -1,0 +1,159 @@
+{
+  // Design writer/repair-writer must write strict JSON to trace/design.trace.json,
+  // then run render-production-artifacts.mjs --artifact design --write.
+  // Replace all placeholders and remove comments before writing the trace file.
+  "trace-schema": "openspec-trace-v1",
+  "artifact-id": "design",
+  "artifact-path": "design.md",
+  "change-name": "<change-slug>",
+  "schema-name": "production-obligation-atom-driven",
+  "agent-role": "design-writer",
+  "source-interface": {
+    "proposal-trace": "trace/proposal.trace.json",
+    "specs-completion-mode": "<delta|no-delta>",
+    "spec-traces": [
+      "trace/specs/<capability>.trace.json"
+    ],
+    "registered-source-window-policy": "design consumes proposal/spec trace only; design.md and specs Markdown are render outputs, not source/scope input."
+  },
+  "production-source-map": [
+    {
+      "source-map-row-id": "PSM-001",
+      "global-atom-id": "GA-0000",
+      "owner-capability": "<owner-capability>",
+      "source-document": "<path from proposal change-atom-coverage-register>",
+      "lines": "Lx-Ly",
+      "atom-type": "<atom-type from proposal>",
+      "source-fact": "<exact source-fact from proposal>",
+      "normativity": "<normativity from proposal>",
+      "artifact-projection": "<spec-requirement|spec-guard|design-obligation|verification-obligation|contextual-only>",
+      "proposal-trace-anchor": "trace/proposal.trace.json#/change-atom-coverage-register/<index>",
+      "spec-trace-anchors": [
+        {
+          "trace-path": "trace/specs/<capability>.trace.json",
+          "trace-pointer": "#/requirement-source-trace/<index>",
+          "owner-capability": "<owner-capability>",
+          "requirement": "<rendered requirement name>",
+          "scenario": "<rendered scenario name>",
+          "spec-handling": "<direct-spec-requirement|direct-spec-guard>",
+          "source-projection": "<spec-requirement|spec-guard>"
+        }
+      ],
+      "design-handling-ids": ["D-001"],
+      "implementation-placement-ids": ["P-001"],
+      "no-scope-expansion-check": "<how the design avoids adding source/scope outside this direct atom>"
+    }
+  ],
+  "spec-scenario-design-map": [
+    {
+      "trace-path": "trace/specs/<capability>.trace.json",
+      "trace-pointer": "#/requirement-source-trace/<index>",
+      "global-atom-id": "GA-0000",
+      "owner-capability": "<owner-capability>",
+      "requirement": "<rendered requirement name>",
+      "scenario": "<rendered scenario name>",
+      "decision-ids": ["D-001"],
+      "placement-ids": ["P-001"],
+      "design-handling": "<how this scenario is implemented>"
+    }
+  ],
+  "design-decision-index": [
+    {
+      "decision-id": "D-001",
+      "title": "<decision title>",
+      "design-handling": "<source-backed design decision summary>",
+      "source-item-ids": ["GA-0000"],
+      "placement-ids": ["P-001"]
+    }
+  ],
+  "design-obligation-matrix": [
+    {
+      "matrix-row-id": "DOM-001",
+      "global-atom-id": "GA-0000",
+      "owner-capability": "<owner-capability>",
+      "artifact-projection": "<projection from proposal>",
+      "source-fact": "<exact source-fact from proposal>",
+      "spec-scenario-anchors": ["<capability>::<requirement>::<scenario>"],
+      "decision-ids": ["D-001"],
+      "placement-ids": ["P-001"],
+      "guard-handling": "<must-not|preserve-boundary|non-goal|N/A>",
+      "proof-expectation": "<runtime-acceptance/verification handoff, or N/A>",
+      "no-scope-expansion": "<explicit boundary>",
+      "explicit-blocker": "无"
+    }
+  ],
+  "source-scope-map": {
+    "direct-source-item-handling": [
+      {
+        "global-atom-id": "GA-0000",
+        "handling": "<design handling summary>",
+        "decision-ids": ["D-001"],
+        "placement-ids": ["P-001"],
+        "no-scope-expansion": "<explicit boundary>"
+      }
+    ],
+    "implementation-placement-map": [
+      {
+        "placement-id": "P-001",
+        "placement": "<module|route|table|DTO|component|worker|ops-boundary>",
+        "path-boundary": "<production path or ownership boundary>",
+        "owner": "<single production owner>",
+        "implementation-contract": "<what implementers must build or preserve>"
+      }
+    ],
+    "non-direct-boundary-handling": []
+  },
+  "ui-control-contracts": [
+    {
+      "control-id": "UIC-001",
+      "owner-component": "<component>",
+      "event-trigger": "<user event>",
+      "handler-or-api-route": "<handler/API>",
+      "request-payload": "<payload>",
+      "response-merge-or-reload": "<merge/reload persistence>",
+      "submitting-disabled-error-retry": "<submitting/disabled/error/retry contract>",
+      "source-item-ids": ["GA-0000"]
+    }
+  ],
+  "proof-expectation-handoff": [
+    {
+      "source-item-id": "GA-0000",
+      "handoff-kind": "<runtime-acceptance|verification|none>",
+      "expectation": "<source-backed proof expectation without test file/command/evidence path>"
+    }
+  ],
+  "production-alignment-gate": {
+    "change-slug": "<change-slug>",
+    "schema-name": "production-obligation-atom-driven",
+    "direct-atom-count": 1,
+    "direct-atom-ids": ["GA-0000"],
+    "design-obligation-ids": ["GA-0000"],
+    "production-source-map-check": "production-source-map mirrors proposal direct atoms.",
+    "design-obligation-matrix-check": "Each proposal direct atom has exactly one matrix row.",
+    "blockers": []
+  },
+  "delivery-plane": {
+    "context": ["- <reviewer-facing context>"],
+    "goals-non-goals": ["- <goals and non-goals>"],
+    "decisions": [
+      {
+        "decision-id": "D-001",
+        "title": "<decision title>",
+        "decision": "<decision text>",
+        "source-gap": "<source gap or 无>",
+        "minimal-shape": "<minimal production-compatible shape>",
+        "rejected-expansion": "<rejected source/scope expansion>"
+      }
+    ],
+    "architecture-module-boundary-design": ["- <architecture/module boundary>"],
+    "domain-data-migration-design": ["- <domain/data/migration design>"],
+    "api-auth-security-design": ["- <API/auth/security design>"],
+    "async-realtime-ai-worker-design": ["- <async/realtime/AI/worker design or 无>"],
+    "frontend-ux-prototype-fidelity-design": ["- <frontend/UX/prototype fidelity design or 无>"],
+    "observability-ops-deployment-design": ["- <observability/ops/deployment design>"],
+    "verification-design": ["- <proof strategy handoff, not test files or commands>"],
+    "rollout-compatibility": ["- <rollout/compatibility>"],
+    "risks-trade-offs": ["- <risks/trade-offs>"],
+    "open-questions": "无"
+  }
+}

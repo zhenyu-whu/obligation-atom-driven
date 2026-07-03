@@ -1,0 +1,58 @@
+{
+  // Legacy sidecar reference only. New verification writer/repair-writer must not
+  // create trace/verification.proof-slices.json. Write this model into
+  // trace/verification.trace.json#/proof-slice-model instead.
+  // This legacy shape remains documented only for reading old proof-slices-v1 changes.
+  "trace-schema": "openspec-proof-slices-v1",
+  "artifact-id": "verification",
+  "artifact-path": "verification.md",
+  "change-name": "<change-slug>",
+  "schema-name": "production-default-acceptance-driven",
+  "source-interface": {
+    "runtime-source-artifact": "runtime-acceptance.md",
+    "runtime-source-trace": "trace/runtime-acceptance.trace.json",
+    "runtime-row-count": 1,
+    "change-kind": "<foundation|business>",
+    "oracle-source-policy": "Every proof slice oracle-fragment only derives from runtime-acceptance canonical rows.",
+    "excluded-oracle-sources": "No task artifact, implementation file, apply evidence, or process state is used as oracle."
+  },
+  "proof-slice-summary": {
+    "proof-slice-count": 1,
+    "persistent-test-required-count": 1,
+    "non-persistent-proof-slice-count": 0,
+    "runtime-row-count": 1,
+    "slice-id-format": "PS-###"
+  },
+  "proof-slices": [
+    {
+      "slice-id": "PS-001",
+      "runtime-row-ids": ["RS-001"],
+      "primary-runtime-row-id": "RS-001",
+      "primitive-type": "<operation|state|failure|negative-boundary|layout|observability|fixture-variant|authorization>",
+      "branch-variant": "<single independently failing branch>",
+      "observable-surface": "<public runtime observable surface>",
+      "oracle-fragment": "<single atomic assertion derived from runtime-acceptance canonical row fields>",
+      "failure-signal": "<observable failure signal for this branch>",
+      "primary-layer": "<unit|component|route/API|DB/integration|contract|worker/job|realtime/SSE|browser/e2e|visual/responsive|security/negative>",
+      "production-owner": "<single production owner token>",
+      "persistent-test-required": true,
+      "proof-evidence-mode": "durable-test",
+      "primary-assertion-shape": "<single primary assertion shape>",
+      "fixture-mock-boundary": "<allowed fixture/mock boundary and real default path requirement>",
+      "regression-intent": "<high|medium|low plus Chinese reason>",
+      "manual-environment-gate": "None",
+      "test-contract": {
+        "primary-test-cardinality": "exactly-one",
+        "test-title-prefix": "PS-001",
+        "allow-shared-setup": true,
+        "allow-multi-slice-primary-test": false,
+        "waiver-required-for-multi-slice": true,
+        "placement": {
+          "planned-test-directory": "<owner-root>/tests/<layer-subtree>/**",
+          "placement-basis": "<existing-tests-directory|planned-layer-subdirectory|workspace-tests-directory|nonpersistent-evidence>",
+          "placement-reason": "<directory-level placement reason based on Production Owner and Primary Layer>"
+        }
+      }
+    }
+  ]
+}

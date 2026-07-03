@@ -5,10 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const RENDER_CONTRACT_VERSION = "trace-render-v1";
-export const TRACE_CONTRACT_VERSION = "proof-slices-v1";
+export const TRACE_CONTRACT_VERSION = "verification-inline-proof-slices-v1";
+export const LEGACY_TRACE_CONTRACT_VERSION = "proof-slices-v1";
 export const TRACE_SCHEMA = "openspec-trace-v1";
 export const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
 export const PROOF_SLICES_TRACE_PATH = "trace/verification.proof-slices.json";
+export const VERIFICATION_TRACE_PATH = "trace/verification.trace.json";
+export const INLINE_PROOF_SLICES_MODEL_PATH = `${VERIFICATION_TRACE_PATH}#/proof-slice-model`;
 export const NO_DELTA_SPECS_ARTIFACT_PATH = "specs/no-spec-delta/README.md";
 export const NO_DELTA_SPECS_COMPLETION_MODE = "no-delta";
 
@@ -37,9 +40,17 @@ export function renderChangeArtifact(options = {}) {
   const tracePath = tracePathForArtifactPath(artifactPath);
   const traceFullPath = path.join(changeDir, tracePath);
   const trace = readJson(traceFullPath);
+  const manifestPath = path.join(changeDir, "trace", "manifest.json");
+  const traceContractVersion = fs.existsSync(manifestPath)
+    ? strip(readJson(manifestPath)["trace-contract-version"])
+    : "";
   const proofSlicesTrace =
-    artifact === "verification" && fs.existsSync(path.join(changeDir, PROOF_SLICES_TRACE_PATH))
-      ? readJson(path.join(changeDir, PROOF_SLICES_TRACE_PATH))
+    artifact === "verification"
+      ? resolveVerificationProofSliceModel({
+          trace,
+          changeDir,
+          allowLegacySidecar: traceContractVersion === LEGACY_TRACE_CONTRACT_VERSION,
+        })
       : null;
   const markdown = renderArtifactMarkdown({
     trace,
@@ -54,6 +65,7 @@ export function renderChangeArtifact(options = {}) {
     updateManifest(changeDir, {
       artifactPath,
       tracePath,
+      trace,
       proofSlicesTrace: artifact === "verification" ? proofSlicesTrace : null,
     });
   }
@@ -98,7 +110,7 @@ export function renderDeliveryBody(trace, proofSlicesTrace = null) {
     return renderRuntimeDelivery(delivery, trace);
   }
   if (artifactId === "verification") {
-    return renderVerificationDelivery(delivery, proofSlicesTrace);
+    return renderVerificationDelivery(trace, proofSlicesTrace);
   }
   if (artifactId === "tasks") {
     return renderTasksDelivery(delivery);
@@ -140,21 +152,22 @@ function renderSpecsDelivery(delivery) {
     return renderNoDeltaSpecsDelivery(delivery);
   }
   const sections = [
-    ["ADDED Requirements", delivery["added-requirements"], true],
-    ["MODIFIED Requirements", delivery["modified-requirements"], false],
-    ["REMOVED Requirements", delivery["removed-requirements"], false],
-    ["RENAMED Requirements", delivery["renamed-requirements"], false],
+    ["ADDED Requirements", delivery["added-requirements"], renderRequirement],
+    ["MODIFIED Requirements", delivery["modified-requirements"], renderRequirement],
+    ["REMOVED Requirements", delivery["removed-requirements"], renderRemovedRequirement],
+    ["RENAMED Requirements", delivery["renamed-requirements"], renderRenamedRequirement],
   ];
+  const populated = sections.filter(([, requirements]) => asArray(requirements).length > 0);
+  if (populated.length === 0) {
+    throw new RenderContractError("VAL-RENDER-002", "specs delivery-plane", "normal specs delta 至少需要一个非空 requirements section。");
+  }
   let output = "";
-  for (const [heading, requirements, required] of sections) {
+  for (const [heading, requirements, renderer] of sections) {
     const rows = asArray(requirements);
-    if (rows.length === 0 && !required) {
+    if (rows.length === 0) {
       continue;
     }
-    if (rows.length === 0 && required) {
-      throw new RenderContractError("VAL-RENDER-002", "specs delivery-plane", `${heading} 缺少 requirements payload。`);
-    }
-    output += `## ${heading}\n\n${rows.map(renderRequirement).join("\n")}`;
+    output += `## ${heading}\n\n${rows.map(renderer).join("\n")}`;
   }
   return output;
 }
@@ -177,6 +190,21 @@ function renderRequirement(requirement) {
   return `### Requirement: ${name}\n\n${body}\n\n${scenarios.map((scenario) => renderScenario(name, scenario)).join("\n")}\n`;
 }
 
+function renderRemovedRequirement(requirement) {
+  const row = asObject(requirement);
+  const name = requireScalar(row.name, "specs.removed-requirements[].name");
+  const reason = renderBlockText(requireText(row.reason, `specs.removed-requirements[${name}].reason`));
+  const migration = renderBlockText(requireText(row.migration, `specs.removed-requirements[${name}].migration`));
+  return `### Requirement: ${name}\n\nReason:\n\n${reason}\n\nMigration:\n\n${migration}\n`;
+}
+
+function renderRenamedRequirement(requirement) {
+  const row = asObject(requirement);
+  const from = requireScalar(row.from, "specs.renamed-requirements[].from");
+  const to = requireScalar(row.to, "specs.renamed-requirements[].to");
+  return `### Requirement Rename\n\nFROM: ${from}\nTO: ${to}\n`;
+}
+
 function renderScenario(requirementName, scenario) {
   const row = asObject(scenario);
   const name = requireScalar(row.name, `specs.requirements[${requirementName}].scenarios[].name`);
@@ -194,6 +222,8 @@ function renderScenario(requirementName, scenario) {
 }
 
 function renderDesignDelivery(delivery) {
+  const frontendDesign =
+    delivery["frontend-ux-prototype-fidelity-design"] ?? delivery["frontend-ux-design"];
   return [
     renderSection("Context", requireText(delivery.context, "design.delivery-plane.context")),
     renderSection("Goals / Non-Goals", requireText(delivery["goals-non-goals"], "design.delivery-plane.goals-non-goals")),
@@ -202,7 +232,7 @@ function renderDesignDelivery(delivery) {
     renderSection("Domain / Data / Migration Design", requireText(delivery["domain-data-migration-design"], "design.delivery-plane.domain-data-migration-design")),
     renderSection("API / Auth / Security Design", requireText(delivery["api-auth-security-design"], "design.delivery-plane.api-auth-security-design")),
     renderSection("Async / Realtime / AI / Worker Design", requireText(delivery["async-realtime-ai-worker-design"], "design.delivery-plane.async-realtime-ai-worker-design")),
-    renderSection("Frontend / UX / Prototype Fidelity Design", requireText(delivery["frontend-ux-prototype-fidelity-design"], "design.delivery-plane.frontend-ux-prototype-fidelity-design")),
+    renderSection("Frontend / UX / Prototype Fidelity Design", requireText(frontendDesign, "design.delivery-plane.frontend-ux-prototype-fidelity-design")),
     renderSection("Observability / Ops / Deployment Design", requireText(delivery["observability-ops-deployment-design"], "design.delivery-plane.observability-ops-deployment-design")),
     renderSection("Verification Design", requireText(delivery["verification-design"], "design.delivery-plane.verification-design")),
     renderSection("Rollout / Compatibility", requireText(delivery["rollout-compatibility"], "design.delivery-plane.rollout-compatibility")),
@@ -330,7 +360,8 @@ const RUNTIME_TABLES = [
 
 function renderRuntimeDelivery(delivery, trace) {
   const canonicalIndex = asObject(trace["canonical-row-index"]);
-  const canonicalRows = canonicalRowsById(delivery["canonical-rows"]);
+  const canonicalRows = collectCanonicalRuntimeRows(delivery["canonical-rows"]);
+  validateRuntimeDeliveryModel(canonicalRows, canonicalIndex);
   let output = `## Runtime Acceptance Intent\n\n${renderIntentList(delivery["runtime-acceptance-intent"], [
     ["Scope", "scope"],
     ["Source basis", "source-basis"],
@@ -339,8 +370,8 @@ function renderRuntimeDelivery(delivery, trace) {
   for (const table of RUNTIME_TABLES) {
     const ids = asArray(canonicalIndex[table.section]).map(strip).filter(Boolean);
     const rows = ids.map((id) => {
-      const row = asObject(canonicalRows[id]);
-      if (strip(row[table.idField] ?? row.id) !== id) {
+      const row = asObject(canonicalRows.byId[id]);
+      if (strip(row[table.idField]) !== id) {
         throw new RenderContractError("VAL-RENDER-002", "runtime delivery-plane", `${id} 缺少 canonical row fields。`);
       }
       return row;
@@ -350,31 +381,113 @@ function renderRuntimeDelivery(delivery, trace) {
   return output;
 }
 
-function canonicalRowsById(value) {
+function collectCanonicalRuntimeRows(value) {
   const rows = new Map();
+  const ids = [];
+  const duplicates = [];
   if (Array.isArray(value)) {
     for (const rowValue of value) {
       const row = asObject(rowValue);
       const id = strip(row.id ?? row["surface-id"] ?? row["operation-id"] ?? row["state-id"] ?? row["chain-id"]);
-      if (id) rows.set(id, row);
+      if (!id) continue;
+      if (rows.has(id)) duplicates.push(id);
+      rows.set(id, row);
+      ids.push(id);
     }
   } else {
     for (const [id, rowValue] of Object.entries(asObject(value))) {
+      if (rows.has(id)) duplicates.push(id);
       rows.set(id, asObject(rowValue));
+      ids.push(id);
     }
   }
-  return Object.fromEntries(rows);
+  return { byId: Object.fromEntries(rows), ids, duplicates };
 }
 
-function renderVerificationDelivery(delivery, proofSlicesTrace) {
-  if (!proofSlicesTrace || typeof proofSlicesTrace !== "object" || Array.isArray(proofSlicesTrace)) {
-    throw new RenderContractError("VAL-RENDER-002", PROOF_SLICES_TRACE_PATH, "verification renderer 缺少 proof-slices trace。");
+function validateRuntimeDeliveryModel(canonicalRows, canonicalIndex) {
+  if (canonicalRows.duplicates.length > 0) {
+    throw new RenderContractError(
+      "VAL-RENDER-002",
+      "runtime delivery-plane",
+      `canonical runtime row 重复：${unique(canonicalRows.duplicates).join(", ")}。`,
+    );
   }
-  const proofRows = asArray(proofSlicesTrace["proof-slices"]).map((slice) => {
+
+  const indexedIds = [];
+  const seenIndexIds = new Set();
+  const duplicateIndexIds = [];
+  for (const table of RUNTIME_TABLES) {
+    const sectionIds = asArray(canonicalIndex[table.section]).map(strip).filter(Boolean);
+    if (!Array.isArray(canonicalIndex[table.section])) {
+      throw new RenderContractError("VAL-RENDER-002", "runtime canonical-row-index", `${table.section} 必须是数组。`);
+    }
+    for (const id of sectionIds) {
+      indexedIds.push(id);
+      if (seenIndexIds.has(id)) duplicateIndexIds.push(id);
+      seenIndexIds.add(id);
+      if (!runtimeIdBelongsToTable(id, table)) {
+        throw new RenderContractError("VAL-RENDER-002", "runtime canonical-row-index", `${id} 不属于 ${table.section}。`);
+      }
+      const row = asObject(canonicalRows.byId[id]);
+      if (!Object.keys(row).length) {
+        throw new RenderContractError("VAL-RENDER-002", "runtime canonical-row-index", `${id} 缺少 canonical row。`);
+      }
+      validateRuntimeRowFields(id, row, table);
+    }
+  }
+
+  if (duplicateIndexIds.length > 0) {
+    throw new RenderContractError(
+      "VAL-RENDER-002",
+      "runtime canonical-row-index",
+      `canonical-row-index 重复引用：${unique(duplicateIndexIds).join(", ")}。`,
+    );
+  }
+
+  const canonicalIdSet = new Set(canonicalRows.ids);
+  const indexedIdSet = new Set(indexedIds);
+  const missingFromIndex = [...canonicalIdSet].filter((id) => !indexedIdSet.has(id));
+  const extraInIndex = [...indexedIdSet].filter((id) => !canonicalIdSet.has(id));
+  if (missingFromIndex.length > 0 || extraInIndex.length > 0) {
+    const parts = [];
+    if (missingFromIndex.length > 0) parts.push(`未入 index：${missingFromIndex.join(", ")}`);
+    if (extraInIndex.length > 0) parts.push(`index 未定义：${extraInIndex.join(", ")}`);
+    throw new RenderContractError("VAL-RENDER-002", "runtime canonical-row-index", `canonical rows 与 index 不一致；${parts.join("；")}。`);
+  }
+}
+
+function validateRuntimeRowFields(id, row, table) {
+  if (strip(row[table.idField]) !== id) {
+    throw new RenderContractError("VAL-RENDER-002", "runtime delivery-plane", `${id} 缺少 ${table.idField}。`);
+  }
+  for (const [, key] of table.columns) {
+    if (!strip(row[key])) {
+      throw new RenderContractError("VAL-RENDER-002", "runtime delivery-plane", `${id} 缺少 ${key}。`);
+    }
+  }
+  const owner = strip(row["owner-candidate"]);
+  if (/[,，;+、]|(?:^|\s)(?:and|和|与)(?:\s|$)/iu.test(owner)) {
+    throw new RenderContractError("VAL-RENDER-002", "runtime delivery-plane", `${id} Owner Candidate 必须是单一 advisory owner。`);
+  }
+}
+
+function runtimeIdBelongsToTable(id, table) {
+  if (table.section === "surface-rows") return /^RS-\d{3}$/u.test(id);
+  if (table.section === "operation-rows") return /^OP-\d{3}$/u.test(id);
+  if (table.section === "state-rows") return /^ST-\d{3}$/u.test(id);
+  if (table.section === "chain-rows") return /^CH-\d{3}$/u.test(id);
+  return false;
+}
+
+function renderVerificationDelivery(trace, proofSlicesTrace) {
+  const delivery = trace["delivery-plane"];
+  const proofModel = resolveVerificationProofSliceModel({ trace, proofSlicesTrace });
+  validateVerificationProofSlicesForRender(proofModel);
+  const proofRows = asArray(proofModel["proof-slices"]).map((slice) => {
       const runtimeRows = asArray(slice["runtime-row-ids"]).join(", ");
       return `| ${cell(slice["slice-id"])} | ${cell(runtimeRows)} | ${cell(slice["primary-runtime-row-id"])} | ${cell(slice["primitive-type"])} | ${cell(slice["branch-variant"])} | ${cell(slice["observable-surface"])} | ${cell(slice["oracle-fragment"])} | ${cell(slice["failure-signal"])} | ${cell(slice["primary-layer"])} | ${cell(slice["production-owner"])} | ${cell(slice["persistent-test-required"])} | ${cell(slice["proof-evidence-mode"])} | ${cell(slice["primary-assertion-shape"])} | ${cell(slice["fixture-mock-boundary"])} | ${cell(slice["regression-intent"])} | ${cell(slice["manual-environment-gate"])} |`;
   });
-  const placementRows = asArray(proofSlicesTrace["proof-slices"]).map((slice) => {
+  const placementRows = asArray(proofModel["proof-slices"]).map((slice) => {
     const placement = asObject(asObject(slice["test-contract"]).placement);
     return `| ${cell(slice["slice-id"])} | ${cell(slice["persistent-test-required"])} | ${cell(slice["proof-evidence-mode"])} | ${cell(placement["planned-test-directory"])} | ${cell(placement["placement-basis"])} | ${cell(placement["placement-reason"])} |`;
   });
@@ -426,6 +539,88 @@ ${renderMarkdownTableLines([
     "runtime-row-ids",
   ])}
 `;
+}
+
+function validateVerificationProofSlicesForRender(proofSlicesTrace) {
+  if (proofSlicesTrace["trace-schema"] !== PROOF_SLICES_TRACE_SCHEMA) {
+    throw new RenderContractError(
+      "VAL-RENDER-002",
+      proofSliceModelSource(proofSlicesTrace),
+      `verification proof-slices trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`,
+    );
+  }
+  if (proofSlicesTrace["artifact-id"] !== "verification" || proofSlicesTrace["artifact-path"] !== "verification.md") {
+    throw new RenderContractError(
+      "VAL-RENDER-002",
+      proofSliceModelSource(proofSlicesTrace),
+      "verification proof-slices artifact-id/path 必须为 verification / verification.md。",
+    );
+  }
+  const rows = asArray(proofSlicesTrace["proof-slices"]);
+  if (rows.length === 0) {
+    throw new RenderContractError("VAL-RENDER-002", proofSliceModelSource(proofSlicesTrace), "verification proof-slices 不能为空。");
+  }
+  for (const [index, slice] of rows.entries()) {
+    const ref = `${proofSliceModelSource(proofSlicesTrace)}/proof-slices/${index}`;
+    const sliceId = strip(slice?.["slice-id"]) || `(index ${index})`;
+    const contract = asObject(slice?.["test-contract"]);
+    const placement = contract.placement;
+    if (!placement || typeof placement !== "object" || Array.isArray(placement)) {
+      throw new RenderContractError("VAL-RENDER-002", ref, `${sliceId} 缺少 test-contract.placement。`);
+    }
+    for (const field of ["planned-test-directory", "placement-basis", "placement-reason"]) {
+      if (!strip(placement[field])) {
+        throw new RenderContractError("VAL-RENDER-002", ref, `${sliceId} test-contract.placement 缺少 ${field}。`);
+      }
+    }
+  }
+}
+
+export function resolveVerificationProofSliceModel(options = {}) {
+  const trace = options.trace;
+  if (!trace || typeof trace !== "object" || Array.isArray(trace)) {
+    throw new RenderContractError("VAL-RENDER-002", "trace", "verification renderer 缺少 trace object。");
+  }
+  const inlineModel = trace["proof-slice-model"];
+  if (inlineModel && typeof inlineModel === "object" && !Array.isArray(inlineModel)) {
+    return normalizeProofSliceModel(inlineModel, trace, INLINE_PROOF_SLICES_MODEL_PATH);
+  }
+  if (options.proofSlicesTrace) {
+    return normalizeProofSliceModel(options.proofSlicesTrace, trace, PROOF_SLICES_TRACE_PATH);
+  }
+  if (options.allowLegacySidecar && options.changeDir) {
+    const sidecarPath = path.join(options.changeDir, PROOF_SLICES_TRACE_PATH);
+    if (fs.existsSync(sidecarPath)) {
+      return normalizeProofSliceModel(readJson(sidecarPath), trace, PROOF_SLICES_TRACE_PATH);
+    }
+  }
+  throw new RenderContractError(
+    "VAL-RENDER-002",
+    INLINE_PROOF_SLICES_MODEL_PATH,
+    "verification renderer 缺少 proof-slice-model。",
+  );
+}
+
+function normalizeProofSliceModel(model, trace, sourcePath) {
+  const normalized = {
+    "trace-schema": model["trace-schema"] ?? model["model-schema"],
+    "artifact-id": model["artifact-id"] ?? trace["artifact-id"],
+    "artifact-path": model["artifact-path"] ?? trace["artifact-path"],
+    "change-name": model["change-name"] ?? trace["change-name"],
+    "schema-name": model["schema-name"] ?? trace["schema-name"],
+    "source-interface": model["source-interface"] ?? trace["source-interface"],
+    "proof-slice-summary": model["proof-slice-summary"],
+    "proof-slices": model["proof-slices"],
+  };
+  Object.defineProperty(normalized, "source-path", {
+    value: sourcePath,
+    enumerable: false,
+  });
+  return normalized;
+}
+
+function proofSliceModelSource(proofSlicesTrace) {
+  return strip(proofSlicesTrace?.["source-path"]) || PROOF_SLICES_TRACE_PATH;
 }
 
 function renderTasksDelivery(delivery) {
@@ -630,7 +825,18 @@ function updateManifest(changeDir, rendered) {
   const manifest = fs.existsSync(manifestPath)
     ? readJson(manifestPath)
     : { "trace-schema": TRACE_SCHEMA, artifacts: [] };
-  manifest["trace-contract-version"] = TRACE_CONTRACT_VERSION;
+  const existingTraceContractVersion = strip(manifest["trace-contract-version"]);
+  const existingLegacyProofSlices =
+    rendered.artifactPath !== "verification.md" &&
+    existingTraceContractVersion === LEGACY_TRACE_CONTRACT_VERSION &&
+    fs.existsSync(path.join(changeDir, PROOF_SLICES_TRACE_PATH));
+  const renderedLegacyProofSlices =
+    rendered.artifactPath === "verification.md" &&
+    rendered.proofSlicesTrace &&
+    proofSliceModelSource(rendered.proofSlicesTrace) === PROOF_SLICES_TRACE_PATH &&
+    !hasInlineProofSliceModel(rendered.trace);
+  const legacyProofSlices = existingLegacyProofSlices || renderedLegacyProofSlices;
+  manifest["trace-contract-version"] = legacyProofSlices ? LEGACY_TRACE_CONTRACT_VERSION : TRACE_CONTRACT_VERSION;
   manifest["render-contract-version"] = RENDER_CONTRACT_VERSION;
   manifest.artifacts = Array.isArray(manifest.artifacts) ? manifest.artifacts : [];
   upsertManifestEntry(manifest, {
@@ -639,13 +845,15 @@ function updateManifest(changeDir, rendered) {
     "trace-path": rendered.tracePath,
     "trace-schema": TRACE_SCHEMA,
   });
-  if (rendered.proofSlicesTrace) {
+  if (legacyProofSlices) {
     upsertManifestEntry(manifest, {
       "artifact-id": "verification",
       "artifact-path": "verification.md",
       "trace-path": PROOF_SLICES_TRACE_PATH,
       "trace-schema": PROOF_SLICES_TRACE_SCHEMA,
     });
+  } else {
+    removeManifestTraceEntry(manifest, PROOF_SLICES_TRACE_PATH);
   }
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }
@@ -663,6 +871,15 @@ function upsertManifestEntry(manifest, entry) {
   }
 }
 
+function removeManifestTraceEntry(manifest, tracePath) {
+  manifest.artifacts = asArray(manifest.artifacts).filter((entry) => entry?.["trace-path"] !== tracePath);
+}
+
+function hasInlineProofSliceModel(trace) {
+  const model = trace?.["proof-slice-model"];
+  return Boolean(model && typeof model === "object" && !Array.isArray(model));
+}
+
 function artifactIdForArtifactPath(artifactPath) {
   if (artifactPath.startsWith("specs/")) return "specs";
   return artifactPath.replace(/\.md$/u, "");
@@ -674,6 +891,10 @@ function asArray(value) {
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function unique(values) {
+  return [...new Set(values)];
 }
 
 function requireScalar(value, ref) {

@@ -1,5 +1,5 @@
 name: production-default-acceptance-driven
-version: 14
+version: 16
 description: 面向 Greenfield 完成后的生产演进工作流；artifact graph 由本 schema 定义，artifact 内容合同由 _production-contracts 定义，trace-first 编排由 agent-runtime 定义
 artifacts:
   - id: proposal
@@ -13,7 +13,7 @@ artifacts:
   - id: specs
     generates: "specs/**/*.md"
     description: default OpenSpec delta specs
-    template: spec.md
+    template: spec.trace.template.jsonc
     instruction: |
       本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
@@ -22,9 +22,9 @@ artifacts:
   - id: design
     generates: design.md
     description: production design for the accepted spec delta
-    template: design.md
+    template: design.trace.template.jsonc
     instruction: |
-      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
+      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/design.trace.json 的 JSONC authoring guide，不是 design.md Markdown 模板。不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -32,9 +32,9 @@ artifacts:
   - id: runtime-acceptance
     generates: runtime-acceptance.md
     description: canonical runtime coverage registry，定义供 tasks.md 与 verification.md 共同引用的 RS/OP/ST/CH rows
-    template: runtime-acceptance.md
+    template: runtime-acceptance.trace.template.jsonc
     instruction: |
-      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
+      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/runtime-acceptance.trace.json 的 JSONC authoring guide，不是 runtime-acceptance.md Markdown 模板。不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -43,9 +43,9 @@ artifacts:
   - id: verification
     generates: verification.md
     description: slice-only 独立测试意图、Proof Slice 原子测试义务和测试前一致性预检 artifact
-    template: verification.md
+    template: verification.trace.template.jsonc
     instruction: |
-      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
+      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/verification.trace.json 的 JSONC authoring guide，不是 verification.md Markdown 模板。verification writer 必须把 Proof Slice canonical model 写入 trace/verification.trace.json 的 proof-slice-model，不得新建 trace/verification.proof-slices.json。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -55,9 +55,9 @@ artifacts:
   - id: tasks
     generates: tasks.md
     description: 生产实现计划与运行时验收覆盖模型
-    template: tasks.md
+    template: tasks.trace.template.jsonc
     instruction: |
-      本 artifact 只作为 OpenSpec CLI entrypoint；不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
+      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/tasks.trace.json 的 JSONC authoring guide，不是 tasks.md Markdown 模板。不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs

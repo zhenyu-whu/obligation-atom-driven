@@ -11,9 +11,15 @@ import {
   isProofEvidenceRequired,
   isPlacementAllowed,
 } from "./proof-slice-placement-policy.mjs";
+import {
+  RenderContractError,
+  resolveVerificationProofSliceModel,
+} from "./render-production-artifacts.mjs";
 
 const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
 const PROOF_TEST_MAP_SCHEMA = "openspec-proof-test-map-v1";
+const TRACE_CONTRACT_INLINE_PROOF_SLICES = "verification-inline-proof-slices-v1";
+const TRACE_CONTRACT_PROOF_SLICES = "proof-slices-v1";
 const PROOF_SLICE_RE = /\bPS-\d{3}\b/g;
 const KNOWN_EXECUTION_SCOPES = new Set(["focused-test", "containing-file", "related-suite", "workspace"]);
 const ROBUST_EXECUTION_SCOPES = new Set(["containing-file", "related-suite", "workspace"]);
@@ -27,26 +33,20 @@ export function auditProofTestMapping(options = {}) {
   }
 
   const issues = [];
-  const proofSlicesPath = path.join(
-    root,
-    "openspec",
-    "changes",
-    change,
-    "trace",
-    "verification.proof-slices.json",
-  );
+  const changeDir = path.join(root, "openspec", "changes", change);
+  const proofSlicesPath = path.join(changeDir, "trace", "verification.proof-slices.json");
   const proofMapPath =
     options.proofTestMapPath ??
     path.join(root, "openspec-results", change, "proof-test-map.json");
 
-  const proofSlicesTrace = readJson(proofSlicesPath, root, issues, "MAP-READ-001");
+  const proofSlicesTrace = loadProofSlicesForAudit(changeDir, root, issues);
   const proofTestMap = readJson(proofMapPath, root, issues, "MAP-READ-002");
   if (!proofSlicesTrace || !proofTestMap) {
     return summarize(issues);
   }
 
   if (proofSlicesTrace["trace-schema"] !== PROOF_SLICES_TRACE_SCHEMA) {
-    addIssue(issues, "error", "MAP-PS-001", path.relative(root, proofSlicesPath), `trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`);
+    addIssue(issues, "error", "MAP-PS-001", proofSlicesTrace["source-path"] ?? path.relative(root, proofSlicesPath), `trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`);
   }
   if (proofTestMap["trace-schema"] !== PROOF_TEST_MAP_SCHEMA) {
     addIssue(issues, "error", "MAP-TM-001", path.relative(root, proofMapPath), `trace-schema 必须为 ${PROOF_TEST_MAP_SCHEMA}。`);
@@ -182,6 +182,42 @@ export function auditProofTestMapping(options = {}) {
   }
 
   return summarize(issues);
+}
+
+function loadProofSlicesForAudit(changeDir, root, issues) {
+  const manifestPath = path.join(changeDir, "trace", "manifest.json");
+  const verificationTracePath = path.join(changeDir, "trace", "verification.trace.json");
+  const sidecarPath = path.join(changeDir, "trace", "verification.proof-slices.json");
+  const manifest = fs.existsSync(manifestPath) ? readJson(manifestPath, root, issues, "MAP-READ-001") : null;
+  const contractVersion = strip(manifest?.["trace-contract-version"]);
+  if (contractVersion === TRACE_CONTRACT_INLINE_PROOF_SLICES) {
+    const verificationTrace = readJson(verificationTracePath, root, issues, "MAP-READ-001");
+    if (!verificationTrace) return null;
+    const model = verificationTrace["proof-slice-model"];
+    if (!model || typeof model !== "object" || Array.isArray(model)) {
+      addIssue(issues, "error", "MAP-READ-001", "trace/verification.trace.json#/proof-slice-model", "缺少 proof-slice-model。");
+      return null;
+    }
+    return resolveProofSliceModelForAudit({ trace: verificationTrace }, issues);
+  }
+  if (contractVersion && contractVersion !== TRACE_CONTRACT_PROOF_SLICES) {
+    addIssue(issues, "error", "MAP-READ-001", "trace/manifest.json", `trace-contract-version 不支持：${contractVersion}。`);
+    return null;
+  }
+  const sidecar = readJson(sidecarPath, root, issues, "MAP-READ-001");
+  return sidecar ? resolveProofSliceModelForAudit({ trace: sidecar, proofSlicesTrace: sidecar }, issues) : null;
+}
+
+function resolveProofSliceModelForAudit(options, issues) {
+  try {
+    return resolveVerificationProofSliceModel(options);
+  } catch (error) {
+    if (error instanceof RenderContractError) {
+      addIssue(issues, "error", "MAP-READ-001", error.file, error.message.replace(/^VAL-RENDER-\d+:\s*/u, ""));
+      return null;
+    }
+    throw error;
+  }
 }
 
 function discoverRunnerTests(root, issues, runnerOutputs = null) {

@@ -1,6 +1,6 @@
 ---
 name: obligation-atom-driven
-description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their Delivery Plane / JSON Trace Plane proposal/spec/design/runtime-acceptance/verification/tasks templates and matching OpenSpec agent-runtime constraint documents.
+description: Install or switch a repository to bundled production OpenSpec workflows. Use when Codex needs to sync the docs-driven production-obligation-atom-driven schema, or the post-greenfield production-default-acceptance-driven schema, with their trace-first JSONC authoring guides, deterministic Delivery Plane rendering, and matching OpenSpec agent-runtime constraint documents.
 ---
 
 # Obligation Atom Driven
@@ -9,10 +9,10 @@ Use this skill to configure a repository so OpenSpec changes use one of the bund
 
 ## Profiles
 
-- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes stable source-aligned JSON handoff sidecars plus canonical change packet Markdown mirrors from `openspec/orchestrate`, preserves `GA-####` IDs, and uses Delivery Plane proposal/spec/design/runtime-acceptance/verification/tasks artifacts with external JSON Trace Plane audit files plus short terminal `Trace Appendix` pointer blocks. It does not execute upstream source-aligned skill scripts. `runtime-acceptance.md` owns canonical runtime `RS-/OP-/ST-/CH-` rows, `verification.md` owns slice-only independent test intent and the atomic Proof Slice Matrix, and `tasks.md` starts from AC delivery sections while keeping runtime acceptance projection in `trace/tasks.trace.json`.
-- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> runtime-acceptance -> verification -> tasks model, adds independent slice-only `verification.md` with an atomic Proof Slice Matrix, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and uses lightweight `SI-###` change-local scope coverage in `trace/proposal.trace.json` plus AC delivery sections in `tasks.md`.
+- `production-obligation-atom-driven`: docs-driven Greenfield implementation schema. It consumes stable source-aligned JSON handoff sidecars plus canonical change packet Markdown mirrors from `openspec/orchestrate`, preserves `GA-####` IDs, and uses JSON Trace Plane files as the canonical authoring source for deterministic Delivery Plane proposal/spec/design/runtime-acceptance/verification/tasks rendering with short terminal `Trace Appendix` pointer blocks. It does not execute upstream source-aligned skill scripts. `runtime-acceptance.trace.json` owns canonical runtime `RS-/OP-/ST-/CH-` rows, `verification.trace.json#/proof-slice-model` owns slice-only independent test intent and atomic Proof Slices, and `tasks.trace.json` owns task delivery projection.
+- `production-default-acceptance-driven`: post-greenfield evolution schema. It follows the OpenSpec default proposal -> specs -> design -> runtime-acceptance -> verification -> tasks model, adds independent slice-only verification through `verification.trace.json#/proof-slice-model`, does not consume `openspec/orchestrate`, does not use the old GA-based terminology, and uses lightweight `SI-###` change-local scope coverage in `trace/proposal.trace.json` plus AC delivery sections in `trace/tasks.trace.json`.
 
-The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `GA-####`. Runtime constraints, templates, generated proposal/spec/design/tasks artifacts, and sync verification for that profile must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
+The canonical Global Atom ID prefix for `production-obligation-atom-driven` is `GA-####`. Runtime constraints, trace templates, generated proposal/spec/design/tasks artifacts, and sync verification for that profile must preserve `GA-####` IDs from `obligation-atom-index.md`; do not rewrite them to another global prefix or local source atom ID.
 
 The `production-default-acceptance-driven` profile uses change-local `SI-###` scope item IDs only inside a single change. These IDs are not global source IDs and must not be treated as a global registry.
 
@@ -53,13 +53,14 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 7. Verify the result:
    - `openspec/config.yaml` has `schema: <schema_name>`.
    - `openspec/schemas/production-obligation-atom-driven/schema.yaml` exists.
-   - `openspec/schemas/production-obligation-atom-driven/templates/` contains the bundled templates.
+   - `openspec/schemas/production-obligation-atom-driven/templates/` contains the bundled trace JSONC authoring guide templates.
    - `openspec/schemas/production-default-acceptance-driven/schema.yaml` exists.
-   - `openspec/schemas/production-default-acceptance-driven/templates/` contains the bundled templates.
+   - `openspec/schemas/production-default-acceptance-driven/templates/` contains the bundled trace JSONC authoring guide templates.
    - `openspec/schemas/_production-contracts/` exists and `find openspec/schemas/_production-contracts -name schema.yaml -print` returns no files.
    - `openspec/agent-runtime/*.md` contains the installed runtime constraint files.
    - `openspec/agent-runtime/scripts/validate-production-artifacts.mjs` exists when bundled by the skill.
    - `openspec/agent-runtime/scripts/render-production-artifacts.mjs` exists when bundled by the skill.
+   - `openspec/agent-runtime/scripts/validators/` contains the bundled per-artifact validators when bundled by the skill.
    - `AGENTS.md` includes the runtime section from `references/agent-runtime/agents-md-runtime-section.md`.
    - If the repository has OpenSpec CLI available, run `openspec list --json` to inspect active changes, then run `openspec status --change "<name>" --json` for the relevant change when useful.
 
@@ -67,18 +68,18 @@ When OpenSpec artifact-generation skills run in a repository configured by this 
 
 - `references/profiles/production-obligation-atom-driven/`: profile metadata and schema files for the production obligation atom driven OpenSpec workflow.
 - `references/profiles/production-obligation-atom-driven/schema/schema.yaml`: projection-aware schema that consumes source-aligned JSON handoff sidecars and canonical final change packet Markdown mirrors directly from `openspec/orchestrate`, keeps proposal, specs, design, runtime-acceptance, verification, and tasks as the OpenSpec CLI entrypoints, and delegates repeated writer/reviewer requirements to the shared contract bundle.
-- `references/profiles/production-obligation-atom-driven/schema/templates/`: templates paired with the schema artifacts.
+- `references/profiles/production-obligation-atom-driven/schema/templates/`: JSONC trace/proof-slice authoring guide templates paired with the schema artifacts; they are not Markdown artifact templates.
 - `references/profiles/production-default-acceptance-driven/`: profile metadata and schema files for post-greenfield production evolution.
 - `references/profiles/production-default-acceptance-driven/schema/schema.yaml`: default-style schema that keeps proposal, specs, design, runtime-acceptance, verification, and tasks as the OpenSpec CLI entrypoints, does not consume orchestrate packets or global indexes, uses change-local `SI-###` scope items, and delegates repeated writer/reviewer requirements to the shared contract bundle.
-- `references/profiles/production-default-acceptance-driven/schema/templates/`: templates paired with the default-style acceptance-driven schema.
+- `references/profiles/production-default-acceptance-driven/schema/templates/`: JSONC trace/proof-slice authoring guide templates paired with the default-style acceptance-driven schema; they are not Markdown artifact templates.
 - `references/profiles/_production-contracts/`: shared contract bundle read by both production schemas and by per-artifact writer/reviewer agents. It contains common rules, artifact-specific contracts, profile input contracts, and schema-specific overlays; it intentionally contains no `schema.yaml`.
-- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows, the `AGENTS.md` runtime section reference, `scripts/render-production-artifacts.mjs`, and `scripts/validate-production-artifacts.mjs` with fixture tests. The propose runtime requires writers to write JSON trace/proof-slices first, invoke the deterministic renderer for Markdown artifacts, then run partial validator, read-only reviewer, main-agent repair, and hard validator gates, followed by a read-only artifact integration reviewer after the full hard pass. The apply runtime hard-requires Phase 0 static artifact validation and apply-stage `implementation-worker`, `test-worker`, `fix-worker`, `change-stabilizer`, and `final-reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades. It also requires write-stage checkpoint commits as process audit records after read/write apply agents, requires test agents to consume atomic Proof Slices through Test Placement Routing instead of writing mixed broad tests, and requires at most one automatic post-worker `change-stabilizer` repair pass before the read-only `final-reviewer`; any final-reviewer blocker after stabilization stops the apply flow for human review.
+- `references/agent-runtime/`: runtime constraints for OpenSpec propose/apply/archive workflows, the `AGENTS.md` runtime section reference, `scripts/render-production-artifacts.mjs`, `scripts/validate-production-artifacts.mjs`, modular validators under `scripts/validators/`, and fixture tests. The propose runtime requires writers to write JSON trace first, keep the current verification Proof Slice model inline at `trace/verification.trace.json#/proof-slice-model`, invoke the deterministic renderer for Markdown artifacts, then run partial validator, read-only reviewer, main-agent repair, and hard validator gates, followed by a read-only artifact integration reviewer after the full hard pass. The apply runtime hard-requires Phase 0 static artifact validation and apply-stage `implementation-worker`, `test-worker`, `fix-worker`, `change-stabilizer`, and `final-reviewer` subagents to use `GPT-5.5` with `xhigh` reasoning and forbids downgrades. It also requires write-stage checkpoint commits as process audit records after read/write apply agents, requires test agents to consume atomic Proof Slices through Test Placement Routing instead of writing mixed broad tests, and requires at most one automatic post-worker `change-stabilizer` repair pass before the read-only `final-reviewer`; any final-reviewer blocker after stabilization stops the apply flow for human review.
 
 ## Profile Contract
 
 The bundled profile directory contains:
 
 - `profile.yaml` with `profile`, `schema_name`, and optional `schema_dir`.
-- The schema directory named by `schema_dir`, containing `schema.yaml` and templates.
+- The schema directory named by `schema_dir`, containing `schema.yaml` and JSONC trace authoring-guide templates.
 
 The skill synchronizes the selected schema directory to `openspec/schemas/<schema_name>/`, synchronizes shared contracts to `openspec/schemas/_production-contracts/`, switches `openspec/config.yaml` to that schema, synchronizes runtime constraints, and updates `AGENTS.md`.

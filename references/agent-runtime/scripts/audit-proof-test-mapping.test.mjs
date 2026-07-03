@@ -256,15 +256,55 @@ test("browser proof 两次 containing-file pass 且 stable 时通过", () => {
   assert.equal(result.errorCount, 0);
 });
 
+test("legacy proof-slices sidecar 仍可审计通过", () => {
+  const root = makeProofMappingChange("legacy-sidecar-map", {
+    legacyProofSlices: true,
+    results: [proofResult("PS-001")],
+  });
+  const result = auditProofTestMapping({
+    root,
+    change: "legacy-sidecar-map",
+    discoveredTests: [discovered("PS-001 actor denial")],
+  });
+  assert.equal(result.errorCount, 0);
+});
+
 function makeProofMappingChange(change, options) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-proof-map-"));
   const changeDir = path.join(root, "openspec", "changes", change, "trace");
   const resultDir = path.join(root, "openspec-results", change);
   fs.mkdirSync(changeDir, { recursive: true });
   fs.mkdirSync(resultDir, { recursive: true });
+  const proofSliceTrace = proofSlices(options.sliceOverrides);
+  if (options.legacyProofSlices) {
+    fs.writeFileSync(
+      path.join(changeDir, "verification.proof-slices.json"),
+      `${JSON.stringify(proofSliceTrace, null, 2)}\n`,
+    );
+  } else {
+    fs.writeFileSync(
+      path.join(changeDir, "verification.trace.json"),
+      `${JSON.stringify(verificationTrace(proofSliceTrace), null, 2)}\n`,
+    );
+  }
   fs.writeFileSync(
-    path.join(changeDir, "verification.proof-slices.json"),
-    `${JSON.stringify(proofSlices(options.sliceOverrides), null, 2)}\n`,
+    path.join(changeDir, "manifest.json"),
+    `${JSON.stringify(
+      {
+        "trace-schema": "openspec-trace-v1",
+        "trace-contract-version": options.legacyProofSlices ? "proof-slices-v1" : "verification-inline-proof-slices-v1",
+        artifacts: [
+          {
+            "artifact-id": "verification",
+            "artifact-path": "verification.md",
+            "trace-path": options.legacyProofSlices ? "trace/verification.proof-slices.json" : "trace/verification.trace.json",
+            "trace-schema": options.legacyProofSlices ? "openspec-proof-slices-v1" : "openspec-trace-v1",
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   );
   fs.writeFileSync(
     path.join(resultDir, "proof-test-map.json"),
@@ -280,6 +320,22 @@ function makeProofMappingChange(change, options) {
     )}\n`,
   );
   return root;
+}
+
+function verificationTrace(proofSliceTrace) {
+  return {
+    "trace-schema": "openspec-trace-v1",
+    "artifact-id": "verification",
+    "artifact-path": "verification.md",
+    "change-name": "test",
+    "schema-name": "production-obligation-atom-driven",
+    "source-interface": {},
+    "proof-slice-model": {
+      "model-schema": "openspec-proof-slices-v1",
+      "proof-slice-summary": proofSliceTrace["proof-slice-summary"] ?? { "proof-slice-count": proofSliceTrace["proof-slices"].length },
+      "proof-slices": proofSliceTrace["proof-slices"],
+    },
+  };
 }
 
 function proofSlices(sliceOverrides = {}) {

@@ -1,0 +1,84 @@
+{
+  // Specs writer/repair-writer must write strict JSON to trace/specs/<capability>.trace.json,
+  // then run render-production-artifacts.mjs --artifact specs --capability <capability> --write.
+  // Replace all placeholders and remove comments before writing the trace file.
+  "trace-schema": "openspec-trace-v1",
+  "artifact-id": "specs",
+  "artifact-path": "specs/<capability>/spec.md",
+  "change-name": "<change-slug>",
+  "schema-name": "production-obligation-atom-driven",
+  "agent-role": "specs-writer",
+  "source-proposal-trace-path": "trace/proposal.trace.json",
+  "specs-completion-mode": "delta",
+  "capability": "<owner-capability>",
+  "existing-spec-read-set": [
+    {
+      "capability": "<owner-capability>",
+      "path": "openspec/specs/<capability>/spec.md",
+      "read-purpose": "existing requirement block for MODIFIED/REMOVED/RENAMED delta, or not-applicable for new capability",
+      "interpretation-result": "<summary or not-applicable>"
+    }
+  ],
+  "capability-source-map": [
+    {
+      "owner-capability": "<owner-capability>",
+      "spec-requirement-ids": ["GA-0000"],
+      "spec-guard-ids": ["GA-0001"],
+      "artifact-path": "specs/<capability>/spec.md",
+      "trace-path": "trace/specs/<capability>.trace.json"
+    }
+  ],
+  "requirement-source-trace": [
+    {
+      "global-atom-id": "GA-0000",
+      "owner-capability": "<owner-capability>",
+      "source-document": "<path from proposal change-atom-coverage-register>",
+      "lines": "Lx-Ly",
+      "source-fact": "<exact source-fact from proposal register>",
+      "source-projection": "spec-requirement",
+      "spec-handling": "direct-spec-requirement",
+      "requirement": "<rendered requirement name>",
+      "scenario": "<rendered scenario name>"
+    },
+    {
+      "global-atom-id": "GA-0001",
+      "owner-capability": "<owner-capability>",
+      "source-document": "<path from proposal change-atom-coverage-register>",
+      "lines": "Lx-Ly",
+      "source-fact": "<exact source-fact from proposal register>",
+      "source-projection": "spec-guard",
+      "spec-handling": "direct-spec-guard",
+      "guard-handling": "must-not",
+      "requirement": "<rendered guard requirement name>",
+      "scenario": "<rendered guard scenario name>"
+    }
+  ],
+  "production-alignment-gate": {
+    "spec-relevant-atoms": {
+      "count": 2,
+      "ids": ["GA-0000", "GA-0001"],
+      "id-list-source": "trace/proposal.trace.json#/change-atom-coverage-register"
+    },
+    "orphan-spec-atoms": [],
+    "delivery-only-scenarios": [],
+    "blockers": []
+  },
+  "delivery-plane": {
+    "added-requirements": [
+      {
+        "name": "<requirement name>",
+        "body": "System SHALL ...",
+        "scenarios": [
+          {
+            "name": "<scenario name>",
+            "when": "<trigger / actor / route / UI event>",
+            "then": "<source-backed observable result>"
+          }
+        ]
+      }
+    ],
+    "modified-requirements": [],
+    "removed-requirements": [],
+    "renamed-requirements": []
+  }
+}
