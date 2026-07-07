@@ -19,6 +19,20 @@
 - `openspec/orchestrate/change-plan.md` 只在自动推断 change slug 或核对 roadmap/dependency 顺序时读取，不得覆盖 final packet。
 - 除 canonical change packet、global atom index 和必要 capability views 外，其它 orchestrate/review/report 产物都不是 proposal 内容权威或门禁。
 
+## JSON Handoff Schema
+
+- Proposal writer 必须按本节 JSONPath 读取 source-aligned JSON handoff；不得猜测替代顶层 key、不得把缺失 key 解释为空集合、不得静默回退到 Markdown mirror。
+- `final-packet-index.json` 的 planned change 列表位于 `$.packets[]`，不得读取 `$.changes[]`、`$.changePackets[]` 或其它推测路径。
+- 当前 change packet 必须由 `$.packets[?(@.change == "<change-slug>")]` 唯一选出；匹配数量不是 `1` 时必须写入 blocker。
+- 当前 packet 必须包含并使用这些字段：`change`、`change-kind`、`direct-atom-ids`、`owner-scoped-non-direct-atom-ids`、`packet-path`、`capability-view-paths`。缺少任一字段必须 blocker。
+- `change-kind` 只能为 `foundation` 或 `business`；`direct-atom-ids[]` 与 `owner-scoped-non-direct-atom-ids[]` 必须是 exact `GA-####` 字符串数组，不得使用 range、count、summary 或 capability 聚合替代。
+- `atom-plan-mapping.json` 的 mapping 列表位于 `$.rows[]`，每个 direct GA 必须按 `global-atom-id` 查找唯一 row，且该 row 的 `final-owner-change` 必须等于当前 change、`final-relation` 必须为 `direct`。
+- `change-ga-register[].capability` 必须来自 `atom-plan-mapping.json $.rows[].final-owner-capability`；`change-ga-register[].projection` 必须来自 `$.rows[].final-artifact-projection`。
+- `obligation-atom-index.json` 的 atom lookup 列表位于 `$["global-atoms"][]`，每个 direct GA 和允许的 non-direct boundary GA 都必须按 `global-atom-id` 查找唯一 row。
+- `change-ga-register[]` 与 `non-direct-boundary-ref[]` 的 `source-document`、`lines`、`source-fact`、`normativity` 和 `atom-type` 必须来自 `obligation-atom-index.json $["global-atoms"][]` 的同名字段。
+- `trace/manifest.json` 必须读取 `$.trace-contract-version` 与 `$.phase-statuses["phase-5"]`；`trace/phase-5.trace.json` 必须读取 `$.status`，并按上游输入权威规则校验一致性。
+- 若上述 JSONPath 指向的顶层集合、字段或唯一性校验失败，proposal writer 必须报告 `Proposal Input Contract Blocker`，不得继续生成 `trace/proposal.trace.json`。
+
 ## Source Interface
 
 - `source-interface` 只记录上游权威输入路径和 `input-mode`；字段值必须是字符串路径，不得写成 object，不得内联 `{ "path": "...", "sha256": "...", "trace-schema": "..." }` 或其它上游 metadata。
