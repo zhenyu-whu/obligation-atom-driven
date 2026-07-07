@@ -27,4 +27,4 @@
 
 - `tasks.md` checkbox 必须代表 production implementation work，例如代码、schema、migration、API、domain behavior、UI behavior、auth/security guard、config、provider contract、observability、deployment 或 runtime boundary preservation。
 - checkbox 不得只为了 proof、verification、test、fixture replay、截图、evidence、coverage closure、acceptance closure 或 artifact closure 而存在。
-- `Proof:` 和 coverage 表中的 proof 摘要是生产任务完成标准或 runtime proof category，不是独立 executable work。
+- `tasks.md` 不再承载 `Proof:`、`Acceptance:` 或 coverage proof 摘要；完成标准和 oracle 必须从 runtime-acceptance 与 verification 反查。

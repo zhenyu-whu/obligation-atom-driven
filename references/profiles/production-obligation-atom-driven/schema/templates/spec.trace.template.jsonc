@@ -10,59 +10,9 @@
   "agent-role": "specs-writer",
   "source-proposal-trace-path": "trace/proposal.trace.json",
   "specs-completion-mode": "delta",
-  "capability": "<owner-capability>",
-  "existing-spec-read-set": [
-    {
-      "capability": "<owner-capability>",
-      "path": "openspec/specs/<capability>/spec.md",
-      "read-purpose": "existing requirement block for MODIFIED/REMOVED/RENAMED delta, or not-applicable for new capability",
-      "interpretation-result": "<summary or not-applicable>"
-    }
-  ],
-  "capability-source-map": [
-    {
-      "owner-capability": "<owner-capability>",
-      "spec-requirement-ids": ["GA-0000"],
-      "spec-guard-ids": ["GA-0001"],
-      "artifact-path": "specs/<capability>/spec.md",
-      "trace-path": "trace/specs/<capability>.trace.json"
-    }
-  ],
-  "requirement-source-trace": [
-    {
-      "global-atom-id": "GA-0000",
-      "owner-capability": "<owner-capability>",
-      "source-document": "<path from proposal change-atom-coverage-register>",
-      "lines": "Lx-Ly",
-      "source-fact": "<exact source-fact from proposal register>",
-      "source-projection": "spec-requirement",
-      "spec-handling": "direct-spec-requirement",
-      "requirement": "<rendered requirement name>",
-      "scenario": "<rendered scenario name>"
-    },
-    {
-      "global-atom-id": "GA-0001",
-      "owner-capability": "<owner-capability>",
-      "source-document": "<path from proposal change-atom-coverage-register>",
-      "lines": "Lx-Ly",
-      "source-fact": "<exact source-fact from proposal register>",
-      "source-projection": "spec-guard",
-      "spec-handling": "direct-spec-guard",
-      "guard-handling": "must-not",
-      "requirement": "<rendered guard requirement name>",
-      "scenario": "<rendered guard scenario name>"
-    }
-  ],
-  "production-alignment-gate": {
-    "spec-relevant-atoms": {
-      "count": 2,
-      "ids": ["GA-0000", "GA-0001"],
-      "id-list-source": "trace/proposal.trace.json#/change-atom-coverage-register"
-    },
-    "orphan-spec-atoms": [],
-    "delivery-only-scenarios": [],
-    "blockers": []
-  },
+  "capability": "<capability>",
+
+  // Renderer payload for specs/<capability>/spec.md.
   "delivery-plane": {
     "added-requirements": [
       {
@@ -80,5 +30,65 @@
     "modified-requirements": [],
     "removed-requirements": [],
     "renamed-requirements": []
+  },
+
+  // Input paths and modes are strings only. Do not inline source metadata objects.
+  "source-interface": {
+    "proposal-trace": "trace/proposal.trace.json",
+    "existing-spec": "openspec/specs/<capability>/spec.md",
+    "existing-spec-read-mode": "absent",
+    "input-policy": "specs consumes proposal change-ga-register rows routed to specs via artifact-routes plus focused existing spec only; source-fact remains source truth and route use is artifact-local consumption guidance. Markdown proposal is render output, not semantic input."
+  },
+
+  "existing-spec-state": {
+    "status": "absent",
+    "path": "openspec/specs/<capability>/spec.md",
+    "requirement-anchors": [],
+    "blocker": "N/A"
+  },
+
+  // One semantic delta per row. Source IDs must be exact GA IDs from
+  // trace/proposal.trace.json#/change-ga-register with artifact-routes
+  // artifact=specs and role spec-requirement or spec-guard.
+  "spec-delta-register": [
+    {
+      "delta-id": "SD-001",
+      "delta-op": "added",
+      "requirement": "<requirement name>",
+      "body": "System SHALL ...",
+      "source-ids": ["GA-0000"],
+      "scenarios": [
+        {
+          "name": "<scenario name>",
+          "when": "<trigger / actor / route / UI event>",
+          "then": "<source-backed observable result>",
+          "source-ids": ["GA-0000"]
+        }
+      ]
+    },
+    {
+      "delta-id": "SD-002",
+      "delta-op": "added",
+      "requirement": "<guard requirement name>",
+      "body": "System MUST NOT ...",
+      "source-ids": ["GA-0001"],
+      "guard-handling": "must-not",
+      "scenarios": [
+        {
+          "name": "<guard scenario name>",
+          "then": "<negative boundary>",
+          "source-ids": ["GA-0001"]
+        }
+      ]
+    }
+  ],
+
+  // Minimal closure result. Do not duplicate full coverage maps here.
+  "spec-gate": {
+    "blockers": [],
+    "orphan-source-ids": [],
+    "source-set-mismatch": [],
+    "existing-spec-state-violations": [],
+    "delivery-projection-mismatch": []
   }
 }

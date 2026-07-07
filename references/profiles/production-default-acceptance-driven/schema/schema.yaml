@@ -31,7 +31,7 @@ artifacts:
 
   - id: runtime-acceptance
     generates: runtime-acceptance.md
-    description: canonical runtime coverage registry，定义供 tasks.md 与 verification.md 共同引用的 RS/OP/ST/CH rows
+    description: runtime fact register，细化 proposal/spec/design 背景并投影供 tasks.md 与 verification.md 共同引用的 RS/OP/ST/CH rows
     template: runtime-acceptance.trace.template.jsonc
     instruction: |
       本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/runtime-acceptance.trace.json 的 JSONC authoring guide，不是 runtime-acceptance.md Markdown 模板。不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
@@ -45,7 +45,7 @@ artifacts:
     description: slice-only 独立测试意图、Proof Slice 原子测试义务和测试前一致性预检 artifact
     template: verification.trace.template.jsonc
     instruction: |
-      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/verification.trace.json 的 JSONC authoring guide，不是 verification.md Markdown 模板。verification writer 必须把 Proof Slice canonical model 写入 trace/verification.trace.json 的 proof-slice-model，不得新建 trace/verification.proof-slices.json。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
+      本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/verification.trace.json 的 JSONC authoring guide，不是 verification.md Markdown 模板。verification writer 必须把 Proof Slice canonical register 写入 trace/verification.trace.json 的 verification-slice-register，不得新建 trace/verification.proof-slices.json。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
     requires:
       - proposal
       - specs
@@ -69,55 +69,53 @@ apply:
   tracks: tasks.md
   instruction: |
     本 schema 的 apply instruction 只定义 schema-local artifact 语义；执行顺序、subagent 编排、测试质量门禁、evidence 输出和 ready-for-archive 判定必须遵守 `openspec/agent-runtime/openspec-apply-change.md`。
-    Checkpoint commit policy 也由 `openspec/agent-runtime/openspec-apply-change.md` 强制定义；checkpoint commit 只作为写入型 apply-stage agent 的过程性审计轨迹，不得作为 runtime oracle、Proof Slice evidence、verification pass、runtime row covered 或 ready-for-archive 信号。
+    Checkpoint commit policy 也由 `openspec/agent-runtime/openspec-apply-change.md` 强制定义；checkpoint commit 只作为写入型 apply-stage agent 的过程性审计轨迹，不得作为 runtime oracle、Proof Slice evidence、verification pass、runtime fact covered 或 ready-for-archive 信号。
 
     Apply 必须读取 proposal、specs、design、runtime-acceptance、verification 和 tasks。缺少 `runtime-acceptance.md` 或 `verification.md` 是 blocker；新 schema 不兼容旧 `tasks.md` 内置测试矩阵模式。
     Apply Phase 0 必须运行 `node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`；validator hard error 必须作为实现前 `Artifact Consistency Blocker`，不得启动 implementation-worker。
 
-    `runtime-acceptance.md` 是 canonical runtime coverage registry：
-    - 它定义 RS-/OP-/ST-/CH- runtime rows、scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
-    - `tasks.md` 和 `verification.md` 只能引用其中已定义的 runtime rows，不得各自发明新的 canonical runtime row。
+    `runtime-acceptance.md` 是 canonical runtime fact register 的 Delivery Plane：
+    - 它从 `trace/runtime-acceptance.trace.json#/runtime-fact-register` 投影 RS-/OP-/ST-/CH- runtime facts，并定义 scope basis、runtime obligation、observable fact、owner candidate、default path policy、external boundary、scope role 和 no-scope-expansion check。
+    - `tasks.md` 和 `verification.md` 只能引用其中已定义的 runtime facts，不得各自发明新的 canonical runtime fact。
 
-    `tasks.md` 是 production implementation Delivery Plane；runtime acceptance audit model 位于 `trace/tasks.trace.json`：
-    - 使用 change-local `SI-###` 作为 scope item ID；`SI-###` 只在本 change 内有效。
-    - Delivery Plane 的 AC section 是 implementation slice 和 worker 默认入口；implementation worker 默认消费 AC 的 `Outcome`、`Start Gate`、`Runtime Rows`、`Resolved Runtime Contract`、`Implementation Scope`、`Preserve`、`Proof Contract` 和 checkbox tasks。
-    - Delivery Plane checkbox 只能代表 production implementation work；`Proof:`、`Acceptance Proof`、coverage closure、fixture execution、截图、测试执行或 evidence collection 不得单独成为 checkbox。
-    - `trace/tasks.trace.json` 的 `acceptance-driven-coverage` 负责把 scope items、spec scenarios 和 design decisions 映射到 AC、implementation checkbox 和 runtime proof 摘要。
-    - `trace/tasks.trace.json` 的 `runtime-acceptance-index` 和 `runtime-acceptance-projection` 只把 runtime-acceptance.md rows 投影到 provider/consumer graph、start gates、no-scope boundary、implementation task ownership 和 runtime proof categories。
-    - `trace/tasks.trace.json` 中的 coverage rows 和 runtime projection 不是额外 executable work。
+    `tasks.md` 是 production implementation Delivery Plane；最小实现任务模型位于 `trace/tasks.trace.json`：
+    - 使用 change-local `SI-###` 作为 proposal scope item ID；`SI-###` 不得出现在 tasks trace 中，source/scope 覆盖只能通过 runtime fact 的 `source-basis` 反查。
+    - Delivery Plane 的 AC section 是 implementation step 和 worker 默认入口；implementation worker 默认消费 AC 的 `Runtime Facts` 和 checkbox task `Work`。
+    - Delivery Plane checkbox 只能代表 production implementation work；`Proof:`、`Acceptance:`、`Acceptance Proof`、coverage closure、fixture execution、截图、测试执行或 evidence collection 不得成为 checkbox 字段或独立 checkbox。
+    - `trace/tasks.trace.json` 的 `implementation-step-register[]` 负责把 required / preserve runtime facts 映射到有序 AC、checkbox task 和 task-level runtime fact ownership。
+    - `trace/tasks.trace.json` 的 `delivery-plane.step-sections[]` 只提供渲染顺序；不得重复定义 step、task、coverage、runtime index 或 projection。
+    - `trace/tasks.trace.json` 不再维护 `acceptance-driven-coverage`、`runtime-acceptance-index` 或 `runtime-acceptance-projection`。
     - `tasks.md` 只允许更新 implementation checkbox；不得写入测试计划、测试编号、测试文件、固定命令、evidence path、执行状态或 deposit 状态。
 
     `verification.md` 是 independent test intent and oracle artifact：
-    - Proof Slice Matrix 是唯一测试义务模型，不是执行清单；不生成、不引用任何额外业务 oracle 分组 ID。
-    - `verification.md` 不重复 `scope basis`，不重新解释 source/scope；source/scope 审计只能通过 Proof Slice -> Runtime Row IDs -> runtime-acceptance row 反查。
+    - `trace/verification.trace.json#/verification-slice-register` 是唯一测试义务模型，Proof Slice Matrix 只是其人读投影，不是执行清单；不生成、不引用任何额外业务 oracle 分组 ID。
+    - `verification.md` 不重复 `scope basis`，不重新解释 source/scope；source/scope 审计只能通过 Proof Slice -> runtime fact IDs -> runtime-acceptance row 反查。
     - oracle 必须描述 public/runtime observable behavior，不得来自当前实现细节、私有 helper、artifact 文本结构或 OpenSpec 流程状态。
-    - Proof Slice 的语义只能摘取或细分 runtime-acceptance canonical row 的 runtime obligation、observable fact、failure/branch/default/no-scope 字段，不得新增 source/scope 外 behavior。
-    - 每个 required / preserve / proof-only runtime row 必须拆出所有独立可失败分支；每个分支对应一个 required Proof Slice，或有 scope-backed manual/not-applicable reason。
-    - 每个 Proof Slice 必须有 `Primary Runtime Row ID`，且该 row 必须存在于同一 slice 的 `Runtime Row IDs` 中；`Primary Runtime Row ID` 是 coverage/trace anchor。独立 operation、state、failure/retry、auth/security、layout、observability、fixture variant、viewport 或 redaction branch 不得合并成一个 slice；多个 atomic slices 可以共享相同 `Primary Runtime Row ID`。
-    - Proof Slice 的 `Primitive Type` 只能是 `operation`、`state`、`failure`、`negative-boundary`、`layout`、`observability`、`fixture-variant`、`authorization`。
-    - Proof Slice 的 `Branch / Variant`、`Oracle Fragment`、`Failure Signal` 和 `Primary Assertion Shape` 必须都是单一原子断言维度。
-    - Proof Slice 的 `Primary Layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
+    - Proof Slice 的语义只能摘取或细分 runtime-acceptance canonical fact 的 runtime obligation、observable fact、failure/branch/default/no-scope 字段，不得新增 source/scope 外 behavior。
+    - 每个 required / preserve runtime fact 必须拆出所有独立可失败分支；每个可验证分支对应一个 Proof Slice，无法验证或冲突时进入 `verification-gate.blockers`。
+    - 每个 Proof Slice 必须有 `Primary runtime fact ID`，且该 row 必须存在于同一 slice 的 `runtime fact IDs` 中；`Primary runtime fact ID` 是 coverage/trace anchor。独立 operation、state、failure/retry、auth/security、layout、observability、fixture variant、viewport 或 redaction branch 不得合并成一个 slice；多个 atomic slices 可以共享相同 `Primary runtime fact ID`。
+    - Proof Slice 的 `proof-type` 只能是 `operation`、`state`、`failure`、`negative-boundary`、`layout`、`observability`、`fixture-variant`、`authorization`。
+    - Proof Slice 的 `branch`、`oracle`、`failure-signal` 和 `assertion-shape` 必须都是单一原子断言维度。
+    - Proof Slice 的 `test-layer` 只能是 `unit`、`component`、`route/API`、`DB/integration`、`contract`、`worker/job`、`realtime/SSE`、`browser/e2e`、`visual/responsive`、`security/negative`。
     - Proof Slice 的 `Production Owner` 是 production owner 边界，不是测试目录、runner selector 或 evidence 目录。
     - Proof Slice 的 `Production Owner` 必须是 exactly one production code boundary token；包含逗号、多个 owner token、`+`、`/` owner list、`and`、`和` 或 `与` 的复合 owner 必须视为无效。
-    - Proof Slice 必须声明 `persistent-test-required` boolean 和 `proof-evidence-mode`。`proof-evidence-mode` 只能是 `durable-test`、`readiness-command`、`build-command`、`codegen-command`、`compose-config-readback`、`static-boundary-readback`、`manual-environment`。
-    - `persistent-test-required=true` 时，`proof-evidence-mode` 必须为 `durable-test`，`test-contract.primary-test-cardinality` 必须为 `exactly-one`；`persistent-test-required=false` 时，`proof-evidence-mode` 不得为 `durable-test`，`test-contract.primary-test-cardinality` 必须为 `none`。
-    - 每个 Proof Slice 的 `test-contract.placement` 必须规划目录级测试落点。`persistent-test-required=true` 时，`planned-test-directory` 必须是外置 `tests/` 子树目录 glob、以 `/**` 结尾，并匹配 `Primary Layer` 的默认子树；`persistent-test-required=false` 时，`planned-test-directory` 必须为 `N/A` 且 `placement-basis` 必须为 `nonpersistent-evidence`。
+    - Proof Slice 必须声明 `proof-evidence-mode`。`proof-evidence-mode` 只能是 `durable-test`、`readiness-command`、`build-command`、`codegen-command`、`compose-config-readback`、`static-boundary-readback`、`manual-environment`。
+    - `proof-evidence-mode=durable-test` 表示必须生成或确认持久测试；非 `durable-test` 表示非持久 proof。
+    - 每个 Proof Slice 必须声明顶层 `planned-test-directory`。durable slice 的 `planned-test-directory` 必须是外置 `tests/` 子树目录 glob、以 `/**` 结尾，并匹配 `test-layer` 的默认子树；non-durable slice 的 `planned-test-directory` 必须为 `N/A` 且 `non-persistent-reason` 必须给出原因。
     - Layer 默认目录子树：`unit -> tests/unit/**`，`component -> tests/component/**`，`route/API -> tests/api/**` 或 `tests/contract/**`，`DB/integration -> tests/integration/**`，`contract -> tests/contract/**`，`worker/job -> tests/worker/**`，`realtime/SSE -> tests/integration/**`，`browser/e2e` / `visual/responsive -> tests/e2e/**`，`security/negative -> tests/security/**` 或能真实触达边界的 layer 子树。
-    - business change 中，若 `manual-environment-gate` 为 `None`，Proof Slice 默认必须 `persistent-test-required=true`。foundation change 可按 slice 标记 `persistent-test-required=false`，但仍必须提供非持久 proof evidence mode。
-    - Layer / Harness / Fixture Notes 只是跨 slice 说明，不是固定测试计划；apply 阶段必须按 `openspec-apply-change.md` 和 `test-quality-strength.md` 消费 Proof Slice 生成或确认测试。
+    - apply 阶段必须按 `openspec-apply-change.md` 和 `test-quality-strength.md` 消费 `verification-slice-register[]` 生成或确认测试。
     - apply 阶段不得为了适配当前实现静默修改 `verification.md`。
 
     Artifact integrity blockers：
     - 静态 artifact validator 返回 hard error，必须报告 `Artifact Consistency Blocker`。
-    - `runtime-acceptance.md` 缺失、runtime row ID 重复、runtime row 缺少 scope basis/default path/no-scope boundary、或包含测试/任务/evidence/deposit 字段，必须报告 `Artifact Consistency Blocker`。
-    - `tasks.md` 或 `verification.md` 引用了 runtime-acceptance.md 中不存在的 runtime row，必须报告 `Artifact Consistency Blocker`。
-    - `tasks.md` AC 主体缺少 `Resolved Runtime Contract`，或该表 row IDs 与 AC `Runtime Rows:` 不一致，或与 runtime-acceptance.md canonical row 语义冲突，必须报告 `Artifact Consistency Blocker`。
-    - runtime-acceptance.md 中 required / preserve runtime row 缺少 tasks projection 或 verification Proof Slice projection，必须报告 `Artifact Consistency Blocker`。
-    - proof-only runtime row 未分类为 `production-work-required` 或 `proof-projection-only`，或 `proof-projection-only` row 被投影到新建 proof-only AC/checkbox，必须报告 `Artifact Consistency Blocker`。
+    - `runtime-acceptance.md` 缺失、runtime fact ID 重复、runtime fact 缺少 scope basis/default path/no-scope boundary、或包含测试/任务/evidence/deposit 字段，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` 或 `verification.md` 引用了 runtime-acceptance.md 中不存在的 runtime fact，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` 缺少 `implementation-step-register[]`、`delivery-plane.step-sections[]`，或任一 step/task runtime fact ID 不存在、不属于 required / preserve scope role、或与 step runtime facts 不一致，必须报告 `Artifact Consistency Blocker`。
+    - runtime-acceptance.md 中 required / preserve runtime fact 缺少 checkbox task coverage 或 verification Proof Slice projection，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` 包含只执行 proof、verification、test、fixture、screenshot、evidence、coverage closure 或 acceptance closure、且不实现 production runtime behavior 的 checkbox，必须报告 `Artifact Consistency Blocker`。
-    - task-level `Runtime Rows` 包含仅由 proof/readback 观察、但该 task 不实现或实质保留的 supporting rows，必须报告 `Artifact Consistency Blocker`。
-    - 同一 runtime row 在 runtime-acceptance.md、tasks.md 和 verification.md 中的 scope role、default path policy 或 no-scope boundary 冲突，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` 或 `trace/tasks.trace.json` 包含旧 AC-local proof/preserve 字段、`Resolved Runtime Contract`、`Acceptance:`、`Proof:`、`Mock / Default Path Policy:`、coverage table、runtime index 或 runtime projection，必须报告 `Artifact Consistency Blocker`。
+    - task-level `Runtime Facts` 包含仅由 proof/readback 观察、但该 task 不实现或实质保留的 supporting rows，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
-    - `verification.md` 不得包含具体测试文件路径、固定测试命令、runner selector、evidence directory 或 deposit status；目录级 planned test glob 只能出现在 `Planned Test Placement Matrix` 中。
-    - `verification.md` 若缺少 `Proof Slice Matrix` 或 `Planned Test Placement Matrix`、required / preserve / proof-only runtime row 未列出 expected Proof Slice、slice 缺少 `Primary Runtime Row ID`、`Primitive Type`、`Branch / Variant`、`Failure Signal`、`Regression Intent`、`persistent-test-required`、`proof-evidence-mode` 或 `test-contract.placement`，primary row 不在该 slice 的 `Runtime Row IDs` 中、slice 的 `Oracle Fragment`、`Branch / Variant` 或 `Primary Assertion Shape` 合并多个独立可失败分支、slice 混合多个 primary layer、slice 缺少 production owner、slice 的 production owner 是复合 owner / owner list、persistent-test-required 与 proof-evidence-mode/test-contract 不一致、durable slice 的 planned-test-directory 不是合法目录 glob 或不匹配 Primary Layer、non-persistent slice 未使用 `N/A + nonpersistent-evidence`、business automatic slice 关闭持久测试、runtime row 标记 covered 但 missing slice 非空、slice 引用不存在的 runtime row、或 slice 把 `tests/runtime`/repo-wide env/ops/workspace/forbidden-drift 当成默认新测试目标，必须报告 `Artifact Consistency Blocker`。
+    - `verification.md` 不得包含具体测试文件路径、固定测试命令、runner selector、evidence directory 或 deposit status；目录级 planned test glob 只能出现在 `Proof Slice Matrix` 的 `Planned Test Directory` 列。
+    - `verification.md` 若缺少 `Proof Slice Matrix`、required / preserve runtime fact 未被 `verification-slice-register[]` 覆盖、slice 缺少 `Primary runtime fact ID`、`proof-type`、`branch`、`failure-signal`、`proof-evidence-mode`、`planned-test-directory` 或 `non-persistent-reason`，primary row 不在该 slice 的 `runtime fact IDs` 中、slice 的 `oracle`、`branch` 或 `assertion-shape` 合并多个独立可失败分支、slice 混合多个 test layer、slice 缺少 production owner、slice 的 production owner 是复合 owner / owner list、durable slice 的 planned-test-directory 不是合法目录 glob 或不匹配 test layer、non-durable slice 未使用 `N/A` 或缺少 non-persistent reason、slice 引用不存在的 runtime fact、或 slice 把 `tests/runtime`/repo-wide env/ops/workspace/forbidden-drift 当成默认新测试目标，必须报告 `Artifact Consistency Blocker`。
     - `verification.md` 的 oracle 若与 proposal/specs/design 冲突、引入 scope 外行为、要求测试 artifact/process、重复 source/scope basis、或依赖 implementation detail，必须报告 `Artifact Consistency Blocker`。

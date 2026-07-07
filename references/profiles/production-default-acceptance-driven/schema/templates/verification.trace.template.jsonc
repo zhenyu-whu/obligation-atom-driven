@@ -3,137 +3,57 @@
   // trace/verification.trace.json, then run:
   // node openspec/agent-runtime/scripts/render-production-artifacts.mjs --change "<change-slug>" --artifact verification --write
   // Replace all placeholders and remove comments before writing the trace file.
-  // Proof Slice canonical rows belong only in proof-slice-model.proof-slices.
+  // Proof Slice canonical facts belong only in verification-slice-register.
   "trace-schema": "openspec-trace-v1",
   "artifact-id": "verification",
   "artifact-path": "verification.md",
   "change-name": "<change-slug>",
   "schema-name": "production-default-acceptance-driven",
   "agent-role": "verification-writer",
+
   "source-interface": {
-    "runtime-source-artifact": "runtime-acceptance.md",
-    "runtime-source-trace": "trace/runtime-acceptance.trace.json",
-    "proof-slice-model": "trace/verification.trace.json#/proof-slice-model",
-    "oracle-source-policy": "Proof Slice oracle only derives from runtime-acceptance canonical rows.",
-    "upstream-consistency-read": [
-      "trace/proposal.trace.json",
-      "trace/specs/<capability>.trace.json",
-      "trace/design.trace.json"
+    "runtime-trace": "trace/runtime-acceptance.trace.json",
+    "spec-traces": [
+      "trace/specs/<capability>.trace.json"
     ],
-    "markdown-input-policy": "verification consumes JSON traces only; Markdown artifacts are render outputs, not semantic inputs."
+    "design-trace": "trace/design.trace.json",
+    "input-policy": "verification derives oracle from runtime-acceptance only; proposal trace is not a semantic input."
   },
-  "proof-slice-model": {
-    "model-schema": "openspec-proof-slices-v1",
-    "proof-slice-summary": {
-      "proof-slice-count": 1,
-      "persistent-test-required-count": 1,
-      "non-persistent-proof-slice-count": 0,
-      "runtime-row-count": 1,
-      "slice-id-format": "PS-###"
-    },
-    "proof-slices": [
-      {
-        "slice-id": "PS-001",
-        "runtime-row-ids": ["RS-001"],
-        "primary-runtime-row-id": "RS-001",
-        "primitive-type": "<operation|state|failure|negative-boundary|layout|observability|fixture-variant|authorization>",
-        "branch-variant": "<single independently failing branch>",
-        "observable-surface": "<public runtime observable surface>",
-        "oracle-fragment": "<single atomic assertion derived from runtime-acceptance canonical row fields>",
-        "failure-signal": "<observable failure signal for this branch>",
-        "primary-layer": "<unit|component|route/API|DB/integration|contract|worker/job|realtime/SSE|browser/e2e|visual/responsive|security/negative>",
-        "production-owner": "<single production owner token>",
-        "persistent-test-required": true,
-        "proof-evidence-mode": "durable-test",
-        "primary-assertion-shape": "<single primary assertion shape>",
-        "fixture-mock-boundary": "<allowed fixture/mock boundary and real default path requirement>",
-        "regression-intent": "<high|medium|low plus Chinese reason>",
-        "manual-environment-gate": "None",
-        "test-contract": {
-          "primary-test-cardinality": "exactly-one",
-          "test-title-prefix": "PS-001",
-          "allow-shared-setup": true,
-          "allow-multi-slice-primary-test": false,
-          "waiver-required-for-multi-slice": true,
-          "placement": {
-            "planned-test-directory": "<owner-root>/tests/<layer-subtree>/**",
-            "placement-basis": "<existing-tests-directory|planned-layer-subdirectory|workspace-tests-directory|nonpersistent-evidence>",
-            "placement-reason": "<directory-level placement reason based on Production Owner and Primary Layer>"
-          }
-        }
-      }
-    ]
+
+  "verification-slice-register": [
+    {
+      "slice-id": "PS-001",
+      "runtime-fact-ids": ["OP-001"],
+      "primary-runtime-fact-id": "OP-001",
+      "proof-type": "<operation|state|failure|negative-boundary|layout|observability|fixture-variant|authorization>",
+      "branch": "<single independently failing runtime branch>",
+      "oracle": "<single atomic assertion derived from runtime-acceptance canonical fact fields>",
+      "failure-signal": "<observable failure signal for this branch>",
+      "test-layer": "<unit|component|route/API|DB/integration|contract|worker/job|realtime/SSE|browser/e2e|visual/responsive|security/negative>",
+      "production-owner": "<single production owner token>",
+      "assertion-shape": "<single primary assertion shape>",
+      "fixture-boundary": "<allowed fixture/mock boundary and real default path requirement>",
+      "proof-evidence-mode": "<durable-test|readiness-command|build-command|codegen-command|compose-config-readback|static-boundary-readback|manual-environment>",
+      "planned-test-directory": "<tests/<layer-subtree>/** or N/A for non-durable proof>",
+      "non-persistent-reason": "<N/A for durable-test; source/scope-backed reason for non-durable proof>"
+    }
+  ],
+
+  "verification-gate": {
+    "blockers": [],
+    "uncovered-runtime-facts": [],
+    "invalid-runtime-refs": [],
+    "non-atomic-slices": [],
+    "invalid-proof-modes": [],
+    "invalid-test-placement": [],
+    "delivery-projection-mismatch": []
   },
-  "runtime-row-branch-inventory": [
-    {
-      "branch-id": "VRB-001",
-      "runtime-row-id": "RS-001",
-      "runtime-row-type": "surface",
-      "scope-role": "<required behavior|preserve boundary|proof-only>",
-      "branch-source-field": "<runtime-obligation|observable-fact|default-path-policy|external-boundary|no-scope-expansion-check|failure-branch>",
-      "branch-variant": "<single independently failing runtime branch>",
-      "handling": "proof-slice",
-      "expected-proof-slice-ids": ["PS-001"],
-      "handling-reason": "<why these proof slices cover this branch>"
-    },
-    {
-      "branch-id": "VRB-002",
-      "runtime-row-id": "OP-001",
-      "runtime-row-type": "operation",
-      "scope-role": "<required behavior|preserve boundary|proof-only>",
-      "branch-source-field": "<default-path-policy|external-boundary|no-scope-expansion-check>",
-      "branch-variant": "<manual or not-applicable branch>",
-      "handling": "<manual-environment|not-applicable>",
-      "expected-proof-slice-ids": [],
-      "handling-reason": "<source/scope-backed manual or not-applicable reason>"
-    }
-  ],
-  "manual-not-applicable-inventory": [
-    {
-      "branch-id": "VRB-002",
-      "runtime-row-id": "OP-001",
-      "handling": "<manual-environment|not-applicable>",
-      "basis-field": "<scope-role|default-path-policy|external-boundary|no-scope-expansion-check>",
-      "reason": "<source/scope-backed reason; not a test file, command, runner, or evidence path>"
-    }
-  ],
-  "runtime-coverage-reconciliation": [
-    {
-      "runtime-row-id": "RS-001",
-      "row-type": "surface",
-      "scope-role": "<required behavior|preserve boundary|proof-only>",
-      "expected-proof-slice-ids": ["PS-001"],
-      "missing-proof-slice-ids": [],
-      "coverage-status": "<covered|manual-environment|not-applicable|blocked>",
-      "gap-not-covered-reason": "<None when covered; otherwise source/scope-backed gap reason>"
-    }
-  ],
-  "slice-consistency-checklist": [
-    "Every verification-relevant runtime row branch is mapped to a Proof Slice or manual/not-applicable reason.",
-    "Every expected Proof Slice exists in proof-slice-model.proof-slices and includes the reconciled runtime row.",
-    "Proof Slice canonical rows are stored only in proof-slice-model."
-  ],
+
   "delivery-plane": {
     "verification-intent": {
       "scope": "<runtime verification scope covered by this change>",
-      "runtime-source": "runtime-acceptance.md canonical rows.",
+      "runtime-source": "trace/runtime-acceptance.trace.json#/runtime-fact-register",
       "out-of-scope": "<artifact/process/internal implementation details and scope-backed no-scope exclusions>"
-    },
-    "layer-harness-fixture-notes": [
-      {
-        "slice-id-set": "PS-001",
-        "layer-reason": "<why the selected primary layer proves the runtime branch>",
-        "harness-expectation": "<needed harness capability, without fixed command or runner selector>",
-        "mock-fixture-boundary": "<what may be controlled and what default path must remain real>",
-        "omitted-stable-layers-reason": "<why omitted layers are stable or redundant>"
-      }
-    ],
-    "do-not-test": [
-      {
-        "item": "<scope-backed no-scope, external boundary, implementation detail, or process item>",
-        "reason": "<why this is not a runtime verification obligation>",
-        "runtime-row-ids": ["RS-001"]
-      }
-    ]
+    }
   }
 }

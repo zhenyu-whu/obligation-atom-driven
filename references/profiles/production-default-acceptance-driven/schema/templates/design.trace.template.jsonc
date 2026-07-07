@@ -8,148 +8,277 @@
   "change-name": "<change-slug>",
   "schema-name": "production-default-acceptance-driven",
   "agent-role": "design-writer",
+
   "source-interface": {
     "proposal-trace": "trace/proposal.trace.json",
     "specs-completion-mode": "<delta|no-delta>",
     "spec-traces": [
       "trace/specs/<capability>.trace.json"
     ],
-    "registered-source-window-policy": "design consumes proposal/spec trace only; design.md and specs Markdown are render outputs, not source/scope input."
+    "input-policy": "design consumes proposal/spec trace only; design.md and specs Markdown are render outputs, not semantic input."
   },
-  "production-source-map": [
+
+  // The single semantic authority for design. Each row is one implementation
+  // design decision, primarily anchored to specs scenarios. Proposal design rows
+  // are consumed only through design-inputs.
+  "implementation-design-register": [
     {
-      "source-map-row-id": "PSM-001",
-      "scope-item-id": "SI-001",
-      "capability": "<capability>",
-      "source": "<source from proposal change-scope-coverage>",
-      "source-fact": "<exact source-fact from proposal>",
-      "artifact-handling": "<spec|guard|design|proof|context>",
-      "proposal-trace-anchor": "trace/proposal.trace.json#/change-scope-coverage/<index>",
-      "spec-trace-anchors": [
+      "implementation-design-id": "IDR-001",
+      "layer": "architecture-module-boundary",
+      "title": "<design decision title>",
+      "spec-anchors": [
+        "trace/specs/<capability>.trace.json#/spec-delta-register/0/scenarios/0"
+      ],
+      "design-inputs": [
         {
-          "trace-path": "trace/specs/<capability>.trace.json",
-          "trace-pointer": "#/requirement-source-trace/<index>",
-          "capability": "<capability>",
-          "requirement": "<rendered requirement name>",
-          "scenario": "<rendered scenario name>",
-          "spec-handling": "<direct-spec-requirement|direct-spec-guard>",
-          "artifact-handling": "<spec|guard>"
+          "source-item-id": "SI-001",
+          "use": "<how this design scope item constrains the decision>"
         }
       ],
-      "design-handling-ids": ["D-001"],
-      "implementation-placement-ids": ["P-001"],
-      "no-scope-expansion-check": "<how the design avoids adding source/scope outside this scope item>"
+      "decision": "<source-backed design decision for the anchored scenario>",
+      "implementation-boundary": "<production module|route|component|table|worker|ops boundary>",
+      "implementation-contract": "<what implementers must build or preserve>",
+      "guard-failure-handling": "<guard/failure/disabled/retry/preserve/non-goal handling>",
+      "verification-handoff": "<runtime/verification expectation without test files, commands, or evidence paths>",
+      "no-scope-expansion": "<explicit rejected behavior boundary>",
+      "blocker": "无",
+      "implementation-details": [
+        {
+          "detail-id": "IDR-001-D001",
+          "detail-type": "module-boundary",
+          "owner": "<single production owner>",
+          "subject": "<table|DTO|route|component|state|migration|boundary subject>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "- <module/package/route/component boundary and responsibility split>\n- <allowed inbound/outbound dependencies and explicit persistence/API ownership>\n- <failure or disabled behavior at this boundary>",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D002",
+          "detail-type": "data-model",
+          "owner": "<single production owner>",
+          "subject": "<table-or-aggregate-name>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Data model:\n\n| Field | Type | Nullable | Default | Index / Constraint | Notes |\n| --- | --- | --- | --- | --- | --- |\n| id | uuid | no | generated | primary key | <stable identifier> |\n| tenant_id | uuid | no | none | index | <tenant isolation boundary> |\n| payload | jsonb | no | '{}' | none | <versioned domain payload shape> |\n| created_at | timestamptz | no | now() | none | <creation timestamp> |\n\n- Persistence owner: <service/module that writes the table>.\n- Read model: <queries, filters, sort order, and pagination boundary>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D003",
+          "detail-type": "json-shape",
+          "owner": "<single production owner>",
+          "subject": "<json-payload-or-config-name>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "JSON shape:\n\n```json\n{\n  \"version\": 1,\n  \"items\": [\n    {\n      \"id\": \"<stable-id>\",\n      \"type\": \"<enum-value>\",\n      \"enabled\": true\n    }\n  ]\n}\n```\n\n- Optional fields: <field list and omission behavior>.\n- Compatibility: <how unknown or future fields are handled>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D004",
+          "detail-type": "api-contract",
+          "owner": "<single production owner>",
+          "subject": "<method-and-route-family>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "API contract:\n\n| Method | Path | Auth / Tenant Boundary | Success | Error |\n| --- | --- | --- | --- | --- |\n| POST | /<resource> | <actor + tenant resolution> | 200 <ResponseDto> | 400 <ValidationErrorDto>, 409 <ConflictDto> |\n\nRequest body:\n\n```json\n{\n  \"name\": \"<string>\",\n  \"payload\": {}\n}\n```\n\n- Idempotency/concurrency: <version, etag, idempotency key, or none with reason>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D005",
+          "detail-type": "dto-contract",
+          "owner": "<single production owner>",
+          "subject": "<dto-family-name>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "DTO contract:\n\n```ts\ninterface ExampleResponseDto {\n  id: string;\n  status: \"active\" | \"disabled\";\n  payload: Record<string, unknown>;\n}\n```\n\n- Required fields: id, status, payload.\n- Nullable fields: <field names and null semantics>.\n- Versioning: <backward-compatible addition/removal rules>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D006",
+          "detail-type": "frontend-contract",
+          "owner": "<single production owner>",
+          "subject": "<route-or-component-family>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Frontend contract:\n\n| Surface | Component / Route | State | Event | Data Fetching | Error Display |\n| --- | --- | --- | --- | --- | --- |\n| <screen> | <component-or-route> | <state fields> | <user/system event> | <request/cache behavior> | <inline/banner/panel behavior> |\n\n- Loading and disabled states: <button, form, or panel state rules>.\n- Validation display: <field path, message key, and focus behavior>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D007",
+          "detail-type": "validation-error-contract",
+          "owner": "<single production owner>",
+          "subject": "<validation-error-family>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Validation error contract:\n\n| Error Code | Field / Path | Severity / Blocking | Message Key | UI Locator |\n| --- | --- | --- | --- | --- |\n| <ERR_CODE> | <payload.field.path> | blocking | <message.key> | <panel-or-field-anchor> |\n\n- Aggregation: <how multiple errors are ordered and grouped>.\n- Recovery: <how users or callers clear the error>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D008",
+          "detail-type": "state-lifecycle",
+          "owner": "<single production owner>",
+          "subject": "<state-machine-or-draft-state>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "State lifecycle:\n\n| State | Enter Condition | Transition | Persistence / Failure Behavior |\n| --- | --- | --- | --- |\n| <state-name> | <entry condition> | <from -> to event> | <persist, restore, rollback, or failure rule> |\n\n- Terminal or disabled state: <what stops further transitions>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D009",
+          "detail-type": "integration-boundary",
+          "owner": "<single production owner>",
+          "subject": "<integration-or-external-boundary>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Integration boundary:\n\n- Boundary: <internal owner> calls <external dependency/provider> only through <adapter/API/queue/event>.\n- Inbound/outbound protocol: <request, event, queue, timeout, and payload boundary>.\n- Failure handling: <timeout, retry, fallback, and error propagation behavior>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D010",
+          "detail-type": "migration-compatibility",
+          "owner": "<single production owner>",
+          "subject": "<migration-or-compatibility-subject>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Migration compatibility:\n\n| Step | Migration / Backfill | Compatibility Strategy | Rollback / Safety Boundary |\n| --- | --- | --- | --- |\n| <step> | <DDL/data/config change> | <default/version/legacy behavior> | <rollback or replay boundary> |\n\n- Old data handling: <how legacy rows or configs remain readable>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D011",
+          "detail-type": "observability-ops",
+          "owner": "<single production owner>",
+          "subject": "<metric-log-alert-family>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Observability and ops:\n\n| Signal | Production Owner | Trigger | Action |\n| --- | --- | --- | --- |\n| metric | <owner> | <counter/latency/error condition> | <dashboard/runbook lookup> |\n| log | <owner> | <state change or failure> | <correlation fields and retention> |\n| alert | <owner> | <threshold or SLO burn> | <on-call/runbook action> |",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D012",
+          "detail-type": "rollout-compatibility",
+          "owner": "<single production owner>",
+          "subject": "<rollout-or-compatibility-gate>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Rollout compatibility:\n\n| Gate | Rollout / Flag | Compatibility | Rollback / Monitor |\n| --- | --- | --- | --- |\n| <gate> | <feature flag or deployment phase> | <client/server version rule> | <rollback path and monitor signal> |\n\n- Disable behavior: <what remains readable or callable after rollback>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        },
+        {
+          "detail-id": "IDR-001-D013",
+          "detail-type": "non-applicable",
+          "owner": "<single production owner>",
+          "subject": "<non-applicable-layer-or-subject>",
+          "basis": {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [
+              "SI-001"
+            ]
+          },
+          "content": "Non-applicable reason: <why this detail type is not applicable for the scoped change>.\nRejected expansion: <scope-expanding behavior that must not be added to make it applicable>.",
+          "no-scope-expansion": "<explicit rejected behavior boundary for this detail>"
+        }
+      ]
     }
   ],
-  "spec-scenario-design-map": [
-    {
-      "trace-path": "trace/specs/<capability>.trace.json",
-      "trace-pointer": "#/requirement-source-trace/<index>",
-      "scope-item-id": "SI-001",
-      "capability": "<capability>",
-      "requirement": "<rendered requirement name>",
-      "scenario": "<rendered scenario name>",
-      "decision-ids": ["D-001"],
-      "placement-ids": ["P-001"],
-      "design-handling": "<how this scenario is implemented>"
-    }
-  ],
-  "design-decision-index": [
-    {
-      "decision-id": "D-001",
-      "title": "<decision title>",
-      "design-handling": "<source-backed design decision summary>",
-      "source-item-ids": ["SI-001"],
-      "placement-ids": ["P-001"]
-    }
-  ],
-  "design-obligation-matrix": [
-    {
-      "matrix-row-id": "DOM-001",
-      "scope-item-id": "SI-001",
-      "capability": "<capability>",
-      "artifact-handling": "<handling from proposal>",
-      "source-fact": "<exact source-fact from proposal>",
-      "spec-scenario-anchors": ["<capability>::<requirement>::<scenario>"],
-      "decision-ids": ["D-001"],
-      "placement-ids": ["P-001"],
-      "guard-handling": "<must-not|preserve-boundary|non-goal|N/A>",
-      "proof-expectation": "<runtime-acceptance/verification handoff, or N/A>",
-      "no-scope-expansion": "<explicit boundary>",
-      "explicit-blocker": "无"
-    }
-  ],
-  "source-scope-map": {
-    "direct-source-item-handling": [
-      {
-        "scope-item-id": "SI-001",
-        "handling": "<design handling summary>",
-        "decision-ids": ["D-001"],
-        "placement-ids": ["P-001"],
-        "no-scope-expansion": "<explicit boundary>"
-      }
-    ],
-    "implementation-placement-map": [
-      {
-        "placement-id": "P-001",
-        "placement": "<module|route|table|DTO|component|worker|ops-boundary>",
-        "path-boundary": "<production path or ownership boundary>",
-        "owner": "<single production owner>",
-        "implementation-contract": "<what implementers must build or preserve>"
-      }
-    ],
-    "non-direct-boundary-handling": []
+
+  "design-gate": {
+    "blockers": [],
+    "uncovered-spec-anchors": [],
+    "uncovered-design-inputs": [],
+    "invalid-design-inputs": [],
+    "missing-implementation-details": [],
+    "invalid-implementation-details": [],
+    "detail-basis-violations": [],
+    "layer-detail-coverage-gaps": [],
+    "fragmented-design-subjects": [],
+    "placeholder-detail-content": [],
+    "delivery-projection-mismatch": []
   },
-  "ui-control-contracts": [
-    {
-      "control-id": "UIC-001",
-      "owner-component": "<component>",
-      "event-trigger": "<user event>",
-      "handler-or-api-route": "<handler/API>",
-      "request-payload": "<payload>",
-      "response-merge-or-reload": "<merge/reload persistence>",
-      "submitting-disabled-error-retry": "<submitting/disabled/error/retry contract>",
-      "source-item-ids": ["SI-001"]
-    }
-  ],
-  "proof-expectation-handoff": [
-    {
-      "source-item-id": "SI-001",
-      "handoff-kind": "<runtime-acceptance|verification|none>",
-      "expectation": "<source-backed proof expectation without test file/command/evidence path>"
-    }
-  ],
-  "production-alignment-gate": {
-    "change-slug": "<change-slug>",
-    "schema-name": "production-default-acceptance-driven",
-    "scope-item-count": 1,
-    "scope-item-ids": ["SI-001"],
-    "design-scope-item-ids": ["SI-001"],
-    "production-source-map-check": "production-source-map mirrors proposal scope items.",
-    "design-obligation-matrix-check": "Each proposal scope item has exactly one matrix row.",
-    "blockers": []
-  },
+
   "delivery-plane": {
     "context": ["- <reviewer-facing context>"],
     "goals-non-goals": ["- <goals and non-goals>"],
     "decisions": [
       {
-        "decision-id": "D-001",
-        "title": "<decision title>",
-        "decision": "<decision text>",
-        "source-gap": "<source gap or 无>",
-        "minimal-shape": "<minimal production-compatible shape>",
-        "rejected-expansion": "<rejected source/scope expansion>"
+        "decision-id": "IDR-001"
       }
     ],
-    "architecture-module-boundary-design": ["- <architecture/module boundary>"],
-    "domain-data-migration-design": ["- <domain/data/migration design>"],
-    "api-auth-security-design": ["- <API/auth/security design>"],
-    "async-realtime-ai-worker-design": ["- <async/realtime/AI/worker design or 无>"],
-    "frontend-ux-design": ["- <frontend/UX design or 无>"],
-    "observability-ops-deployment-design": ["- <observability/ops/deployment design>"],
-    "verification-design": ["- <proof strategy handoff, not test files or commands>"],
-    "rollout-compatibility": ["- <rollout/compatibility>"],
+    "detail-render-order": [
+      "module-boundary",
+      "data-model",
+      "json-shape",
+      "api-contract",
+      "dto-contract",
+      "frontend-contract",
+      "validation-error-contract",
+      "state-lifecycle",
+      "integration-boundary",
+      "migration-compatibility",
+      "observability-ops",
+      "rollout-compatibility",
+      "non-applicable"
+    ],
     "risks-trade-offs": ["- <risks/trade-offs>"],
     "open-questions": "无"
   }

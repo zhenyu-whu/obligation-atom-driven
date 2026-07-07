@@ -9,6 +9,7 @@
   "change-name": "<change-slug>",
   "schema-name": "production-obligation-atom-driven",
   "agent-role": "tasks-writer",
+
   "source-interface": {
     "proposal-trace": "trace/proposal.trace.json",
     "specs-completion-mode": "<delta|no-delta>",
@@ -17,155 +18,41 @@
     ],
     "design-trace": "trace/design.trace.json",
     "runtime-acceptance-trace": "trace/runtime-acceptance.trace.json",
-    "verification-input-policy": "tasks does not consume verification trace; verification and proof evidence are downstream or parallel proof models, not implementation scope sources.",
-    "markdown-input-policy": "tasks consumes proposal/spec/design/runtime JSON traces only; Markdown artifacts are render outputs, not semantic inputs."
+    "input-policy": "tasks uses proposal/spec/design as background and runtime-acceptance runtime facts as the implementation target; Markdown, verification, tests, and evidence are not semantic inputs."
   },
 
-  // Audit plane. Rows here prove source/scope coverage, but they are not extra
-  // executable work. One exact GA per obligation-atom-coverage row.
-  "acceptance-driven-coverage": {
-    "obligation-atom-coverage": [
-      {
-        "global-atom-id": "GA-0000",
-        "artifact-projection": "<spec-requirement|spec-guard|design-obligation|verification-obligation|contextual-only>",
-        "owner-capability": "<owner-capability>",
-        "source-fact": "<exact source fact from proposal register>",
-        "runtime-row-ids": ["RS-001"],
-        "acceptance-slice-ids": ["AC-001"],
-        "implementation-task-ids": ["AC-001.1"],
-        "proof-only-handling": "<not-proof-only|production-work-required|proof-projection-only>",
-        "runtime-proof-summary": "<observable runtime proof summary; not a test ID, command, or evidence path>",
-        "coverage-status": "<projected-to-production-task|projected-to-existing-production-task|not-applicable|blocked>",
-        "blocker-not-applicable-reason": "无"
-      }
-    ],
-    "requirement-scenario-coverage": [
-      {
-        "trace-path": "trace/specs/<capability>.trace.json",
-        "requirement": "<Requirement name>",
-        "scenario": "<Scenario name>",
-        "source-item-ids": ["GA-0000"],
-        "runtime-row-ids": ["RS-001"],
-        "acceptance-slice-ids": ["AC-001"],
-        "implementation-task-ids": ["AC-001.1"],
-        "runtime-proof-summary": "<how implementation task proves this scenario at runtime>",
-        "coverage-status": "<projected-to-production-task|not-applicable|blocked>",
-        "blocker-not-applicable-reason": "无"
-      }
-    ],
-    "design-obligation-coverage": [
-      {
-        "design-obligation-id": "DOM-001",
-        "decision-ids": ["D-001"],
-        "source-item-ids": ["GA-0000"],
-        "runtime-row-ids": ["RS-001"],
-        "acceptance-slice-ids": ["AC-001"],
-        "implementation-task-ids": ["AC-001.1"],
-        "runtime-proof-summary": "<how implementation task realizes the design obligation>",
-        "coverage-status": "<projected-to-production-task|not-applicable|blocked>",
-        "blocker-not-applicable-reason": "无"
-      }
-    ]
+  // The single semantic authority for tasks. Each step is ordered production
+  // implementation work against required/preserve runtime facts from
+  // trace/runtime-acceptance.trace.json#/runtime-fact-register.
+  "implementation-step-register": [
+    {
+      "step-id": "AC-001",
+      "title": "<中文生产实现步骤名称>",
+      "depends-on-step-ids": [],
+      "runtime-fact-ids": ["RS-001", "OP-001"],
+      "tasks": [
+        {
+          "task-id": "AC-001.1",
+          "title": "<具体 production implementation work>",
+          "runtime-fact-ids": ["RS-001"],
+          "work": "<要改变或保留的生产行为；不是 file-edit summary>"
+        }
+      ]
+    }
+  ],
+
+  "task-gate": {
+    "blockers": [],
+    "uncovered-target-runtime-facts": [],
+    "invalid-runtime-fact-refs": [],
+    "dependency-order-violations": [],
+    "non-production-task-violations": [],
+    "delivery-projection-mismatch": []
   },
 
-  // Preflight routing table for implementation workers and archive/stabilizer.
-  // It defines topology and start gates; it does not redefine runtime rows.
-  "runtime-acceptance-index": {
-    "ac-runtime-ownership-index": [
-      {
-        "ac-id": "AC-001",
-        "source-basis": "GA-0000; specs `<requirement> / <scenario>`; D-001.",
-        "runtime-surface-rows": ["RS-001"],
-        "operation-rows": ["OP-001"],
-        "state-branch-rows": ["ST-001"],
-        "async-realtime-rows": ["CH-001"],
-        "provides-rows": ["RS-001", "OP-001"],
-        "consumes-rows": [],
-        "depends-on-ac-ids": [],
-        "prerequisite-runtime-facts": "None",
-        "start-gate": "None",
-        "scope-role": "<required behavior|preserve boundary|proof-only>",
-        "no-scope-expansion-check": "<explicit boundary from runtime-acceptance rows>",
-        "detail-matrix-rows": ["RS-001", "OP-001"],
-        "runtime-proof-summary": "<observable proof categories produced by this AC>"
-      }
-    ]
-  },
-
-  // Runtime row -> AC/task projection. Required and preserve rows must point to
-  // production checkbox tasks, or carry an explicit source-backed blocker/NA.
-  "runtime-acceptance-projection": {
-    "runtime-row-ownership-projection": [
-      {
-        "runtime-row-id": "RS-001",
-        "row-type": "surface",
-        "scope-role": "<required behavior|preserve boundary|proof-only>",
-        "owner-ac-id": "AC-001",
-        "implementation-task-ids": ["AC-001.1"],
-        "provides-rows": ["RS-001"],
-        "consumes-rows": [],
-        "depends-on-ac-ids": [],
-        "projection-status": "<projected|not-applicable|blocked>",
-        "proof-only-handling": "<not-proof-only|production-work-required|proof-projection-only>",
-        "runtime-proof-summary": "<observable runtime proof summary>",
-        "blocker-not-applicable-reason": "无"
-      }
-    ],
-    "provider-consumer-projection": [
-      {
-        "provider-ac-id": "AC-001",
-        "consumer-ac-id": "AC-002",
-        "provider-runtime-row-ids": ["RS-001"],
-        "consumer-runtime-row-ids": ["OP-001"],
-        "dependency-reason": "<why consumer must wait for provider runtime fact>",
-        "start-gate-effect": "<how this dependency appears in AC-002 start-gate>"
-      }
-    ]
-  },
-
-  // Renderer payload for tasks.md. This is the only source used by the renderer
-  // to create AC sections and checkbox task blocks.
+  // Renderer reads step IDs from here, then renders rows from
+  // implementation-step-register. Do not duplicate step fields here.
   "delivery-plane": {
-    "acceptance-slices": [
-      {
-        "ac-id": "AC-001",
-        "title": "<中文验收切片名称，描述生产 runtime work>",
-        "outcome": [
-          "- <用户/系统可观察的验收结果；不得列 GA coverage。>"
-        ],
-        "start-gate": [
-          "- <None、依赖 AC IDs 或必须已存在的 runtime facts。>"
-        ],
-        "runtime-rows": ["RS-001", "OP-001"],
-        "resolved-runtime-contract": [
-          {
-            "row": "RS-001",
-            "worker-facing-obligation": "<摘录 runtime-acceptance canonical row 的 worker-facing obligation>",
-            "observable-proof": "<摘录 runtime-acceptance canonical row 的 observable proof>",
-            "default-no-scope-boundary": "<摘录 default path policy 与 no-scope boundary>"
-          }
-        ],
-        "implementation-scope": [
-          "- <worker 可执行的 production change 范围；不要放 coverage、test plan 或 evidence。>"
-        ],
-        "preserve": [
-          "- <必须保留的 module/data/API/auth/worker/UI/privacy/ops constraints。>"
-        ],
-        "proof-contract": [
-          "- <AC 完成后应具备的可观察 proof 类别；不是固定测试命令。>"
-        ],
-        "tasks": [
-          {
-            "task-id": "AC-001.1",
-            "title": "<具体 production implementation work>",
-            "runtime-rows": ["RS-001"],
-            "acceptance": "<此任务贡献证明的具体可验收行为，不写 file-edit summary>",
-            "preserve": "<必须保留的 constraints>",
-            "proof": "<可观察 proof；用户可见操作需覆盖 interaction、API/data effect 和 reload/readback>",
-            "mock-default-path-policy": "<mock/sandbox/default path 规则；不得用 mock 替代 required runtime boundary>"
-          }
-        ]
-      }
-    ]
+    "step-sections": ["AC-001"]
   }
 }

@@ -19,7 +19,7 @@
     ],
     "change-plan-boundary": [
       "- Closed-loop outcome：<从 final change packet 摘要闭环结果。>",
-      "- In scope：<只写当前 packet direct scope 和允许的 owner boundary。>",
+      "- In scope：<只写当前 packet direct scope 和允许的 non-direct boundary ref。>",
       "- In scope 技术边界：<必要模块、API、数据、运行态、部署或验证边界。>",
       "- Out of scope：<只写当前 packet allowlist 支撑的边界，不从其它 change 扩展。>",
       "- Dependencies：<已归档依赖或明确 blocker；无则写“无”。>"
@@ -37,7 +37,7 @@
       "modified-capabilities": []
     },
     "non-goals": [
-      "- <来自 direct rows、owner-scoped non-direct boundary rows 或 packet out-of-scope summary 的明确非目标。>"
+      "- <来自 change-ga-register direct rows、non-direct-boundary-ref rows 或 packet out-of-scope summary 的明确非目标。>"
     ],
     "impact": [
       "- <受影响的 app/package/API/database/runtime/security/ops/downstream 边界。>"
@@ -48,7 +48,8 @@
   },
 
   // Handoff paths are strings only. Do not inline upstream metadata objects.
-  "obligation-atom-preconditions": {
+  "source-interface": {
+    "input-mode": "final-change-packet",
     "orchestrate-manifest": "openspec/orchestrate/trace/manifest.json",
     "global-atom-index-json": "openspec/orchestrate/change-capability-anchors/obligation-atom-index.json",
     "atom-plan-mapping-json": "openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json",
@@ -57,121 +58,59 @@
     "capability-view-<capability-name>": "openspec/orchestrate/change-capability-anchors/<change-slug>/capability-anchors/<capability-name>.md"
   },
 
-  // One exact direct GA per row. This register is the only downstream-propagated
-  // source of GA coverage for later artifacts.
-  "change-atom-coverage-register": [
+  // One exact direct GA per row. This is the only downstream-propagated
+  // source of GA coverage for later artifacts. projection remains the upstream
+  // suggested classification; artifact-routes is the proposal-reviewed routing
+  // authority for specs/design eligibility.
+  "change-ga-register": [
     {
-      "global-atom-id": "GA-0000",
+      "ga-id": "GA-0000",
       "source-document": "<source path>",
       "lines": "L0-L0",
-      "atom-type": "<primary-action|display|data-fact|architecture-runtime|auth-privacy-rule|...>",
       "source-fact": "<原始 source fact 的中文解释或精确保留文本>",
       "normativity": "<must|must-not|should|context|...>",
-      "coverage-status": "direct",
-      "artifact-projection": "<spec-requirement|spec-guard|design-obligation|verification-obligation|contextual-only>",
-      "projection-source": "atom-plan-mapping.json",
-      "owner-capability": "<capability-kebab-case>",
-      "atom-relation": "direct",
-      "propose-use": "<该 atom 在 proposal 中的用途>",
-      "evidence-need": "<browser-e2e|integration|contract|manual|none|...>",
-      "downstream-coverage-expectation": "<对 specs/design/runtime-acceptance/tasks/verification 的覆盖期望>"
+      "atom-type": "<primary-action|display|data-fact|architecture-runtime|auth-privacy-rule|...>",
+      "capability": "<capability-kebab-case>",
+      "projection": "<spec-requirement|spec-guard|design-obligation|verification-obligation>",
+      "routing-disposition": "<projected|reference-only|deferred|out-of-scope|not-projected>",
+      "artifact-routes": [
+        {
+          "artifact": "<specs|design>",
+          "role": "<spec-requirement|spec-guard|design-input>",
+          "use": "<artifact-local consumption note; must stay traceable to source-fact>"
+        }
+      ],
+      "routing-rationale": "<why proposal routes, reclassifies, dual-routes, or does not project this GA>",
+      "routing-no-scope-expansion": "<explicit boundary that prevents route/use from expanding source-fact>",
+      "proposal-use": "<该 GA 在 proposal 中的用途>",
+      "downstream-expectation": "<对 specs/design/runtime-acceptance/tasks/verification 的覆盖期望>"
     }
   ],
 
-  // Include only when final packet has owner-scoped non-direct rows. These rows
-  // are boundary context only and must not create downstream GA coverage.
-  "owner-scoped-non-direct-boundary-register": [
+  // Boundary refs are reference-only. They limit proposal scope but must not
+  // create downstream GA coverage.
+  "non-direct-boundary-ref": [
     {
-      "global-atom-id": "GA-0000",
+      "ga-id": "GA-0000",
       "source-document": "<source path>",
       "lines": "L0-L0",
-      "atom-type": "<explicit-non-goal|architecture-runtime|reference|...>",
       "source-fact": "<source-backed boundary fact>",
-      "normativity": "<must-not|must|context|...>",
-      "coverage-status": "<explicit-non-goal|preserve/reference|dependency|later-change>",
-      "owner-capability": "<capability-kebab-case>",
-      "atom-relation": "<explicit-non-goal|preserve/reference|dependency|later-change>",
-      "boundary-role": "<stable-boundary-label>",
-      "reference-only": true,
-      "downstream-trace-policy": "do-not-propagate-ga",
-      "boundary-handling": "<说明该 row 如何限制 scope，且不产生 runtime row/task/proof obligation>",
-      "original-artifact-projection": "<spec-guard|design-obligation|contextual-only|...>",
-      "propose-use": "<用于 Non-Goals、design guard 或 dependency boundary 的说明>",
-      "evidence-need": "<manual|integration|contract|none|...>"
+      "boundary-role": "<explicit-non-goal|preserve-reference|dependency|later-change|...>",
+      "propagate": false,
+      "proposal-use": "<用于 Non-Goals、design guard 或 dependency boundary 的说明>"
     }
   ],
 
-  // Group direct atoms by source document for audit readability.
-  "production-source-coverage": [
-    {
-      "source-document": "<source path>",
-      "global-atom-ids": ["GA-0000"],
-      "line-ranges": ["L0-L0"],
-      "atom-count": 1,
-      "artifact-projections": ["<projection enum>"],
-      "owner-capabilities": ["<capability-kebab-case>"],
-      "proposal-use": "<该 source document 对当前 proposal 的用途>"
-    }
-  ],
-
-  // One exact direct GA per row. This records focused source/baseline rereads.
-  "source-window-read-set": [
-    {
-      "global-atom-id": "GA-0000",
-      "source-document": "<source path>",
-      "line-range": "L0-L0",
-      "source-fact": "<must match the registered source fact>",
-      "read-purpose": "<为什么需要定点重读该 source window>",
-      "interpretation-result": "<中文解释定点重读结论；不得与 source-fact 矛盾>"
-    }
-  ],
-
-  "proposal-alignment-gate": {
-    "proposal-input-mode": "final-change-packet",
-    "change-slug": "<change-slug>",
-    "change-kind": "<foundation|business>",
-    "global-atom-index-json": "openspec/orchestrate/change-capability-anchors/obligation-atom-index.json",
-    "change-packet": "openspec/orchestrate/change-capability-anchors/<change-slug>/<change-slug>.md",
-    "final-packet-index-json": "openspec/orchestrate/phase-works/phase-5/final-packet-index.json",
-    "atom-plan-mapping-json": "openspec/orchestrate/phase-works/phase-5/atom-plan-mapping.json",
-    "capability-atom-view-files": [
-      "openspec/orchestrate/change-capability-anchors/<change-slug>/capability-anchors/<capability-name>.md"
-    ],
-    "direct-atoms": {
-      "count": 1,
-      "ids": ["GA-0000"],
-      "id-list-source": "final-packet-index"
-    },
-    "artifact-projection-coverage": [
-      {
-        "artifact-projection": "<projection enum>",
-        "count": 1,
-        "ids": ["GA-0000"],
-        "downstream-expectation": "<该 projection 的下游处理期望>"
-      }
-    ],
-    "owner-scoped-non-direct-atoms": {
-      "count": 0,
-      "ids": [],
-      "relation-summary": {},
-      "downstream-trace-policy": "do-not-propagate-ga"
-    },
-    "source-windows-re-read": {
-      "count": 1,
-      "ids": ["GA-0000"],
-      "read-set-source": "source-window-read-set"
-    },
-    "orphan-direct-atoms": [],
-    "capability-increment-coverage": [
-      {
-        "capability": "<capability-kebab-case>",
-        "change-kind": "<foundation|business>",
-        "direct-atom-count": 1,
-        "advancement": "<new-capability|modified-capability|foundation>",
-        "spec-delta-expected": true,
-        "coverage-note": "<capability 增量覆盖说明>"
-      }
-    ],
-    "blockers": []
+  // Minimal closure result. Do not duplicate full coverage, projection, source,
+  // or capability groupings here; validators compute those mechanically.
+  "proposal-gate": {
+    "blockers": [],
+    "orphan-ga": [],
+    "source-set-mismatch": [],
+    "non-direct-propagation-violations": [],
+    "routing-missing": [],
+    "routing-invalid": [],
+    "routing-route-violations": [],
+    "routing-source-conflicts": []
   }
 }

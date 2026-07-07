@@ -9,141 +9,71 @@
   "change-name": "<change-slug>",
   "schema-name": "production-default-acceptance-driven",
   "agent-role": "runtime-acceptance-writer",
+
   "source-interface": {
-    "proposal-trace": "trace/proposal.trace.json",
     "specs-completion-mode": "<delta|no-delta>",
     "spec-traces": [
       "trace/specs/<capability>.trace.json"
     ],
     "design-trace": "trace/design.trace.json",
-    "markdown-input-policy": "runtime acceptance consumes proposal/spec/design JSON traces only; Markdown artifacts are render outputs, not semantic inputs."
+    "input-policy": "runtime acceptance consumes specs/design JSON traces only; Markdown artifacts and proposal trace are not semantic inputs."
   },
-  "upstream-runtime-obligation-inventory": [
+
+  // Canonical semantic register. Each row is both a runtime fact and the
+  // downstream runtime reference ID. Proposal-only rows never create runtime facts.
+  "runtime-fact-register": [
     {
-      "inventory-item-id": "ROI-001",
-      "upstream-item-id": "SI-001",
-      "upstream-item-type": "proposal-scope-item",
-      "artifact-handling": "<spec|guard|design|proof>",
-      "capability": "<capability>",
-      "source-fact": "<scope-backed runtime obligation or preserve boundary>",
-      "runtime-relevance": "<runtime-required|preserve-boundary|proof-only|not-applicable>",
-      "expected-runtime-row-types": ["RS", "OP", "ST", "CH"],
-      "not-applicable-reason": "N/A"
+      "runtime-fact-id": "RS-001",
+      "fact-type": "surface",
+      "scope-role": "required behavior",
+      "source-basis": {
+        "spec-scenarios": ["trace/specs/<capability>.trace.json#/spec-delta-register/0/scenarios/0"],
+        "design-decisions": ["IDR-001"]
+      },
+      "owner-candidate": "<single advisory owner>",
+      "runtime-fact": "<independent verifiable surface fact>",
+      "observable-fact": "<visible/API/data/log/readback observable>",
+      "default-path-policy": "<production/default path policy and reason>",
+      "external-boundary": "<provider/storage/network/env boundary or None>",
+      "no-scope-expansion-check": "<why this fact stays inside source scope>"
+    },
+    {
+      "runtime-fact-id": "OP-001",
+      "fact-type": "operation",
+      "scope-role": "required behavior",
+      "source-basis": {
+        "spec-scenarios": ["trace/specs/<capability>.trace.json#/spec-delta-register/0/scenarios/0"],
+        "design-decisions": ["IDR-001"]
+      },
+      "owner-candidate": "<single advisory owner>",
+      "runtime-fact": "<trigger/action/query/mutation fact with success/failure/readback boundary>",
+      "observable-fact": "<visible/API/data/log/readback observable>",
+      "default-path-policy": "<production/default path policy and reason>",
+      "external-boundary": "<provider/storage/network/env boundary or None>",
+      "no-scope-expansion-check": "<why this fact stays inside source scope>"
     }
   ],
-  "runtime-not-applicable-inventory": [
-    {
-      "inventory-item-id": "ROI-002",
-      "upstream-item-id": "SI-002",
-      "upstream-item-type": "proposal-scope-item",
-      "artifact-handling": "<context|proof>",
-      "not-applicable-reason": "<scope-backed reason why this item produces no runtime row>"
-    }
-  ],
-  "canonical-row-index": {
-    "surface-rows": ["RS-001"],
-    "operation-rows": ["OP-001"],
-    "state-rows": ["ST-001"],
-    "chain-rows": ["CH-001"]
+
+  "runtime-gate": {
+    "blockers": [],
+    "uncovered-spec-scenarios": [],
+    "uncovered-runtime-design-decisions": [],
+    "orphan-runtime-facts": [],
+    "invalid-source-refs": [],
+    "delivery-projection-mismatch": []
   },
-  "runtime-upstream-coverage-map": [
-    {
-      "upstream-item-id": "SI-001",
-      "upstream-item-type": "proposal-scope-item",
-      "artifact-handling": "<handling from proposal change-scope-coverage>",
-      "projection-handling": "<runtime-surface|runtime-operation|runtime-state|runtime-chain|not-applicable>",
-      "runtime-row-ids": ["RS-001"],
-      "coverage-mode": "covered-by-runtime-rows",
-      "not-applicable-reason": "N/A",
-      "coverage-note": "<why these rows cover this upstream item>"
-    }
-  ],
-  "runtime-coverage-source-map": [
-    {
-      "source-group": "<runtime source group>",
-      "row-ids": ["RS-001"],
-      "source-basis": ["SI-001", "D-001"],
-      "coverage-note": "<summary only; not a substitute for runtime-upstream-coverage-map>"
-    }
-  ],
-  "coverage-closure-checklist": [
-    "Every material SI/spec scenario/design decision/proof handoff is covered or scope-backed not-applicable."
-  ],
+
   "delivery-plane": {
     "runtime-acceptance-intent": {
       "scope": "<runtime scope covered by this change>",
-      "source-basis": "proposal trace SI rows, specs requirement-source-trace rows, and design trace decisions/obligations.",
+      "source-basis": "specs scenario pointers and design trace implementation-design-register decisions.",
       "out-of-scope": "<runtime surfaces, operations, states, chains, providers, or jobs excluded by scope-backed boundary>"
     },
-    "canonical-rows": [
-      {
-        "surface-id": "RS-001",
-        "surface-type": "<UI route|client component|API|DB|worker|queue|SSE|storage|auth|config>",
-        "owner-candidate": "<single advisory owner>",
-        "entry-point": "<route/action/job/stream entry>",
-        "runtime-obligation": "<scope-backed runtime behavior>",
-        "observable-fact": "<rendered/API/DB/auth/log observable fact>",
-        "default-path-policy": "<production/default path policy and reason>",
-        "external-boundary": "<provider/storage/network/env boundary>",
-        "source-basis": "SI-001; specs `<requirement> / <scenario>`; D-001.",
-        "projection-type": "<runtime-surface>",
-        "scope-role": "<required behavior|preserve boundary|proof-only>",
-        "no-scope-expansion-check": "<how this row avoids scope expansion>"
-      },
-      {
-        "operation-id": "OP-001",
-        "owner-candidate": "<single advisory owner>",
-        "trigger": "<click|type|select|submit|system trigger>",
-        "control-route": "<UI control or route>",
-        "request-action": "<handler/action/API/job request>",
-        "runtime-obligation": "<scope-backed operation behavior>",
-        "expected-rendered-ui-update": "<rendered result or N/A>",
-        "api-data-assertion": "<response/data invariant>",
-        "reload-persistence-assertion": "<reload/readback persistence>",
-        "disabled-failure-recovery-branches": "<disabled/failure/retry/recovery branches>",
-        "default-path-policy": "<production/default path policy and reason>",
-        "external-boundary": "<provider/storage/network/env boundary>",
-        "source-basis": "SI-001; specs `<requirement> / <scenario>`; D-001.",
-        "projection-type": "<runtime-operation>",
-        "scope-role": "<required behavior|preserve boundary|proof-only>",
-        "no-scope-expansion-check": "<how this row avoids scope expansion>"
-      },
-      {
-        "state-id": "ST-001",
-        "owner-candidate": "<single advisory owner>",
-        "state-branch": "<loading|empty|disabled|success|failed|timeout|unauthorized>",
-        "trigger-into": "<entry condition/event>",
-        "runtime-obligation": "<scope-backed state/branch behavior>",
-        "observable-ui-api-outcome": "<visible/API outcome>",
-        "data-event-facts": "<DB/event/outbox/job facts>",
-        "allowed-next-states": "<allowed next states>",
-        "terminal": "<yes|no>",
-        "default-path-policy": "<production/default path policy and reason>",
-        "external-boundary": "<provider/storage/network/env boundary>",
-        "source-basis": "SI-001; specs `<requirement> / <scenario>`; D-001.",
-        "projection-type": "<runtime-state>",
-        "scope-role": "<required behavior|preserve boundary|proof-only>",
-        "no-scope-expansion-check": "<how this row avoids scope expansion>"
-      },
-      {
-        "chain-id": "CH-001",
-        "owner-candidate": "<single advisory owner>",
-        "user-system-entry": "<user action/system job>",
-        "enqueue-dispatch-fact": "<queue/action dispatch or explicit no-enqueue fact>",
-        "worker-consumer-fact": "<worker/consumer processing or explicit no-worker fact>",
-        "domain-mutation": "<domain/data change>",
-        "event-outbox-fact": "<event/outbox/log fact>",
-        "client-subscription-readback": "<SSE/poll/readback>",
-        "rendered-terminal-state": "<success/failure terminal UI>",
-        "failure-variant": "<failed|dispatch-failed|timeout|N/A>",
-        "runtime-obligation": "<scope-backed chain or explicit no-async boundary>",
-        "default-path-policy": "<production/default path policy and reason>",
-        "external-boundary": "<provider/storage/network/env boundary>",
-        "source-basis": "SI-001; specs `<requirement> / <scenario>`; D-001.",
-        "projection-type": "<runtime-chain>",
-        "scope-role": "<required behavior|preserve boundary|proof-only>",
-        "no-scope-expansion-check": "<how this row avoids scope expansion>"
-      }
-    ]
+    "fact-sections": {
+      "surface-facts": ["RS-001"],
+      "operation-facts": ["OP-001"],
+      "state-facts": [],
+      "chain-facts": []
+    }
   }
 }
