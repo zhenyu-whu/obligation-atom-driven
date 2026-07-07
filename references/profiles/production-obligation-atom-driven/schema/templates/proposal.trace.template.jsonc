@@ -61,7 +61,8 @@
   // One exact direct GA per row. This is the only downstream-propagated
   // source of GA coverage for later artifacts. projection remains the upstream
   // suggested classification; artifact-routes is the proposal-reviewed routing
-  // authority for specs/design eligibility.
+  // authority for specs/design eligibility. Review every source-fact directly:
+  // do not mechanically map projection to a single route.
   "change-ga-register": [
     {
       "ga-id": "GA-0000",
@@ -77,10 +78,10 @@
         {
           "artifact": "<specs|design>",
           "role": "<spec-requirement|spec-guard|design-input>",
-          "use": "<artifact-local consumption note; must stay traceable to source-fact>"
+          "use": "<artifact-local consumption note grounded in source-fact; not a projection echo>"
         }
       ],
-      "routing-rationale": "<why proposal routes, reclassifies, dual-routes, or does not project this GA>",
+      "routing-rationale": "<source-fact-based reason for route, reclassification, dual-route, or non-projection; do not cite final projection as the basis>",
       "routing-no-scope-expansion": "<explicit boundary that prevents route/use from expanding source-fact>",
       "proposal-use": "<该 GA 在 proposal 中的用途>",
       "downstream-expectation": "<对 specs/design/runtime-acceptance/tasks/verification 的覆盖期望>"

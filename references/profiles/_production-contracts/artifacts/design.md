@@ -10,10 +10,10 @@ Design trace 只维护一个顶层语义权威：`implementation-design-register
 
 - 读取 `trace/proposal.trace.json` 和所有实际生成的 `trace/specs/*.trace.json`；若 specs artifact 是 no-delta marker，则只读取 `trace/specs/no-spec-delta/README.trace.json` 判定 specs completion，不从中派生 spec scenario。
 - 不得从 `proposal.md`、`specs/**/*.md`、旧 `design.md` 或旧 `trace/design.trace.json` 推导 design 语义。
-- Obligation profile 使用 proposal `change-ga-register[]` 中的 `GA-####`、`projection`、`artifact-routes[]` 和 `capability`；default profile 使用 proposal `change-scope-coverage[]` 中的 `SI-###`、`artifact-handling` 和 `capability`。
+- Obligation schema 使用 proposal `change-ga-register[]` 中的 `GA-####`、`projection`、`artifact-routes[]` 和 `capability`；default schema 使用 proposal `change-scope-coverage[]` 中的 `SI-###`、`artifact-handling` 和 `capability`。
 - Specs scenario 是 design decision 的主要锚点；spec source basis 只能从 specs trace 反查，不得在 design trace 中用通用 `source-item-ids` 重复维护。
-- Proposal 中 routed-to-design（obligation profile：`artifact-routes[].artifact == "design"` 且 `role == "design-input"`）或 `design`（default profile）类型的 direct source/scope item 是 design 输入，必须通过 `implementation-design-register[].design-inputs[]` 被至少一个设计决策吸收。
-- Obligation profile 中，原始 `source-fact` 是唯一 source truth；design route 的 `use` 只解释 design 应消费该 GA 的哪一面，不得新增、改写或替代 source fact。
+- Proposal 中 routed-to-design（obligation schema：`artifact-routes[].artifact == "design"` 且 `role == "design-input"`）或 `design`（default schema）类型的 direct source/scope item 是 design 输入，必须通过 `implementation-design-register[].design-inputs[]` 被至少一个设计决策吸收。
+- Obligation schema 中，原始 `source-fact` 是唯一 source truth；design route 的 `use` 只解释 design 应消费该 GA 的哪一面，不得新增、改写或替代 source fact。
 - 如果 design input 实际要求新增用户行为、API 行为或规范约束，而 proposal/specs trace 未表达该行为，writer 必须报告 blocker 或修订上游 artifact，不得只在 design prose 中补写。
 - Writer 只写 `trace/design.trace.json`；`design.md`、Trace Appendix 和 manifest registry entry 必须由 renderer 从 trace 写入。
 
@@ -21,14 +21,14 @@ Design trace 只维护一个顶层语义权威：`implementation-design-register
 
 Writer 必须按以下顺序生成 design trace：
 
-1. 读取 proposal trace，建立当前 profile 的 direct source/scope item set。
+1. 读取 proposal trace，建立当前 schema 的 direct source/scope item set。
 2. 读取实际 specs trace：
    - delta specs：读取所有 `trace/specs/*.trace.json`。
    - no-delta specs：只读取 `trace/specs/no-spec-delta/README.trace.json`，并确认不派生 scenario。
 3. 从 specs trace 建立 scenario anchor index。Anchor 必须使用 `trace/specs/<capability>.trace.json#/spec-delta-register/<delta-index>/scenarios/<scenario-index>` 字符串，不得从 Markdown scenario 反推。
 4. 建立 design input set：
-   - obligation profile：proposal direct row 中存在 `artifact-routes[]` row 满足 `artifact == "design"` 且 `role == "design-input"`。
-   - default profile：proposal direct row 中 `artifact-handling == "design"`。
+   - obligation schema：proposal direct row 中存在 `artifact-routes[]` row 满足 `artifact == "design"` 且 `role == "design-input"`。
+   - default schema：proposal direct row 中 `artifact-handling == "design"`。
 5. 生成 `implementation-design-register[]`。每行代表一个内聚实现决策主题，不代表 source coverage row、单个 scenario row、单个 atom row、单个页面碎片或单个接口碎片。
 6. 每个 register row 必须至少包含一个 `spec-anchors[]` 或一个 `design-inputs[]`。
 7. 每个 specs scenario anchor 必须至少被一个 register row 覆盖。
@@ -98,8 +98,8 @@ Writer 必须按以下顺序生成 design trace：
 
 `design-inputs[].source-item-id` 只能引用 proposal direct source/scope set 中 design 类型 item：
 
-- obligation profile：存在 `artifact-routes[]` row 满足 `artifact == "design"` 且 `role == "design-input"`。
-- default profile：`artifact-handling == "design"`。
+- obligation schema：存在 `artifact-routes[]` row 满足 `artifact == "design"` 且 `role == "design-input"`。
+- default schema：`artifact-handling == "design"`。
 
 非 routed-to-design item 不得出现在 `design-inputs[]`。Spec source basis 不得复制到 `design-inputs[]`。
 

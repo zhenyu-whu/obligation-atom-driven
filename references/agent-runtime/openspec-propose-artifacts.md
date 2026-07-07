@@ -11,7 +11,7 @@
 1. `AGENTS.md` 强制本 runtime overlay 优先生效；官方 `openspec-propose` / `openspec-ff-change` / `openspec-continue-change` 技能只提供通用执行骨架。
 2. schema 选择、无输入目标推断、subagent 编排、partial/full validator、artifact reviewer、integration reviewer、propose-result 和 apply-ready 声明归本文档。
 3. artifact dependency graph、artifact id、template、output path、`requires` 和 `apply.requires` 归选定 schema 的 `schema.yaml`，并以 `openspec status --change "<name>" --json` 与 `openspec instructions ... --json` 的实际返回为准。
-4. Artifact 内容语义归 contract bundle：`openspec/schemas/_production-contracts/common/*`、`profiles/<schema-name>.md`、`artifacts/<artifact-id>.md` 和存在时的 `overlays/<schema-name>/<artifact-id>.md`。
+4. Artifact 内容语义归 contract bundle：`openspec/schemas/_production-contracts/common/*`、`artifacts/<artifact-id>.md` 和存在时的 `overlays/<schema-name>/<artifact-id>.md`。
 5. JSON Trace Plane 是下游 artifact 的唯一机器语义输入；writer、repair-writer、artifact reviewer 和 integration reviewer 不得从上游 Markdown Delivery Plane 推导 scope、coverage、runtime row、Proof Slice、AC 或 oracle。
 6. Markdown Delivery Plane 和短 `## Trace Appendix` 归 `render-production-artifacts.mjs`；writer/repair-writer 不得手写 Markdown artifact。`trace/manifest.json` 如存在，只作为非权威 trace registry/version metadata；不得通过 manifest 中的任何摘要字段建立下游语义。
 7. 机械结构校验归 `validate-production-artifacts.mjs`；validator hard error 必须修复，warning 必须进入 reviewer 判断。
@@ -58,7 +58,7 @@
    - `active-incomplete`: 继续该 change 的 artifact 生成，不创建重复目录。
    - `active-apply-ready`: 不得自动跳到后续 change；报告该 change 已 propose 完成，下一步应 apply 或 archive。只有用户明确要求并行规划后续 change 时，才允许继续推断下一个 `not-started` change。
    - `not-started`: 自动选择它作为本次 propose 目标，并继续 packet/atom 校验；只有校验通过后才执行 `openspec new change "<change-slug>"`。
-6. 选定目标后，按 `production-obligation-atom-driven` profile contract 读取 source-aligned JSON handoff、final packet 和 global atom index。若 proposal preconditions 显式指向 JSON handoff，对应 JSON 缺失必须 blocker，不得静默回退到 Markdown。
+6. 选定目标后，按 `production-obligation-atom-driven` proposal overlay / proposal input contract 读取 source-aligned JSON handoff、final packet 和 global atom index。若 proposal preconditions 显式指向 JSON handoff，对应 JSON 缺失必须 blocker，不得静默回退到 Markdown。
 7. 只有需要核对 dependencies 或 final packet index 信息不足时，才读取 `openspec/orchestrate/change-plan.md`；它不得覆盖 final packet。
 8. 如果无法可靠判断 completed / active / archive 状态，或多个候选同等合理，才向用户提出一个简短澄清问题，并列出候选 change slug、active/archive 路径与阻塞原因。
 
@@ -90,7 +90,6 @@
    - `openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md`
    - `openspec/schemas/_production-contracts/common/source-scope-boundary.md`
    - `openspec/schemas/_production-contracts/common/reviewer-output-protocol.md`
-   - `openspec/schemas/_production-contracts/profiles/<schema-name>.md`
    - `openspec/schemas/_production-contracts/artifacts/<artifact-id>.md`
    - `openspec/schemas/_production-contracts/overlays/<schema-name>/<artifact-id>.md`，仅在文件存在时读取。
 2. Artifact-specific contract 文件名按 `<artifact-id>.md` 解析；当前 production artifact ids 均使用同名 contract basename。

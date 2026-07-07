@@ -25,11 +25,94 @@ const GA_ID_RE = /^GA-\d{4}$/u;
 const SI_ID_RE = /^SI-\d{3}$/u;
 const ANY_GA_ID_RE = /\bGA-\d{4}\b/u;
 const ANY_SCOPE_ID_RE = /\bSI-\d{3}\b/u;
-const DECISION_ID_RE = /^D-\d{3}$/u;
-const PLACEMENT_ID_RE = /^P-\d{3}$/u;
-const GUARD_HANDLINGS = new Set(["must-not", "preserve-boundary", "non-goal"]);
-const PROOF_HANDOFF_KINDS = new Set(["runtime-acceptance", "verification", "none"]);
+const IMPLEMENTATION_DESIGN_ID_RE = /^IDR-\d{3}$/u;
+const IMPLEMENTATION_DETAIL_ID_RE = /^(IDR-\d{3})-D\d{3}$/u;
 const DELIVERY_LEAK_KEY_RE = /(?:trace|gate|coverage|map|register|matrix)/iu;
+const DETAIL_RENDERED_LEAK_RE = /\bGA-\d{4}\b|\bSI-\d{3}\b|(?:^|[/"'`])trace\/|#\//u;
+const DELIVERY_DECISION_ALLOWED_FIELDS = new Set(["decision-id"]);
+const PLACEHOLDER_RE = /\b(?:TBD|TODO)\b|待定|后续完善|视情况|实现时决定/u;
+const JSON_CODE_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/iu;
+const CODE_FENCE_RE = /```([a-z0-9_-]*)\s*\n[\s\S]*?\n```/iu;
+const MARKDOWN_TABLE_RE = /\|[^\n]*\|\s*\n\|(?:\s*:?-{3,}:?\s*\|)+/u;
+const DATA_MODEL_TYPE_RE = /\b(?:type|类型|uuid|varchar|char|text|jsonb?|int|integer|bigint|smallint|boolean|bool|timestamp|timestamptz|datetime|date|decimal|numeric|float|double|enum|String|Boolean|DateTime|Json)\b/u;
+const API_METHOD_PATH_RE = /\b(?:GET|POST|PUT|PATCH|DELETE)\b[\s|]+\/[^\s|)]*/u;
+const HTTP_STATUS_RE = /\b[245]\d\d\b/u;
+const DETAIL_MIN_LINES = {
+  "module-boundary": 2,
+  "data-model": 4,
+  "json-shape": 4,
+  "api-contract": 4,
+  "dto-contract": 4,
+  "frontend-contract": 4,
+  "validation-error-contract": 4,
+  "state-lifecycle": 4,
+  "integration-boundary": 3,
+  "migration-compatibility": 3,
+  "observability-ops": 3,
+  "rollout-compatibility": 3,
+  "non-applicable": 2,
+};
+
+const DESIGN_LAYERS = new Set([
+  "architecture-module-boundary",
+  "domain-data-migration",
+  "api-auth-security",
+  "async-realtime-ai-worker",
+  "frontend-ux",
+  "observability-ops-deployment",
+  "verification-rollout",
+]);
+
+const DETAIL_TYPES = new Set([
+  "module-boundary",
+  "data-model",
+  "json-shape",
+  "api-contract",
+  "dto-contract",
+  "frontend-contract",
+  "validation-error-contract",
+  "state-lifecycle",
+  "integration-boundary",
+  "migration-compatibility",
+  "observability-ops",
+  "rollout-compatibility",
+  "non-applicable",
+]);
+
+const LAYER_DETAIL_COVERAGE = {
+  "architecture-module-boundary": ["module-boundary", "integration-boundary"],
+  "domain-data-migration": ["data-model", "json-shape", "migration-compatibility"],
+  "api-auth-security": ["api-contract", "dto-contract", "validation-error-contract"],
+  "async-realtime-ai-worker": ["integration-boundary", "state-lifecycle"],
+  "frontend-ux": ["frontend-contract", "state-lifecycle", "validation-error-contract"],
+  "observability-ops-deployment": ["observability-ops", "rollout-compatibility"],
+  "verification-rollout": ["rollout-compatibility", "observability-ops"],
+};
+
+const DESIGN_GATE_FIELDS = [
+  "blockers",
+  "uncovered-spec-anchors",
+  "uncovered-design-inputs",
+  "invalid-design-inputs",
+  "missing-implementation-details",
+  "invalid-implementation-details",
+  "detail-basis-violations",
+  "layer-detail-coverage-gaps",
+  "fragmented-design-subjects",
+  "placeholder-detail-content",
+  "delivery-projection-mismatch",
+];
+
+const LEGACY_DESIGN_FIELDS = [
+  "production-source-map",
+  "spec-scenario-design-map",
+  "design-decision-index",
+  "design-obligation-matrix",
+  "source-scope-map",
+  "ui-control-contracts",
+  "proof-expectation-handoff",
+  "production-alignment-gate",
+];
 
 export function validateDesignArtifact(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
@@ -79,18 +162,13 @@ function validateDesignIfPresent(ctx) {
   if (!specs) return;
 
   validateCommonDesignTrace(ctx, designTrace, expected, specs);
+  validateLegacyFieldsAbsent(ctx, designTrace);
   validateDesignManifest(ctx);
   validateDesignRender(ctx);
-  validateProductionSourceMap(ctx, designTrace, expected, specs);
-  validateSpecScenarioDesignMap(ctx, designTrace, expected, specs);
 
-  const refs = validateDesignReferenceSections(ctx, designTrace, expected, specs);
-  validateDesignObligationMatrix(ctx, designTrace, expected, specs, refs);
-  validateUiControlContracts(ctx, designTrace, expected);
-  validateProofExpectationHandoff(ctx, designTrace, expected);
-  validateDesignGate(ctx, designTrace, expected);
-  validateDeliveryPlane(ctx, designTrace, expected);
-  validateResolvedReferences(ctx, refs);
+  const designModel = validateImplementationDesignRegister(ctx, designTrace, expected, specs);
+  validateDesignGate(ctx, designTrace);
+  validateDeliveryPlane(ctx, designTrace, expected, designModel);
 
   if (expected.schemaName === DEFAULT_SCHEMA) {
     validateDefaultTraceHasNoObligationLeak(ctx, designTrace);
@@ -116,39 +194,19 @@ function buildExpectedDesignModel(ctx, proposalTrace) {
       ctx,
       "VAL-DESIGN-PROPOSAL-001",
       PROPOSAL_TRACE_PATH,
-      proposalTrace["change-atom-coverage-register"],
-      "change-atom-coverage-register",
+      proposalTrace["change-ga-register"],
+      "change-ga-register",
     );
     return buildExpectedModel({
       schemaName,
       rows: register,
-      sourcePath: PROPOSAL_TRACE_PATH,
-      sourcePointerRoot: "change-atom-coverage-register",
-      idField: "global-atom-id",
+      idField: "ga-id",
       idRegex: GA_ID_RE,
-      capabilityField: "owner-capability",
-      projectionField: "artifact-projection",
+      projectionField: "routing-role",
       specProjection: "spec-requirement",
       guardProjection: "spec-guard",
-      designProjection: "design-obligation",
-      proofProjection: "verification-obligation",
-      contextProjection: "contextual-only",
-      specsProjectionField: "source-projection",
-      specAnchorCapabilityField: "owner-capability",
-      productionSourceFields: [
-        "global-atom-id",
-        "owner-capability",
-        "source-document",
-        "lines",
-        "atom-type",
-        "source-fact",
-        "normativity",
-        "artifact-projection",
-      ],
-      matrixFields: ["global-atom-id", "owner-capability", "artifact-projection", "source-fact"],
-      gateCountField: "direct-atom-count",
-      gateIdsField: "direct-atom-ids",
-      gateMatrixIdsField: "design-obligation-ids",
+      designProjection: "design-input",
+      routeBacked: true,
     });
   }
 
@@ -163,24 +221,12 @@ function buildExpectedDesignModel(ctx, proposalTrace) {
     return buildExpectedModel({
       schemaName,
       rows: scopeCoverage,
-      sourcePath: PROPOSAL_TRACE_PATH,
-      sourcePointerRoot: "change-scope-coverage",
       idField: "scope-item-id",
       idRegex: SI_ID_RE,
-      capabilityField: "capability",
       projectionField: "artifact-handling",
       specProjection: "spec",
       guardProjection: "guard",
       designProjection: "design",
-      proofProjection: "proof",
-      contextProjection: "context",
-      specsProjectionField: "artifact-handling",
-      specAnchorCapabilityField: "capability",
-      productionSourceFields: ["scope-item-id", "capability", "source", "source-fact", "artifact-handling"],
-      matrixFields: ["scope-item-id", "capability", "artifact-handling", "source-fact"],
-      gateCountField: "scope-item-count",
-      gateIdsField: "scope-item-ids",
-      gateMatrixIdsField: "design-scope-item-ids",
     });
   }
 
@@ -191,28 +237,51 @@ function buildExpectedDesignModel(ctx, proposalTrace) {
 function buildExpectedModel(config) {
   const rows = [];
   const rowsById = new Map();
-  const indexById = new Map();
-  for (const [index, row] of config.rows.entries()) {
+  for (const row of config.rows) {
     const id = strip(row?.[config.idField]);
     if (!id) continue;
-    rows.push(row);
-    if (!rowsById.has(id)) {
-      rowsById.set(id, row);
-      indexById.set(id, index);
-    }
+    const normalizedRow = normalizeExpectedRow(row, config);
+    rows.push(normalizedRow);
+    if (!rowsById.has(id)) rowsById.set(id, normalizedRow);
   }
   const specRelevantIds = rows
-    .filter((row) => isSpecRelevantProjection(strip(row?.[config.projectionField]), config))
+    .filter((row) => config.routeBacked ? row["routed-to-specs"] : isSpecRelevantProjection(strip(row?.[config.projectionField]), config))
+    .map((row) => strip(row?.[config.idField]))
+    .filter(Boolean);
+  const designInputIds = rows
+    .filter((row) => config.routeBacked ? row["routed-to-design"] : strip(row?.[config.projectionField]) === config.designProjection)
     .map((row) => strip(row?.[config.idField]))
     .filter(Boolean);
   return {
     ...config,
     rows,
     rowsById,
-    indexById,
     ids: rows.map((row) => strip(row?.[config.idField])).filter(Boolean),
     specRelevantIds,
+    designInputIds,
   };
+}
+
+function normalizeExpectedRow(row, config) {
+  if (!config.routeBacked) return row;
+  const specRoutes = getArtifactRoutes(row, "specs");
+  const designRoutes = getArtifactRoutes(row, "design");
+  let routingRole = "";
+  if (designRoutes.length > 0) {
+    routingRole = "design-input";
+  } else if (specRoutes.length > 0) {
+    routingRole = specRoutes[0]?.role;
+  }
+  return {
+    ...row,
+    "routing-role": routingRole,
+    "routed-to-specs": specRoutes.length > 0,
+    "routed-to-design": designRoutes.length > 0,
+  };
+}
+
+function getArtifactRoutes(row, artifact) {
+  return asArray(row?.["artifact-routes"]).filter((route) => strip(route?.artifact) === artifact);
 }
 
 function buildSpecsAnchorModel(ctx, expected) {
@@ -237,9 +306,9 @@ function buildSpecsAnchorModel(ctx, expected) {
     if (!trace) return null;
     expectEqual(ctx, "VAL-DESIGN-SPECS-003", NO_DELTA_TRACE_PATH, trace["schema-name"], expected.schemaName, "specs schema-name");
     expectEqual(ctx, "VAL-DESIGN-SPECS-004", NO_DELTA_TRACE_PATH, trace["specs-completion-mode"], NO_DELTA_SPECS_COMPLETION_MODE, "specs-completion-mode");
-    const sourceTrace = requireArray(ctx, "VAL-DESIGN-SPECS-005", NO_DELTA_TRACE_PATH, trace["requirement-source-trace"], "requirement-source-trace");
-    if (sourceTrace.length !== 0) {
-      addError(ctx, "VAL-DESIGN-SPECS-006", NO_DELTA_TRACE_PATH, "no-delta specs trace 的 requirement-source-trace 必须为空。");
+    const deltaRegister = requireArray(ctx, "VAL-DESIGN-SPECS-005", NO_DELTA_TRACE_PATH, trace["spec-delta-register"], "spec-delta-register");
+    if (deltaRegister.length !== 0) {
+      addError(ctx, "VAL-DESIGN-SPECS-006", NO_DELTA_TRACE_PATH, "no-delta specs trace 的 spec-delta-register 必须为空。");
     }
     if (expected.specRelevantIds.length > 0) {
       addError(ctx, "VAL-DESIGN-SPECS-007", NO_DELTA_TRACE_PATH, "proposal 存在 spec/guard item 时，design 不能消费 no-delta specs marker。");
@@ -248,14 +317,12 @@ function buildSpecsAnchorModel(ctx, expected) {
       mode: NO_DELTA_SPECS_COMPLETION_MODE,
       tracePaths,
       anchors: [],
-      anchorsByKey: new Map(),
-      anchorsById: new Map(),
+      anchorsByPointer: new Map(),
     };
   }
 
   const anchors = [];
-  const anchorsByKey = new Map();
-  const anchorsById = new Map();
+  const anchorsByPointer = new Map();
   for (const tracePath of tracePaths) {
     const trace = readJson(ctx, path.join(ctx.changeDir, tracePath));
     if (!trace) continue;
@@ -263,40 +330,40 @@ function buildSpecsAnchorModel(ctx, expected) {
     expectEqual(ctx, "VAL-DESIGN-SPECS-011", tracePath, trace["schema-name"], expected.schemaName, "schema-name");
     expectEqual(ctx, "VAL-DESIGN-SPECS-012", tracePath, trace["specs-completion-mode"], "delta", "specs-completion-mode");
 
-    const sourceTrace = requireArray(ctx, "VAL-DESIGN-SPECS-013", tracePath, trace["requirement-source-trace"], "requirement-source-trace");
-    for (const [index, row] of sourceTrace.entries()) {
-      const id = requireId(ctx, "VAL-DESIGN-SPECS-014", tracePath, row?.[expected.idField], `requirement-source-trace[${index}].${expected.idField}`, expected.idRegex);
-      if (!id) continue;
-      if (!expected.rowsById.has(id)) {
-        addError(ctx, "VAL-DESIGN-SPECS-015", tracePath, `${id} 不属于 proposal source/scope set。`);
-      } else {
-        const proposalRow = expected.rowsById.get(id);
-        const projection = strip(proposalRow?.[expected.projectionField]);
-        if (!isSpecRelevantProjection(projection, expected)) {
-          addError(ctx, "VAL-DESIGN-SPECS-016", tracePath, `${id} 不是 proposal spec/guard item，不能作为 specs anchor。`);
+    const deltaRegister = requireArray(ctx, "VAL-DESIGN-SPECS-013", tracePath, trace["spec-delta-register"], "spec-delta-register");
+    for (const [deltaIndex, row] of deltaRegister.entries()) {
+      const deltaOp = strip(row?.["delta-op"]);
+      if (deltaOp !== "added" && deltaOp !== "modified") continue;
+      const requirement = requireString(ctx, "VAL-DESIGN-SPECS-014", tracePath, row?.requirement, `spec-delta-register[${deltaIndex}].requirement`);
+      const rowSourceIds = validateSpecAnchorSourceIds(ctx, row?.["source-ids"] ?? [], expected, tracePath, `spec-delta-register[${deltaIndex}].source-ids`);
+      for (const [scenarioIndex, scenario] of requireArray(ctx, "VAL-DESIGN-SPECS-018", tracePath, row?.scenarios, `spec-delta-register[${deltaIndex}].scenarios`).entries()) {
+        const scenarioName = requireString(ctx, "VAL-DESIGN-SPECS-019", tracePath, scenario?.name, `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].name`);
+        const sourceIds = validateSpecAnchorSourceIds(
+          ctx,
+          scenario?.["source-ids"] ?? rowSourceIds,
+          expected,
+          tracePath,
+          `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].source-ids`,
+        );
+        const tracePointer = `#/spec-delta-register/${deltaIndex}/scenarios/${scenarioIndex}`;
+        const pointerKey = anchorPointerKey(tracePath, tracePointer);
+        const anchor = {
+          pointerKey,
+          tracePath,
+          tracePointer,
+          deltaId: strip(row?.["delta-id"]),
+          deltaOp,
+          capability: strip(trace.capability),
+          requirement,
+          scenario: scenarioName,
+          sourceIds,
+        };
+        if (anchorsByPointer.has(pointerKey)) {
+          addError(ctx, "VAL-DESIGN-SPECS-017", tracePath, `重复 specs scenario anchor：${pointerKey}`);
         }
+        anchors.push(anchor);
+        anchorsByPointer.set(pointerKey, anchor);
       }
-
-      const pointer = `#/requirement-source-trace/${index}`;
-      const key = anchorKey(tracePath, pointer);
-      const anchor = {
-        key,
-        tracePath,
-        tracePointer: pointer,
-        id,
-        capability: strip(row?.[expected.specAnchorCapabilityField]),
-        requirement: strip(row?.requirement),
-        scenario: strip(row?.scenario),
-        specHandling: strip(row?.["spec-handling"]),
-        projection: strip(row?.[expected.specsProjectionField]),
-      };
-      anchors.push(anchor);
-      if (anchorsByKey.has(key)) {
-        addError(ctx, "VAL-DESIGN-SPECS-017", tracePath, `重复 specs anchor：${key}`);
-      }
-      anchorsByKey.set(key, anchor);
-      if (!anchorsById.has(id)) anchorsById.set(id, []);
-      anchorsById.get(id).push(anchor);
     }
   }
 
@@ -304,8 +371,7 @@ function buildSpecsAnchorModel(ctx, expected) {
     mode: "delta",
     tracePaths,
     anchors,
-    anchorsByKey,
-    anchorsById,
+    anchorsByPointer,
   };
 }
 
@@ -318,7 +384,8 @@ function validateCommonDesignTrace(ctx, trace, expected, specs) {
   requireString(ctx, "VAL-DESIGN-TRACE-006", DESIGN_TRACE_PATH, trace["agent-role"], "agent-role");
   const sourceInterface = requireObject(ctx, "VAL-DESIGN-TRACE-007", DESIGN_TRACE_PATH, trace["source-interface"], "source-interface");
   requireObject(ctx, "VAL-DESIGN-TRACE-008", DESIGN_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
-  requireObject(ctx, "VAL-DESIGN-TRACE-009", DESIGN_TRACE_PATH, trace["production-alignment-gate"], "production-alignment-gate");
+  requireArray(ctx, "VAL-DESIGN-TRACE-009", DESIGN_TRACE_PATH, trace["implementation-design-register"], "implementation-design-register");
+  requireObject(ctx, "VAL-DESIGN-TRACE-010", DESIGN_TRACE_PATH, trace["design-gate"], "design-gate");
 
   expectEqual(ctx, "VAL-DESIGN-SOURCE-INTERFACE-001", DESIGN_TRACE_PATH, sourceInterface["proposal-trace"], PROPOSAL_TRACE_PATH, "source-interface.proposal-trace");
   expectEqual(ctx, "VAL-DESIGN-SOURCE-INTERFACE-002", DESIGN_TRACE_PATH, sourceInterface["specs-completion-mode"], specs.mode, "source-interface.specs-completion-mode");
@@ -326,6 +393,19 @@ function validateCommonDesignTrace(ctx, trace, expected, specs) {
     .map(strip)
     .filter(Boolean);
   expectSameSet(ctx, "VAL-DESIGN-SOURCE-INTERFACE-004", DESIGN_TRACE_PATH, specTraces, specs.tracePaths, "source-interface.spec-traces");
+  for (const [field, value] of Object.entries(sourceInterface)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      addError(ctx, "VAL-DESIGN-SOURCE-INTERFACE-005", DESIGN_TRACE_PATH, `source-interface.${field} 必须是字符串或字符串数组，不能内联 object metadata。`);
+    }
+  }
+}
+
+function validateLegacyFieldsAbsent(ctx, trace) {
+  for (const field of LEGACY_DESIGN_FIELDS) {
+    if (Object.hasOwn(trace, field)) {
+      addError(ctx, "VAL-DESIGN-LEGACY-001", DESIGN_TRACE_PATH, `design trace 不得包含旧字段：${field}。`);
+    }
+  }
 }
 
 function validateDesignManifest(ctx) {
@@ -373,326 +453,448 @@ function validateDesignRender(ctx) {
   }
 }
 
-function validateProductionSourceMap(ctx, trace, expected, specs) {
-  const rows = requireArray(ctx, "VAL-DESIGN-SOURCE-001", DESIGN_TRACE_PATH, trace["production-source-map"], "production-source-map");
-  const actualIds = [];
+function validateImplementationDesignRegister(ctx, trace, expected, specs) {
+  const rows = requireArray(ctx, "VAL-DESIGN-REGISTER-001", DESIGN_TRACE_PATH, trace["implementation-design-register"], "implementation-design-register");
+  const ids = [];
   const seenIds = new Set();
+  const actualSpecAnchors = [];
+  const actualDesignInputs = [];
+  const actualDetailTypes = [];
+  const detailSubjectOwners = new Map();
+  const seenDetailIds = new Set();
+
+  if (rows.length === 0) {
+    addError(ctx, "VAL-DESIGN-REGISTER-002", DESIGN_TRACE_PATH, "implementation-design-register 至少需要一个设计决策 row。");
+  }
+
   for (const [index, row] of rows.entries()) {
-    rejectGroupedIds(ctx, row, "VAL-DESIGN-SOURCE-002", DESIGN_TRACE_PATH, `production-source-map[${index}]`);
-    const id = requireId(ctx, "VAL-DESIGN-SOURCE-003", DESIGN_TRACE_PATH, row?.[expected.idField], `production-source-map[${index}].${expected.idField}`, expected.idRegex);
-    if (!id) continue;
-    if (seenIds.has(id)) {
-      addError(ctx, "VAL-DESIGN-SOURCE-010", DESIGN_TRACE_PATH, `production-source-map source/scope ID 重复：${id}`);
-    }
-    seenIds.add(id);
-    actualIds.push(id);
-
-    const proposalRow = expected.rowsById.get(id);
-    if (!proposalRow) {
-      addError(ctx, "VAL-DESIGN-SOURCE-004", DESIGN_TRACE_PATH, `${id} 不属于 proposal source/scope set。`);
-      continue;
-    }
-
-    for (const field of expected.productionSourceFields) {
-      expectEqual(ctx, "VAL-DESIGN-SOURCE-005", DESIGN_TRACE_PATH, row?.[field], proposalRow?.[field], `production-source-map[${index}].${field}`);
-    }
-    expectEqual(
-      ctx,
-      "VAL-DESIGN-SOURCE-006",
-      DESIGN_TRACE_PATH,
-      row?.["proposal-trace-anchor"],
-      `${PROPOSAL_TRACE_PATH}#/${expected.sourcePointerRoot}/${expected.indexById.get(id)}`,
-      `production-source-map[${index}].proposal-trace-anchor`,
-    );
-
-    const anchors = requireArray(ctx, "VAL-DESIGN-SOURCE-007", DESIGN_TRACE_PATH, row?.["spec-trace-anchors"] ?? [], `production-source-map[${index}].spec-trace-anchors`);
-    validateInlineSpecAnchors(ctx, anchors, specs.anchorsById.get(id) ?? [], expected, `production-source-map[${index}].spec-trace-anchors`);
-    validateIdArrayReferences(ctx, row?.["design-handling-ids"] ?? [], DECISION_ID_RE, `production-source-map[${index}].design-handling-ids`, DESIGN_TRACE_PATH);
-    validateIdArrayReferences(ctx, row?.["implementation-placement-ids"] ?? [], PLACEMENT_ID_RE, `production-source-map[${index}].implementation-placement-ids`, DESIGN_TRACE_PATH);
-    requireString(ctx, "VAL-DESIGN-SOURCE-009", DESIGN_TRACE_PATH, row?.["no-scope-expansion-check"], `production-source-map[${index}].no-scope-expansion-check`);
-  }
-
-  expectSameSet(ctx, "VAL-DESIGN-SOURCE-008", DESIGN_TRACE_PATH, actualIds, expected.ids, "production-source-map IDs");
-}
-
-function validateInlineSpecAnchors(ctx, rows, expectedAnchors, expected, label) {
-  const actualKeys = [];
-  for (const [index, row] of rows.entries()) {
-    const key = anchorKey(strip(row?.["trace-path"]), strip(row?.["trace-pointer"]));
-    actualKeys.push(key);
-    const anchor = expectedAnchors.find((candidate) => candidate.key === key);
-    if (!anchor) {
-      addError(ctx, "VAL-DESIGN-SOURCE-020", DESIGN_TRACE_PATH, `${label}[${index}] 引用未知 specs anchor：${key}`);
-      continue;
-    }
-    expectEqual(ctx, "VAL-DESIGN-SOURCE-021", DESIGN_TRACE_PATH, row?.[expected.specAnchorCapabilityField], anchor.capability, `${label}[${index}].${expected.specAnchorCapabilityField}`);
-    expectEqual(ctx, "VAL-DESIGN-SOURCE-022", DESIGN_TRACE_PATH, row?.requirement, anchor.requirement, `${label}[${index}].requirement`);
-    expectEqual(ctx, "VAL-DESIGN-SOURCE-023", DESIGN_TRACE_PATH, row?.scenario, anchor.scenario, `${label}[${index}].scenario`);
-    expectEqual(ctx, "VAL-DESIGN-SOURCE-024", DESIGN_TRACE_PATH, row?.["spec-handling"], anchor.specHandling, `${label}[${index}].spec-handling`);
-    expectEqual(ctx, "VAL-DESIGN-SOURCE-025", DESIGN_TRACE_PATH, row?.[expected.specsProjectionField], anchor.projection, `${label}[${index}].${expected.specsProjectionField}`);
-  }
-  expectSameSet(ctx, "VAL-DESIGN-SOURCE-026", DESIGN_TRACE_PATH, actualKeys, expectedAnchors.map((anchor) => anchor.key), label);
-}
-
-function validateSpecScenarioDesignMap(ctx, trace, expected, specs) {
-  const rows = requireArray(ctx, "VAL-DESIGN-SPEC-001", DESIGN_TRACE_PATH, trace["spec-scenario-design-map"], "spec-scenario-design-map");
-  const actualKeys = [];
-  const seenKeys = new Set();
-  for (const [index, row] of rows.entries()) {
-    const key = anchorKey(strip(row?.["trace-path"]), strip(row?.["trace-pointer"]));
-    if (seenKeys.has(key)) {
-      addError(ctx, "VAL-DESIGN-SPEC-010", DESIGN_TRACE_PATH, `spec-scenario-design-map anchor 重复：${key}`);
-    }
-    seenKeys.add(key);
-    actualKeys.push(key);
-    const anchor = specs.anchorsByKey.get(key);
-    if (!anchor) {
-      addError(ctx, "VAL-DESIGN-SPEC-002", DESIGN_TRACE_PATH, `spec-scenario-design-map[${index}] 引用未知 specs anchor：${key}`);
-      continue;
-    }
-
-    expectEqual(ctx, "VAL-DESIGN-SPEC-003", DESIGN_TRACE_PATH, row?.[expected.idField], anchor.id, `spec-scenario-design-map[${index}].${expected.idField}`);
-    expectEqual(ctx, "VAL-DESIGN-SPEC-004", DESIGN_TRACE_PATH, row?.[expected.specAnchorCapabilityField], anchor.capability, `spec-scenario-design-map[${index}].${expected.specAnchorCapabilityField}`);
-    expectEqual(ctx, "VAL-DESIGN-SPEC-005", DESIGN_TRACE_PATH, row?.requirement, anchor.requirement, `spec-scenario-design-map[${index}].requirement`);
-    expectEqual(ctx, "VAL-DESIGN-SPEC-006", DESIGN_TRACE_PATH, row?.scenario, anchor.scenario, `spec-scenario-design-map[${index}].scenario`);
-    const decisionIds = validateIdArrayReferences(ctx, row?.["decision-ids"] ?? [], DECISION_ID_RE, `spec-scenario-design-map[${index}].decision-ids`, DESIGN_TRACE_PATH);
-    const placementIds = validateIdArrayReferences(ctx, row?.["placement-ids"] ?? [], PLACEMENT_ID_RE, `spec-scenario-design-map[${index}].placement-ids`, DESIGN_TRACE_PATH);
-    if (decisionIds.length === 0 && placementIds.length === 0) {
-      addError(ctx, "VAL-DESIGN-SPEC-007", DESIGN_TRACE_PATH, `spec-scenario-design-map[${index}] 必须至少引用一个 D-### 或 P-###。`);
-    }
-    requireString(ctx, "VAL-DESIGN-SPEC-009", DESIGN_TRACE_PATH, row?.["design-handling"], `spec-scenario-design-map[${index}].design-handling`);
-  }
-  expectSameSet(ctx, "VAL-DESIGN-SPEC-008", DESIGN_TRACE_PATH, actualKeys, specs.anchors.map((anchor) => anchor.key), "spec-scenario-design-map anchors");
-}
-
-function validateDesignReferenceSections(ctx, trace, expected) {
-  const refs = {
-    ctx,
-    expected,
-    definedDecisions: new Set(),
-    definedPlacements: new Set(),
-    referencedDecisions: new Set(),
-    referencedPlacements: new Set(),
-    sourceRefs: [],
-  };
-
-  const decisionRows = requireArray(ctx, "VAL-DESIGN-DECISION-001", DESIGN_TRACE_PATH, trace["design-decision-index"], "design-decision-index");
-  for (const [index, row] of decisionRows.entries()) {
-    const decisionId = requireId(ctx, "VAL-DESIGN-DECISION-002", DESIGN_TRACE_PATH, row?.["decision-id"], `design-decision-index[${index}].decision-id`, DECISION_ID_RE);
-    if (decisionId) {
-      if (refs.definedDecisions.has(decisionId)) {
-        addError(ctx, "VAL-DESIGN-DECISION-003", DESIGN_TRACE_PATH, `design-decision-index decision-id 重复：${decisionId}`);
-      }
-      refs.definedDecisions.add(decisionId);
-    }
-    requireString(ctx, "VAL-DESIGN-DECISION-004", DESIGN_TRACE_PATH, row?.title, `design-decision-index[${index}].title`);
-    requireString(ctx, "VAL-DESIGN-DECISION-005", DESIGN_TRACE_PATH, row?.["design-handling"], `design-decision-index[${index}].design-handling`);
-    refs.sourceRefs.push(...validateSourceIdArray(ctx, expected, row?.["source-item-ids"] ?? [], `design-decision-index[${index}].source-item-ids`));
-    addReferencedIds(refs.referencedPlacements, validateIdArrayReferences(ctx, row?.["placement-ids"] ?? [], PLACEMENT_ID_RE, `design-decision-index[${index}].placement-ids`, DESIGN_TRACE_PATH));
-  }
-
-  const sourceScopeMap = requireObject(ctx, "VAL-DESIGN-SCOPE-001", DESIGN_TRACE_PATH, trace["source-scope-map"], "source-scope-map");
-  const placementRows = requireArray(ctx, "VAL-DESIGN-SCOPE-002", DESIGN_TRACE_PATH, sourceScopeMap["implementation-placement-map"], "source-scope-map.implementation-placement-map");
-  for (const [index, row] of placementRows.entries()) {
-    const placementId = requireId(ctx, "VAL-DESIGN-SCOPE-003", DESIGN_TRACE_PATH, row?.["placement-id"], `implementation-placement-map[${index}].placement-id`, PLACEMENT_ID_RE);
-    if (placementId) {
-      if (refs.definedPlacements.has(placementId)) {
-        addError(ctx, "VAL-DESIGN-SCOPE-004", DESIGN_TRACE_PATH, `implementation-placement-map placement-id 重复：${placementId}`);
-      }
-      refs.definedPlacements.add(placementId);
-    }
-    for (const field of ["placement", "path-boundary", "owner", "implementation-contract"]) {
-      requireString(ctx, "VAL-DESIGN-SCOPE-005", DESIGN_TRACE_PATH, row?.[field], `implementation-placement-map[${index}].${field}`);
-    }
-  }
-
-  const directRows = requireArray(ctx, "VAL-DESIGN-SCOPE-010", DESIGN_TRACE_PATH, sourceScopeMap["direct-source-item-handling"], "source-scope-map.direct-source-item-handling");
-  const directIds = [];
-  const seenDirectIds = new Set();
-  for (const [index, row] of directRows.entries()) {
-    const id = requireId(ctx, "VAL-DESIGN-SCOPE-011", DESIGN_TRACE_PATH, row?.[expected.idField], `direct-source-item-handling[${index}].${expected.idField}`, expected.idRegex);
+    const label = `implementation-design-register[${index}]`;
+    const id = requireId(ctx, "VAL-DESIGN-REGISTER-003", DESIGN_TRACE_PATH, row?.["implementation-design-id"], `${label}.implementation-design-id`, IMPLEMENTATION_DESIGN_ID_RE);
     if (id) {
-      if (seenDirectIds.has(id)) {
-        addError(ctx, "VAL-DESIGN-SCOPE-016", DESIGN_TRACE_PATH, `direct-source-item-handling source/scope ID 重复：${id}`);
+      if (seenIds.has(id)) {
+        addError(ctx, "VAL-DESIGN-REGISTER-004", DESIGN_TRACE_PATH, `implementation-design-id 重复：${id}`);
       }
-      seenDirectIds.add(id);
-      directIds.push(id);
+      seenIds.add(id);
+      ids.push(id);
     }
-    refs.sourceRefs.push(id);
-    requireString(ctx, "VAL-DESIGN-SCOPE-012", DESIGN_TRACE_PATH, row?.handling, `direct-source-item-handling[${index}].handling`);
-    requireString(ctx, "VAL-DESIGN-SCOPE-013", DESIGN_TRACE_PATH, row?.["no-scope-expansion"], `direct-source-item-handling[${index}].no-scope-expansion`);
-    addReferencedIds(refs.referencedDecisions, validateIdArrayReferences(ctx, row?.["decision-ids"] ?? [], DECISION_ID_RE, `direct-source-item-handling[${index}].decision-ids`, DESIGN_TRACE_PATH));
-    addReferencedIds(refs.referencedPlacements, validateIdArrayReferences(ctx, row?.["placement-ids"] ?? [], PLACEMENT_ID_RE, `direct-source-item-handling[${index}].placement-ids`, DESIGN_TRACE_PATH));
-  }
-  expectSameSet(ctx, "VAL-DESIGN-SCOPE-014", DESIGN_TRACE_PATH, directIds, expected.ids, "direct-source-item-handling IDs");
-  requireArray(ctx, "VAL-DESIGN-SCOPE-015", DESIGN_TRACE_PATH, sourceScopeMap["non-direct-boundary-handling"] ?? [], "source-scope-map.non-direct-boundary-handling");
 
-  const deliveryDecisions = asArray(trace["delivery-plane"]?.decisions);
-  const deliveryDecisionIds = [];
-  for (const [index, row] of deliveryDecisions.entries()) {
-    const decisionId = requireId(ctx, "VAL-DESIGN-DELIVERY-020", DESIGN_TRACE_PATH, row?.["decision-id"], `delivery-plane.decisions[${index}].decision-id`, DECISION_ID_RE);
-    if (decisionId) deliveryDecisionIds.push(decisionId);
-  }
-  expectSameSet(ctx, "VAL-DESIGN-DELIVERY-021", DESIGN_TRACE_PATH, deliveryDecisionIds, [...refs.definedDecisions], "delivery-plane decisions vs design-decision-index");
+    const layer = requireString(ctx, "VAL-DESIGN-REGISTER-005", DESIGN_TRACE_PATH, row?.layer, `${label}.layer`);
+    if (layer && !DESIGN_LAYERS.has(layer)) {
+      addError(ctx, "VAL-DESIGN-REGISTER-006", DESIGN_TRACE_PATH, `${label}.layer 不在允许集合：${layer}`);
+    }
 
-  return refs;
+    for (const field of [
+      "title",
+      "decision",
+      "implementation-boundary",
+      "implementation-contract",
+      "guard-failure-handling",
+      "verification-handoff",
+      "no-scope-expansion",
+    ]) {
+      requireString(ctx, "VAL-DESIGN-REGISTER-007", DESIGN_TRACE_PATH, row?.[field], `${label}.${field}`);
+    }
+
+    if (!isNoLike(row?.blocker)) {
+      addError(ctx, "VAL-DESIGN-REGISTER-008", DESIGN_TRACE_PATH, `${label}.blocker 必须为空、无、None 或 N/A。`);
+    }
+
+    const specAnchors = validateRegisterSpecAnchors(ctx, row?.["spec-anchors"], specs, `${label}.spec-anchors`);
+    actualSpecAnchors.push(...specAnchors);
+
+    const designInputs = validateRegisterDesignInputs(ctx, row?.["design-inputs"], expected, `${label}.design-inputs`);
+    actualDesignInputs.push(...designInputs);
+
+    const detailTypes = validateImplementationDetails(ctx, {
+      row,
+      label,
+      parentId: id,
+      layer,
+      parentSpecAnchors: specAnchors,
+      parentDesignInputs: designInputs,
+      seenDetailIds,
+      detailSubjectOwners,
+    });
+    actualDetailTypes.push(...detailTypes);
+
+    if (specAnchors.length === 0 && designInputs.length === 0) {
+      addError(ctx, "VAL-DESIGN-REGISTER-009", DESIGN_TRACE_PATH, `${label} 必须至少包含一个 spec-anchors 或 design-inputs。`);
+    }
+  }
+
+  expectSameSet(
+    ctx,
+    "VAL-DESIGN-REGISTER-020",
+    DESIGN_TRACE_PATH,
+    actualSpecAnchors,
+    specs.anchors.map((anchor) => anchor.pointerKey),
+    "implementation-design-register spec-anchors",
+  );
+  expectSameSet(
+    ctx,
+    "VAL-DESIGN-REGISTER-021",
+    DESIGN_TRACE_PATH,
+    actualDesignInputs,
+    expected.designInputIds,
+    "implementation-design-register design-inputs",
+  );
+
+  return {
+    registerIds: ids,
+    detailTypes: unique(actualDetailTypes),
+  };
 }
 
-function validateDesignObligationMatrix(ctx, trace, expected, specs, refs) {
-  const rows = requireArray(ctx, "VAL-DESIGN-MATRIX-001", DESIGN_TRACE_PATH, trace["design-obligation-matrix"], "design-obligation-matrix");
-  const actualIds = [];
-  const seenIds = new Set();
-  const proofRows = new Set();
+function validateImplementationDetails(ctx, options) {
+  const {
+    row,
+    label,
+    parentId,
+    layer,
+    parentSpecAnchors,
+    parentDesignInputs,
+    seenDetailIds,
+    detailSubjectOwners,
+  } = options;
+  const rows = requireArray(ctx, "VAL-DESIGN-DETAIL-001", DESIGN_TRACE_PATH, row?.["implementation-details"], `${label}.implementation-details`);
+  const detailTypes = [];
 
-  for (const [index, row] of rows.entries()) {
-    rejectGroupedIds(ctx, row, "VAL-DESIGN-MATRIX-002", DESIGN_TRACE_PATH, `design-obligation-matrix[${index}]`);
-    requireString(ctx, "VAL-DESIGN-MATRIX-003", DESIGN_TRACE_PATH, row?.["matrix-row-id"], `design-obligation-matrix[${index}].matrix-row-id`);
-    const id = requireId(ctx, "VAL-DESIGN-MATRIX-004", DESIGN_TRACE_PATH, row?.[expected.idField], `design-obligation-matrix[${index}].${expected.idField}`, expected.idRegex);
-    if (!id) continue;
-    if (seenIds.has(id)) {
-      addError(ctx, "VAL-DESIGN-MATRIX-031", DESIGN_TRACE_PATH, `design-obligation-matrix source/scope ID 重复：${id}`);
-    }
-    seenIds.add(id);
-    actualIds.push(id);
-    refs.sourceRefs.push(id);
-
-    const proposalRow = expected.rowsById.get(id);
-    if (!proposalRow) {
-      addError(ctx, "VAL-DESIGN-MATRIX-005", DESIGN_TRACE_PATH, `${id} 不属于 proposal source/scope set。`);
-      continue;
-    }
-    for (const field of expected.matrixFields) {
-      expectEqual(ctx, "VAL-DESIGN-MATRIX-006", DESIGN_TRACE_PATH, row?.[field], proposalRow?.[field], `design-obligation-matrix[${index}].${field}`);
-    }
-
-    const projection = strip(proposalRow?.[expected.projectionField]);
-    const decisionIds = validateIdArrayReferences(ctx, row?.["decision-ids"] ?? [], DECISION_ID_RE, `design-obligation-matrix[${index}].decision-ids`, DESIGN_TRACE_PATH);
-    const placementIds = validateIdArrayReferences(ctx, row?.["placement-ids"] ?? [], PLACEMENT_ID_RE, `design-obligation-matrix[${index}].placement-ids`, DESIGN_TRACE_PATH);
-    addReferencedIds(refs.referencedDecisions, decisionIds);
-    addReferencedIds(refs.referencedPlacements, placementIds);
-
-    validateMatrixSpecAnchors(ctx, row, id, specs, `design-obligation-matrix[${index}].spec-scenario-anchors`);
-    validateMatrixProjectionHandling(ctx, row, projection, decisionIds, placementIds, expected, id, index, proofRows);
-    requireString(ctx, "VAL-DESIGN-MATRIX-020", DESIGN_TRACE_PATH, row?.["no-scope-expansion"], `design-obligation-matrix[${index}].no-scope-expansion`);
-    if (!isNoLike(row?.["explicit-blocker"])) {
-      addError(ctx, "VAL-DESIGN-MATRIX-021", DESIGN_TRACE_PATH, `design-obligation-matrix[${index}].explicit-blocker 必须为空、无、None 或 N/A。`);
-    }
+  if (rows.length === 0) {
+    addError(ctx, "VAL-DESIGN-DETAIL-002", DESIGN_TRACE_PATH, `${label}.implementation-details 至少需要一个 implementation detail。`);
   }
 
-  expectSameSet(ctx, "VAL-DESIGN-MATRIX-030", DESIGN_TRACE_PATH, actualIds, expected.ids, "design-obligation-matrix IDs");
-  refs.proofRows = proofRows;
+  for (const [index, detail] of rows.entries()) {
+    const detailLabel = `${label}.implementation-details[${index}]`;
+    const detailId = requireId(ctx, "VAL-DESIGN-DETAIL-003", DESIGN_TRACE_PATH, detail?.["detail-id"], `${detailLabel}.detail-id`, IMPLEMENTATION_DETAIL_ID_RE);
+    if (detailId) {
+      const [, detailParentId] = IMPLEMENTATION_DETAIL_ID_RE.exec(detailId) ?? [];
+      if (detailParentId !== parentId) {
+        addError(ctx, "VAL-DESIGN-DETAIL-004", DESIGN_TRACE_PATH, `${detailLabel}.detail-id 必须以前缀 ${parentId}-D 开头：${detailId}`);
+      }
+      if (seenDetailIds.has(detailId)) {
+        addError(ctx, "VAL-DESIGN-DETAIL-005", DESIGN_TRACE_PATH, `detail-id 重复：${detailId}`);
+      }
+      seenDetailIds.add(detailId);
+    }
+
+    const detailType = requireString(ctx, "VAL-DESIGN-DETAIL-006", DESIGN_TRACE_PATH, detail?.["detail-type"], `${detailLabel}.detail-type`);
+    if (detailType) {
+      detailTypes.push(detailType);
+      if (!DETAIL_TYPES.has(detailType)) {
+        addError(ctx, "VAL-DESIGN-DETAIL-007", DESIGN_TRACE_PATH, `${detailLabel}.detail-type 不在允许集合：${detailType}`);
+      }
+    }
+
+    const owner = requireString(ctx, "VAL-DESIGN-DETAIL-008", DESIGN_TRACE_PATH, detail?.owner, `${detailLabel}.owner`);
+    const subject = requireString(ctx, "VAL-DESIGN-DETAIL-009", DESIGN_TRACE_PATH, detail?.subject, `${detailLabel}.subject`);
+    if (owner && /[,，;+、]|(?:^|\s)(?:and|和|与)(?:\s|$)/iu.test(owner)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-010", DESIGN_TRACE_PATH, `${detailLabel}.owner 必须是单一 production owner。`);
+    }
+    if (detailType && owner && subject) {
+      const subjectKey = `${detailType}\u0000${owner}\u0000${subject}`;
+      const existingParentId = detailSubjectOwners.get(subjectKey);
+      if (existingParentId && existingParentId !== parentId) {
+        addError(ctx, "VAL-DESIGN-DETAIL-030", DESIGN_TRACE_PATH, `${detailLabel} 将同一 detail-type + owner + subject 拆到多个 IDR：${detailType} / ${owner} / ${subject}。`);
+      } else if (!existingParentId) {
+        detailSubjectOwners.set(subjectKey, parentId);
+      }
+    }
+
+    validateDetailBasis(ctx, detail?.basis, {
+      detailLabel,
+      parentSpecAnchors,
+      parentDesignInputs,
+    });
+
+    let contentText = "";
+    if (typeof detail?.content !== "string") {
+      addError(ctx, "VAL-DESIGN-DETAIL-011", DESIGN_TRACE_PATH, `${detailLabel}.content 必须是 string，不能是 array 或 object。`);
+    } else {
+      contentText = detail.content;
+      if (!strip(contentText)) {
+        addError(ctx, "VAL-DESIGN-DETAIL-012", DESIGN_TRACE_PATH, `${detailLabel}.content 必须包含非空正文。`);
+      }
+    }
+    const noScopeExpansion = requireString(ctx, "VAL-DESIGN-DETAIL-014", DESIGN_TRACE_PATH, detail?.["no-scope-expansion"], `${detailLabel}.no-scope-expansion`);
+    validateTechnicalDetailContent(ctx, detailLabel, detailType, contentText);
+    validateRenderedDetailText(ctx, detailLabel, {
+      "detail-id": detailId,
+      "detail-type": detailType,
+      owner,
+      subject,
+      content: contentText,
+      "no-scope-expansion": noScopeExpansion,
+    });
+  }
+
+  validateLayerDetailCoverage(ctx, label, layer, detailTypes);
+  return detailTypes;
 }
 
-function validateMatrixSpecAnchors(ctx, row, id, specs, label) {
-  const expectedLabels = (specs.anchorsById.get(id) ?? []).map(specAnchorLabel);
-  const actualLabels = requireArray(ctx, "VAL-DESIGN-MATRIX-010", DESIGN_TRACE_PATH, row?.["spec-scenario-anchors"] ?? [], label)
+function validateDetailBasis(ctx, value, options) {
+  const { detailLabel, parentSpecAnchors, parentDesignInputs } = options;
+  const basis = requireObject(ctx, "VAL-DESIGN-DETAIL-BASIS-001", DESIGN_TRACE_PATH, value, `${detailLabel}.basis`);
+  const inheritsParentSpecAnchors = requireBoolean(
+    ctx,
+    "VAL-DESIGN-DETAIL-BASIS-002",
+    DESIGN_TRACE_PATH,
+    basis["inherits-parent-spec-anchors"],
+    `${detailLabel}.basis.inherits-parent-spec-anchors`,
+  );
+  const specAnchors = requireArray(ctx, "VAL-DESIGN-DETAIL-BASIS-003", DESIGN_TRACE_PATH, basis["spec-anchors"] ?? [], `${detailLabel}.basis.spec-anchors`)
     .map(strip)
     .filter(Boolean);
-  expectSameSet(ctx, "VAL-DESIGN-MATRIX-011", DESIGN_TRACE_PATH, actualLabels, expectedLabels, label);
-}
-
-function validateMatrixProjectionHandling(ctx, row, projection, decisionIds, placementIds, expected, id, index, proofRows) {
-  const hasDesignHandling = decisionIds.length > 0 || placementIds.length > 0;
-  if (projection === expected.specProjection || projection === expected.guardProjection || projection === expected.designProjection) {
-    if (!hasDesignHandling) {
-      addError(ctx, "VAL-DESIGN-MATRIX-040", DESIGN_TRACE_PATH, `${id} 是 ${projection} item，必须至少引用一个 D-### 或 P-###。`);
+  if (!inheritsParentSpecAnchors && parentSpecAnchors.length > 0 && specAnchors.length === 0) {
+    addError(ctx, "VAL-DESIGN-DETAIL-BASIS-004", DESIGN_TRACE_PATH, `${detailLabel}.basis 未继承父 spec anchors 时必须列出父 spec-anchors 子集。`);
+  }
+  const parentSpecAnchorSet = new Set(parentSpecAnchors);
+  for (const anchor of specAnchors) {
+    if (!parentSpecAnchorSet.has(anchor)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-BASIS-005", DESIGN_TRACE_PATH, `${detailLabel}.basis.spec-anchors 引用父 IDR 未覆盖的 specs anchor：${anchor}`);
     }
   }
 
-  if (projection === expected.guardProjection) {
-    const guardHandling = strip(row?.["guard-handling"]);
-    if (!GUARD_HANDLINGS.has(guardHandling)) {
-      addError(ctx, "VAL-DESIGN-MATRIX-041", DESIGN_TRACE_PATH, `design-obligation-matrix[${index}].guard-handling 必须是 must-not / preserve-boundary / non-goal。`);
-    }
-  }
-
-  if (projection === expected.proofProjection) {
-    proofRows.add(id);
-    if (isNoLike(row?.["proof-expectation"])) {
-      addError(ctx, "VAL-DESIGN-MATRIX-042", DESIGN_TRACE_PATH, `${id} 是 proof item，proof-expectation 必须记录 handoff。`);
-    }
-  }
-
-  if (projection === expected.contextProjection) {
-    if (hasDesignHandling) {
-      addError(ctx, "VAL-DESIGN-MATRIX-043", DESIGN_TRACE_PATH, `${id} 是 context item，只能保留 no-scope handling，不得引用 D/P implementation handling。`);
-    }
-    if (!isNoLike(row?.["proof-expectation"])) {
-      addError(ctx, "VAL-DESIGN-MATRIX-044", DESIGN_TRACE_PATH, `${id} 是 context item，不得声明 proof expectation。`);
-    }
-  }
-}
-
-function validateUiControlContracts(ctx, trace, expected) {
-  const rows = requireArray(ctx, "VAL-DESIGN-UI-001", DESIGN_TRACE_PATH, trace["ui-control-contracts"] ?? [], "ui-control-contracts");
-  for (const [index, row] of rows.entries()) {
-    requireString(ctx, "VAL-DESIGN-UI-002", DESIGN_TRACE_PATH, row?.["control-id"], `ui-control-contracts[${index}].control-id`);
-    for (const field of [
-      "owner-component",
-      "event-trigger",
-      "handler-or-api-route",
-      "request-payload",
-      "response-merge-or-reload",
-      "submitting-disabled-error-retry",
-    ]) {
-      requireString(ctx, "VAL-DESIGN-UI-003", DESIGN_TRACE_PATH, row?.[field], `ui-control-contracts[${index}].${field}`);
-    }
-    validateSourceIdArray(ctx, expected, row?.["source-item-ids"] ?? [], `ui-control-contracts[${index}].source-item-ids`);
-  }
-}
-
-function validateProofExpectationHandoff(ctx, trace, expected) {
-  const rows = requireArray(ctx, "VAL-DESIGN-PROOF-001", DESIGN_TRACE_PATH, trace["proof-expectation-handoff"] ?? [], "proof-expectation-handoff");
-  const rowsById = new Map();
-  for (const [index, row] of rows.entries()) {
-    const id = requireId(ctx, "VAL-DESIGN-PROOF-002", DESIGN_TRACE_PATH, row?.["source-item-id"], `proof-expectation-handoff[${index}].source-item-id`, expected.idRegex);
-    if (!id) continue;
-    if (!expected.rowsById.has(id)) {
-      addError(ctx, "VAL-DESIGN-PROOF-003", DESIGN_TRACE_PATH, `${id} 不属于 proposal source/scope set。`);
-    }
-    if (!rowsById.has(id)) rowsById.set(id, []);
-    rowsById.get(id).push(row);
-
-    const handoffKind = strip(row?.["handoff-kind"]);
-    if (!PROOF_HANDOFF_KINDS.has(handoffKind)) {
-      addError(ctx, "VAL-DESIGN-PROOF-004", DESIGN_TRACE_PATH, `proof-expectation-handoff[${index}].handoff-kind 必须是 runtime-acceptance / verification / none。`);
-    }
-    requireString(ctx, "VAL-DESIGN-PROOF-005", DESIGN_TRACE_PATH, row?.expectation, `proof-expectation-handoff[${index}].expectation`);
-  }
-
-  const proofIds = expected.rows
-    .filter((row) => strip(row?.[expected.projectionField]) === expected.proofProjection)
-    .map((row) => strip(row?.[expected.idField]))
+  const designInputs = requireArray(ctx, "VAL-DESIGN-DETAIL-BASIS-006", DESIGN_TRACE_PATH, basis["design-inputs"] ?? [], `${detailLabel}.basis.design-inputs`)
+    .map(strip)
     .filter(Boolean);
-  for (const id of proofIds) {
-    const rowsForId = rowsById.get(id) ?? [];
-    if (rowsForId.length === 0) {
-      addError(ctx, "VAL-DESIGN-PROOF-006", DESIGN_TRACE_PATH, `${id} 是 proof item，必须存在 proof-expectation-handoff row。`);
-      continue;
-    }
-    if (!rowsForId.some((row) => strip(row?.["handoff-kind"]) !== "none")) {
-      addError(ctx, "VAL-DESIGN-PROOF-007", DESIGN_TRACE_PATH, `${id} 是 proof item，handoff-kind 不能全部为 none。`);
+  const parentDesignInputSet = new Set(parentDesignInputs);
+  for (const id of designInputs) {
+    if (!parentDesignInputSet.has(id)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-BASIS-007", DESIGN_TRACE_PATH, `${detailLabel}.basis.design-inputs 引用父 IDR 未覆盖的 design input：${id}`);
     }
   }
 }
 
-function validateDesignGate(ctx, trace, expected) {
-  const gate = requireObject(ctx, "VAL-DESIGN-GATE-001", DESIGN_TRACE_PATH, trace["production-alignment-gate"], "production-alignment-gate");
-  const blockers = requireArray(ctx, "VAL-DESIGN-GATE-002", DESIGN_TRACE_PATH, gate.blockers ?? [], "production-alignment-gate.blockers");
-  if (blockers.length !== 0) {
-    addError(ctx, "VAL-DESIGN-GATE-003", DESIGN_TRACE_PATH, "production-alignment-gate.blockers 必须为空；非空 blocker 不能进入 validator pass。");
+function validateRenderedDetailText(ctx, label, fields) {
+  for (const [field, value] of Object.entries(fields)) {
+    const text = strip(value);
+    if (!text) continue;
+    if (DETAIL_RENDERED_LEAK_RE.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-020", DESIGN_TRACE_PATH, `${label}.${field} 是 rendered detail 字段，不得包含 GA/SI ID 或 trace pointer。`);
+    }
+    if (field === "content" || field === "no-scope-expansion") {
+      if (PLACEHOLDER_RE.test(text)) {
+        addError(ctx, "VAL-DESIGN-DETAIL-021", DESIGN_TRACE_PATH, `${label}.${field} 不得包含 TBD/TODO/待定/后续完善等占位内容。`);
+      }
+    }
   }
-
-  expectEqual(ctx, "VAL-DESIGN-GATE-004", DESIGN_TRACE_PATH, gate["change-slug"], ctx.change, "production-alignment-gate.change-slug");
-  expectEqual(ctx, "VAL-DESIGN-GATE-005", DESIGN_TRACE_PATH, gate["schema-name"], expected.schemaName, "production-alignment-gate.schema-name");
-  const ids = requireIdArray(ctx, "VAL-DESIGN-GATE-006", DESIGN_TRACE_PATH, gate[expected.gateIdsField] ?? [], `production-alignment-gate.${expected.gateIdsField}`, expected.idRegex);
-  expectEqual(ctx, "VAL-DESIGN-GATE-007", DESIGN_TRACE_PATH, gate[expected.gateCountField], ids.length, `production-alignment-gate.${expected.gateCountField}`);
-  expectSameSet(ctx, "VAL-DESIGN-GATE-008", DESIGN_TRACE_PATH, ids, expected.ids, `production-alignment-gate.${expected.gateIdsField}`);
-  const matrixIds = requireIdArray(ctx, "VAL-DESIGN-GATE-009", DESIGN_TRACE_PATH, gate[expected.gateMatrixIdsField] ?? [], `production-alignment-gate.${expected.gateMatrixIdsField}`, expected.idRegex);
-  expectSameSet(ctx, "VAL-DESIGN-GATE-010", DESIGN_TRACE_PATH, matrixIds, expected.ids, `production-alignment-gate.${expected.gateMatrixIdsField}`);
 }
 
-function validateDeliveryPlane(ctx, trace, expected) {
+function validateTechnicalDetailContent(ctx, label, detailType, contentText) {
+  if (!detailType) return;
+  const text = String(contentText ?? "");
+  const nonEmptyLines = text.split(/\r?\n/u).map(strip).filter(Boolean);
+  const minLines = DETAIL_MIN_LINES[detailType];
+  if (minLines && nonEmptyLines.length < minLines) {
+    addError(ctx, "VAL-DESIGN-DETAIL-050", DESIGN_TRACE_PATH, `${label}.content 对 ${detailType} 必须是至少 ${minLines} 行的结构化技术设计，不能是一行长文本。`);
+  }
+
+  if (detailType === "module-boundary") {
+    if (!/(?:boundary|边界|responsibilit|职责|owner|归属|module|模块|route|路由|component|组件|dependency|依赖|persistence|持久|API|control-api)/iu.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-058", DESIGN_TRACE_PATH, `${label}.content[module-boundary] 必须明确模块/路由/组件边界、职责归属或依赖方向。`);
+    }
+  }
+
+  if (detailType === "data-model") {
+    if (!(MARKDOWN_TABLE_RE.test(text) || CODE_FENCE_RE.test(text)) || !DATA_MODEL_TYPE_RE.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-051", DESIGN_TRACE_PATH, `${label}.content[data-model] 必须使用 Markdown 表格或 DDL/schema code fence，并明确字段类型。`);
+    }
+  }
+
+  if (detailType === "json-shape") {
+    const jsonBlocks = extractJsonCodeBlocks(text);
+    if (jsonBlocks.length === 0) {
+      addError(ctx, "VAL-DESIGN-DETAIL-052", DESIGN_TRACE_PATH, `${label}.content[json-shape] 必须包含 fenced json code block。`);
+      return;
+    }
+    for (const [index, block] of jsonBlocks.entries()) {
+      try {
+        JSON.parse(block);
+      } catch (error) {
+        addError(ctx, "VAL-DESIGN-DETAIL-053", DESIGN_TRACE_PATH, `${label}.content[json-shape] 第 ${index + 1} 个 json code block 不是合法 JSON：${error.message}`);
+      }
+    }
+  }
+
+  if (detailType === "api-contract") {
+    const hasContractShape =
+      (API_METHOD_PATH_RE.test(text) && HTTP_STATUS_RE.test(text)) ||
+      /```(?:http|openapi|yaml|yml)\s*\n[\s\S]*?\n```/iu.test(text);
+    if (!hasContractShape) {
+      addError(ctx, "VAL-DESIGN-DETAIL-054", DESIGN_TRACE_PATH, `${label}.content[api-contract] 必须明确 HTTP method/path 与响应状态，或使用 http/openapi/yaml code fence。`);
+    }
+    if (!/\b(?:request|请求|body|query|params?)\b/iu.test(text) || !/\b(?:response|响应|error|错误)\b/iu.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-055", DESIGN_TRACE_PATH, `${label}.content[api-contract] 必须同时描述 request 和 response/error contract。`);
+    }
+  }
+
+  if (detailType === "dto-contract") {
+    const hasDtoShape =
+      /```(?:ts|tsx|typescript|json|jsonschema|schema)\s*\n[\s\S]*?\n```/iu.test(text) ||
+      (MARKDOWN_TABLE_RE.test(text) && DATA_MODEL_TYPE_RE.test(text));
+    if (!hasDtoShape) {
+      addError(ctx, "VAL-DESIGN-DETAIL-056", DESIGN_TRACE_PATH, `${label}.content[dto-contract] 必须包含 TypeScript/JSON schema code fence 或字段类型表。`);
+    }
+    if (!/\b(?:required|optional|nullable|可选|必填|可空|enum|枚举)\b/iu.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-057", DESIGN_TRACE_PATH, `${label}.content[dto-contract] 必须明确 required/optional/nullable 或 enum 规则。`);
+    }
+  }
+
+  if (detailType === "frontend-contract") {
+    if (!/(?:route|路由|component|组件|state|状态|event|事件|fetch|request|请求|error|错误|loading|validation|校验|UI)/iu.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-059", DESIGN_TRACE_PATH, `${label}.content[frontend-contract] 必须明确 route/component/state/event/data-fetching/error-display 等前端契约。`);
+    }
+  }
+
+  if (detailType === "validation-error-contract") {
+    const checks = [
+      /(?:error\s*code|错误码|code|ERR[_-]|\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b)/u,
+      /(?:field|path|pointer|字段|路径|定位)/iu,
+      /(?:severity|blocking|blocker|warn|warning|级别|阻断|告警)/iu,
+      /(?:message|copy|i18n|文案|消息|提示|UI)/iu,
+    ];
+    if (!checks.every((pattern) => pattern.test(text))) {
+      addError(ctx, "VAL-DESIGN-DETAIL-060", DESIGN_TRACE_PATH, `${label}.content[validation-error-contract] 必须明确 error code、field/path、severity/blocking 和 message/UI 定位。`);
+    }
+  }
+
+  if (detailType === "state-lifecycle") {
+    const checks = [
+      /(?:state|状态|phase|阶段)/iu,
+      /(?:enter|entry|进入|condition|条件)/iu,
+      /(?:transition|转移|流转|next|from|to)/iu,
+      /(?:failure|rollback|失败|回滚|persist|持久|restore|恢复)/iu,
+    ];
+    if (!checks.every((pattern) => pattern.test(text))) {
+      addError(ctx, "VAL-DESIGN-DETAIL-061", DESIGN_TRACE_PATH, `${label}.content[state-lifecycle] 必须明确 state、进入条件、状态转移和失败/持久化/回滚行为。`);
+    }
+  }
+
+  if (detailType === "integration-boundary") {
+    const checks = [
+      /(?:boundary|边界|integration|集成|external|外部|provider|dependency|依赖)/iu,
+      /(?:inbound|outbound|调用|输入|输出|protocol|协议|API|queue|event|事件)/iu,
+      /(?:failure|timeout|retry|fallback|失败|超时|重试|降级)/iu,
+    ];
+    if (!checks.every((pattern) => pattern.test(text))) {
+      addError(ctx, "VAL-DESIGN-DETAIL-062", DESIGN_TRACE_PATH, `${label}.content[integration-boundary] 必须明确集成边界、调用方向/协议和失败/超时/重试策略。`);
+    }
+  }
+
+  if (detailType === "migration-compatibility") {
+    const checks = [
+      /(?:migration|migrate|DDL|backfill|迁移|回填|变更)/iu,
+      /(?:compatib|兼容|version|版本|default|默认|legacy|旧)/iu,
+      /(?:rollback|roll back|回滚|replay|重放|safe|安全)/iu,
+    ];
+    if (!checks.every((pattern) => pattern.test(text))) {
+      addError(ctx, "VAL-DESIGN-DETAIL-063", DESIGN_TRACE_PATH, `${label}.content[migration-compatibility] 必须明确迁移/回填步骤、兼容策略和回滚/安全边界。`);
+    }
+  }
+
+  if (detailType === "observability-ops") {
+    const signals = [
+      /(?:metric|metrics|指标|SLO|SLI)/iu,
+      /(?:log|logging|日志)/iu,
+      /(?:alert|报警|告警)/iu,
+      /(?:dashboard|runbook|trace|tracing|面板|看板|运维手册|追踪)/iu,
+    ].filter((pattern) => pattern.test(text)).length;
+    if (signals < 2) {
+      addError(ctx, "VAL-DESIGN-DETAIL-064", DESIGN_TRACE_PATH, `${label}.content[observability-ops] 必须至少覆盖 metrics/logs/alerts/dashboard/runbook/tracing 中的两类运维信号。`);
+    }
+  }
+
+  if (detailType === "rollout-compatibility") {
+    const checks = [
+      /(?:rollout|发布|灰度|上线|deploy|deployment|flag|feature flag|开关)/iu,
+      /(?:compatib|兼容|backward|forward|version|版本|client|客户端)/iu,
+      /(?:rollback|回滚|disable|禁用|gate|门禁|monitor|监控)/iu,
+    ];
+    if (!checks.every((pattern) => pattern.test(text))) {
+      addError(ctx, "VAL-DESIGN-DETAIL-065", DESIGN_TRACE_PATH, `${label}.content[rollout-compatibility] 必须明确 rollout/flag、兼容策略和回滚/门禁/监控行为。`);
+    }
+  }
+
+  if (detailType === "non-applicable") {
+    if (!/(?:reason|原因|because|由于|not applicable|N\/A|不适用)/iu.test(text) || !/(?:rejected|拒绝|不新增|无须|无需|out of scope|scope 外)/iu.test(text)) {
+      addError(ctx, "VAL-DESIGN-DETAIL-066", DESIGN_TRACE_PATH, `${label}.content[non-applicable] 必须明确不适用原因和拒绝的 scope-expanding 行为。`);
+    }
+  }
+}
+
+function extractJsonCodeBlocks(text) {
+  const blocks = [];
+  const globalJsonFence = new RegExp(JSON_CODE_FENCE_RE.source, "giu");
+  for (const match of text.matchAll(globalJsonFence)) {
+    blocks.push(match[1].trim());
+  }
+  return blocks;
+}
+
+function validateLayerDetailCoverage(ctx, label, layer, detailTypes) {
+  if (!layer || !DESIGN_LAYERS.has(layer)) return;
+  const typeSet = new Set(detailTypes);
+  if (typeSet.has("non-applicable")) return;
+  const required = LAYER_DETAIL_COVERAGE[layer] ?? [];
+  if (!required.some((type) => typeSet.has(type))) {
+    addError(ctx, "VAL-DESIGN-DETAIL-040", DESIGN_TRACE_PATH, `${label}.implementation-details 缺少 layer=${layer} 所需 detail type：${required.join(" / ")}，或使用 non-applicable。`);
+  }
+}
+
+function validateRegisterSpecAnchors(ctx, value, specs, label) {
+  const anchors = requireArray(ctx, "VAL-DESIGN-SPEC-ANCHOR-001", DESIGN_TRACE_PATH, value ?? [], label)
+    .map(strip)
+    .filter(Boolean);
+  const seen = new Set();
+  for (const anchor of anchors) {
+    if (seen.has(anchor)) {
+      addError(ctx, "VAL-DESIGN-SPEC-ANCHOR-002", DESIGN_TRACE_PATH, `${label} 包含重复 specs anchor：${anchor}`);
+    }
+    seen.add(anchor);
+    if (!specs.anchorsByPointer.has(anchor)) {
+      addError(ctx, "VAL-DESIGN-SPEC-ANCHOR-003", DESIGN_TRACE_PATH, `${label} 引用未知 specs scenario anchor：${anchor}`);
+    }
+  }
+  return anchors;
+}
+
+function validateRegisterDesignInputs(ctx, value, expected, label) {
+  const rows = requireArray(ctx, "VAL-DESIGN-INPUT-001", DESIGN_TRACE_PATH, value ?? [], label);
+  const ids = [];
+  const seen = new Set();
+  for (const [index, row] of rows.entries()) {
+    const itemLabel = `${label}[${index}]`;
+    const id = requireId(ctx, "VAL-DESIGN-INPUT-002", DESIGN_TRACE_PATH, row?.["source-item-id"], `${itemLabel}.source-item-id`, expected.idRegex);
+    if (id) {
+      if (seen.has(id)) {
+        addError(ctx, "VAL-DESIGN-INPUT-003", DESIGN_TRACE_PATH, `${label} 包含重复 design input：${id}`);
+      }
+      seen.add(id);
+      ids.push(id);
+
+      const proposalRow = expected.rowsById.get(id);
+      if (!proposalRow) {
+        addError(ctx, "VAL-DESIGN-INPUT-004", DESIGN_TRACE_PATH, `${itemLabel}.source-item-id 不属于 proposal direct source/scope set：${id}`);
+      } else if (expected.routeBacked ? !proposalRow["routed-to-design"] : strip(proposalRow?.[expected.projectionField]) !== expected.designProjection) {
+        addError(ctx, "VAL-DESIGN-INPUT-005", DESIGN_TRACE_PATH, `${itemLabel}.source-item-id 不是 design 类型 source/scope item：${id}`);
+      }
+    }
+    requireString(ctx, "VAL-DESIGN-INPUT-006", DESIGN_TRACE_PATH, row?.use, `${itemLabel}.use`);
+  }
+  return ids;
+}
+
+function validateDesignGate(ctx, trace) {
+  const gate = requireObject(ctx, "VAL-DESIGN-GATE-001", DESIGN_TRACE_PATH, trace["design-gate"], "design-gate");
+  for (const field of DESIGN_GATE_FIELDS) {
+    const rows = requireArray(ctx, "VAL-DESIGN-GATE-002", DESIGN_TRACE_PATH, gate[field] ?? [], `design-gate.${field}`);
+    if (rows.length !== 0) {
+      addError(ctx, "VAL-DESIGN-GATE-003", DESIGN_TRACE_PATH, `design-gate.${field} 必须为空；非空表示 design 未闭合。`);
+    }
+  }
+}
+
+function validateDeliveryPlane(ctx, trace, expected, designModel) {
   const delivery = requireObject(ctx, "VAL-DESIGN-DELIVERY-001", DESIGN_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
   const json = JSON.stringify(delivery);
   if (ANY_GA_ID_RE.test(json) || ANY_SCOPE_ID_RE.test(json)) {
@@ -706,35 +908,40 @@ function validateDeliveryPlane(ctx, trace, expected) {
   if (expected.schemaName === DEFAULT_SCHEMA && ANY_GA_ID_RE.test(json)) {
     addError(ctx, "VAL-DESIGN-DELIVERY-004", DESIGN_TRACE_PATH, "default design delivery-plane 不得包含 GA-####。");
   }
+
+  const deliveryDecisions = asArray(delivery.decisions);
+  const deliveryDecisionIds = [];
+  for (const [index, row] of deliveryDecisions.entries()) {
+    const decision = requireObject(ctx, "VAL-DESIGN-DELIVERY-020", DESIGN_TRACE_PATH, row, `delivery-plane.decisions[${index}]`);
+    for (const key of Object.keys(decision)) {
+      if (!DELIVERY_DECISION_ALLOWED_FIELDS.has(key)) {
+        addError(ctx, "VAL-DESIGN-DELIVERY-022", DESIGN_TRACE_PATH, `delivery-plane.decisions[${index}] 只能包含 decision-id，不能包含旧 summary 字段：${key}`);
+      }
+    }
+    const decisionId = requireId(ctx, "VAL-DESIGN-DELIVERY-020", DESIGN_TRACE_PATH, decision["decision-id"], `delivery-plane.decisions[${index}].decision-id`, IMPLEMENTATION_DESIGN_ID_RE);
+    if (decisionId) deliveryDecisionIds.push(decisionId);
+  }
+  expectSameSet(ctx, "VAL-DESIGN-DELIVERY-021", DESIGN_TRACE_PATH, deliveryDecisionIds, designModel.registerIds, "delivery-plane decisions vs implementation-design-register");
+  validateDetailRenderOrder(ctx, delivery, designModel.detailTypes);
 }
 
-function validateResolvedReferences(ctx, refs) {
-  for (const id of refs.sourceRefs.map(strip).filter(Boolean)) {
-    if (!refs.expected.rowsById.has(id)) {
-      addError(ctx, "VAL-DESIGN-REF-001", DESIGN_TRACE_PATH, `引用了未知 source/scope ID：${id}`);
+function validateDetailRenderOrder(ctx, delivery, actualDetailTypes) {
+  const values = requireArray(ctx, "VAL-DESIGN-DELIVERY-030", DESIGN_TRACE_PATH, delivery["detail-render-order"], "delivery-plane.detail-render-order")
+    .map(strip)
+    .filter(Boolean);
+  const seen = new Set();
+  for (const detailType of values) {
+    if (!DETAIL_TYPES.has(detailType)) {
+      addError(ctx, "VAL-DESIGN-DELIVERY-031", DESIGN_TRACE_PATH, `delivery-plane.detail-render-order 包含未知 detail type：${detailType}`);
     }
+    if (seen.has(detailType)) {
+      addError(ctx, "VAL-DESIGN-DELIVERY-032", DESIGN_TRACE_PATH, `delivery-plane.detail-render-order 重复：${detailType}`);
+    }
+    seen.add(detailType);
   }
-
-  for (const decisionId of refs.referencedDecisions) {
-    if (!refs.definedDecisions.has(decisionId)) {
-      addError(ctx, "VAL-DESIGN-REF-002", DESIGN_TRACE_PATH, `引用了未定义 decision-id：${decisionId}`);
-    }
-  }
-  for (const decisionId of refs.definedDecisions) {
-    if (!refs.referencedDecisions.has(decisionId)) {
-      addError(ctx, "VAL-DESIGN-REF-003", DESIGN_TRACE_PATH, `design-decision-index 存在 orphan decision-id：${decisionId}`);
-    }
-  }
-
-  for (const placementId of refs.referencedPlacements) {
-    if (!refs.definedPlacements.has(placementId)) {
-      addError(ctx, "VAL-DESIGN-REF-004", DESIGN_TRACE_PATH, `引用了未定义 placement-id：${placementId}`);
-    }
-  }
-  for (const placementId of refs.definedPlacements) {
-    if (!refs.referencedPlacements.has(placementId)) {
-      addError(ctx, "VAL-DESIGN-REF-005", DESIGN_TRACE_PATH, `implementation-placement-map 存在 orphan placement-id：${placementId}`);
-    }
+  const missing = unique(actualDetailTypes).filter((detailType) => !seen.has(detailType));
+  if (missing.length > 0) {
+    addError(ctx, "VAL-DESIGN-DELIVERY-033", DESIGN_TRACE_PATH, `delivery-plane.detail-render-order 缺少实际存在的 detail type：${missing.join(", ")}`);
   }
 }
 
@@ -756,47 +963,35 @@ function validateDefaultTraceHasNoObligationLeak(ctx, trace) {
   }
 }
 
-function validateSourceIdArray(ctx, expected, value, label) {
-  const ids = requireIdArray(ctx, "VAL-DESIGN-SOURCE-ID-001", DESIGN_TRACE_PATH, value, label, expected.idRegex);
+function validateSpecAnchorSourceIds(ctx, value, expected, tracePath, label) {
+  const ids = requireIdArray(ctx, "VAL-DESIGN-SPECS-015", tracePath, value, label, expected.idRegex);
   for (const id of ids) {
     if (!expected.rowsById.has(id)) {
-      addError(ctx, "VAL-DESIGN-SOURCE-ID-002", DESIGN_TRACE_PATH, `${label} 引用未知 source/scope ID：${id}`);
+      addError(ctx, "VAL-DESIGN-SPECS-016", tracePath, `${id} 不属于 proposal source/scope set。`);
+      continue;
+    }
+    const proposalRow = expected.rowsById.get(id);
+    const isSpecRelevant = expected.routeBacked
+      ? proposalRow["routed-to-specs"]
+      : isSpecRelevantProjection(strip(proposalRow?.[expected.projectionField]), expected);
+    if (!isSpecRelevant) {
+      addError(ctx, "VAL-DESIGN-SPECS-020", tracePath, `${id} 不是 proposal spec/guard item，不能作为 specs anchor。`);
     }
   }
   return ids;
-}
-
-function validateIdArrayReferences(ctx, value, regex, label, file) {
-  return requireIdArray(ctx, "VAL-DESIGN-IDREF-001", file, value, label, regex);
-}
-
-function addReferencedIds(target, ids) {
-  for (const id of ids) target.add(id);
 }
 
 function isSpecRelevantProjection(projection, expected) {
   return projection === expected.specProjection || projection === expected.guardProjection;
 }
 
-function specAnchorLabel(anchor) {
-  return `${anchor.capability}::${anchor.requirement}::${anchor.scenario}`;
-}
-
-function anchorKey(tracePath, tracePointer) {
-  return `${tracePath}#${tracePointer}`;
+function anchorPointerKey(tracePath, tracePointer) {
+  return `${tracePath}${tracePointer.startsWith("#") ? "" : "#"}${tracePointer}`;
 }
 
 function isNoLike(value) {
   const text = strip(value);
   return !text || text === "无" || text === "None" || text === "N/A" || text === "none" || text === "n/a";
-}
-
-function rejectGroupedIds(ctx, row, ruleId, tracePath, label) {
-  for (const field of ["global-atom-ids", "atom-ids", "scope-item-ids", "ids"]) {
-    if (field in Object(row)) {
-      addError(ctx, ruleId, tracePath, `${label} 不得使用 ${field} 汇总多个 ID。`);
-    }
-  }
 }
 
 function readManifestEntriesLenient(ctx) {
@@ -872,6 +1067,14 @@ function requireString(ctx, ruleId, file, value, label) {
     return "";
   }
   return strip(value);
+}
+
+function requireBoolean(ctx, ruleId, file, value, label) {
+  if (typeof value !== "boolean") {
+    addError(ctx, ruleId, file, `${label} 必须是 boolean。`);
+    return false;
+  }
+  return value;
 }
 
 function requireId(ctx, ruleId, file, value, label, regex) {

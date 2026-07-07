@@ -104,7 +104,7 @@ export function renderDeliveryBody(trace, proofSlicesTrace = null) {
     return renderSpecsDelivery(delivery);
   }
   if (artifactId === "design") {
-    return renderDesignDelivery(delivery);
+    return renderDesignDelivery(delivery, trace);
   }
   if (artifactId === "runtime-acceptance") {
     return renderRuntimeDelivery(delivery, trace);
@@ -221,27 +221,24 @@ function renderScenario(requirementName, scenario) {
   return `#### Scenario: ${name}\n\n${lines.join("\n")}\n`;
 }
 
-function renderDesignDelivery(delivery) {
-  const frontendDesign =
-    delivery["frontend-ux-prototype-fidelity-design"] ?? delivery["frontend-ux-design"];
+function renderDesignDelivery(delivery, trace) {
+  const designRows = asArray(trace["implementation-design-register"]).map((row) => asObject(row));
+  const designRowsById = new Map(
+    designRows
+      .map((row) => [strip(row["implementation-design-id"]), row])
+      .filter(([id]) => Boolean(id)),
+  );
   return [
     renderSection("Context", requireText(delivery.context, "design.delivery-plane.context")),
     renderSection("Goals / Non-Goals", requireText(delivery["goals-non-goals"], "design.delivery-plane.goals-non-goals")),
-    renderDesignDecisions(delivery.decisions),
-    renderSection("Architecture / Module Boundary Design", requireText(delivery["architecture-module-boundary-design"], "design.delivery-plane.architecture-module-boundary-design")),
-    renderSection("Domain / Data / Migration Design", requireText(delivery["domain-data-migration-design"], "design.delivery-plane.domain-data-migration-design")),
-    renderSection("API / Auth / Security Design", requireText(delivery["api-auth-security-design"], "design.delivery-plane.api-auth-security-design")),
-    renderSection("Async / Realtime / AI / Worker Design", requireText(delivery["async-realtime-ai-worker-design"], "design.delivery-plane.async-realtime-ai-worker-design")),
-    renderSection("Frontend / UX / Prototype Fidelity Design", requireText(frontendDesign, "design.delivery-plane.frontend-ux-prototype-fidelity-design")),
-    renderSection("Observability / Ops / Deployment Design", requireText(delivery["observability-ops-deployment-design"], "design.delivery-plane.observability-ops-deployment-design")),
-    renderSection("Verification Design", requireText(delivery["verification-design"], "design.delivery-plane.verification-design")),
-    renderSection("Rollout / Compatibility", requireText(delivery["rollout-compatibility"], "design.delivery-plane.rollout-compatibility")),
+    renderDesignDecisions(delivery.decisions, designRowsById),
     renderSection("Risks / Trade-offs", requireText(delivery["risks-trade-offs"], "design.delivery-plane.risks-trade-offs")),
     renderSection("Open Questions", requireText(delivery["open-questions"], "design.delivery-plane.open-questions")),
+    renderImplementationDetails(delivery["detail-render-order"], designRows),
   ].join("");
 }
 
-function renderDesignDecisions(decisions) {
+function renderDesignDecisions(decisions, designRowsById) {
   const rows = asArray(decisions);
   if (rows.length === 0) {
     throw new RenderContractError("VAL-RENDER-002", "design delivery-plane", "design decisions payload 不能为空。");
@@ -250,21 +247,60 @@ function renderDesignDecisions(decisions) {
     .map((decision) => {
       const row = asObject(decision);
       const id = requireScalar(row["decision-id"], "design.decisions[].decision-id");
-      const title = requireScalar(row.title, `design.decisions[${id}].title`);
+      const designRow = designRowsById.get(id);
+      if (!designRow) {
+        throw new RenderContractError("VAL-RENDER-002", "design delivery-plane", `design.decisions[${id}] 缺少 implementation-design-register row。`);
+      }
+      const title = requireScalar(designRow.title, `implementation-design-register[${id}].title`);
       return [
         `### ${id} ${title}`,
         "",
-        renderLabeledBlock("Decision", row.decision, `design.decisions[${id}].decision`),
-        "",
-        renderLabeledBlock("Source Gap", row["source-gap"], `design.decisions[${id}].source-gap`),
-        "",
-        renderLabeledBlock("Minimal Shape", row["minimal-shape"], `design.decisions[${id}].minimal-shape`),
-        "",
-        renderLabeledBlock("Rejected Expansion", row["rejected-expansion"], `design.decisions[${id}].rejected-expansion`),
+        renderBlockText(requireText(designRow.decision, `implementation-design-register[${id}].decision`)),
       ].join("\n");
     })
     .join("\n\n");
   return `## Decisions\n\n${body}\n\n`;
+}
+
+function renderImplementationDetails(renderOrder, designRows) {
+  const detailsByType = new Map();
+  for (const designRow of designRows) {
+    for (const detail of asArray(designRow["implementation-details"])) {
+      const detailRow = asObject(detail);
+      const detailType = strip(detailRow["detail-type"]);
+      if (!detailType) continue;
+      if (!detailsByType.has(detailType)) detailsByType.set(detailType, []);
+      detailsByType.get(detailType).push(detailRow);
+    }
+  }
+
+  const orderedTypes = asArray(renderOrder).map(strip).filter(Boolean);
+  if (orderedTypes.length === 0) {
+    throw new RenderContractError("VAL-RENDER-002", "design.delivery-plane.detail-render-order", "detail-render-order 不能为空。");
+  }
+
+  const sections = [];
+  for (const detailType of orderedTypes) {
+    const details = detailsByType.get(detailType) ?? [];
+    if (details.length === 0) continue;
+    const body = details
+      .map((detail) => renderBlockText(requireText(detail.content, `implementation-details[${detailType}].content`)))
+      .join("\n\n");
+    sections.push(`### ${titleizeDetailType(detailType)}\n\n${body}`);
+  }
+
+  if (sections.length === 0) {
+    throw new RenderContractError("VAL-RENDER-002", "implementation-design-register[].implementation-details", "implementation details 不能为空。");
+  }
+  return `## Implementation Details\n\n${sections.join("\n\n")}\n\n`;
+}
+
+function titleizeDetailType(value) {
+  return strip(value)
+    .split("-")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 const RUNTIME_TABLES = [

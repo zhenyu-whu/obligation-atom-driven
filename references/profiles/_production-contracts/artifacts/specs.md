@@ -21,9 +21,9 @@ Trace 必须对齐 proposal 模板风格：固定 `delivery-plane` 作为 render
 
 ## Upstream Input Model
 
-- Specs writer 必须按当前 schema profile 与 overlay 解析 proposal trace；`instructions.template` 只提供 JSON shape 和字段示例，不提供 source/scope 语义权威。
+- Specs writer 必须按当前 schema overlay 解析 proposal trace；`instructions.template` 只提供 JSON shape 和字段示例，不提供 source/scope 语义权威。
 - 所有 `trace/specs/**.trace.json` sections 必须能回溯到 proposal trace register、focused existing spec read 或明确 blocker；不得从 template 注释、proposal Markdown、旧 specs Markdown、当前实现、测试文件、apply result、evidence 或 reviewer 过程摘要发明 requirement/guard。
-- Common contract 只定义通用生成顺序和 Delivery Plane / JSON Trace Plane 边界；具体 source ID 体系、proposal register 字段、spec-relevant predicate 和 profile 禁止项由 profile contract 与 schema overlay 约束。
+- Common contract 只定义通用生成顺序和 Delivery Plane / JSON Trace Plane 边界；具体 source ID 体系、proposal register 字段、spec-relevant predicate 和 schema-specific 禁止项由 schema overlay 约束。
 - Downstream artifact writer/reviewer 只能把 specs trace 作为 specs 语义输入；`specs/**/*.md` 是 renderer 投影后的 Delivery Plane，不得反向作为 source/scope register、coverage oracle、runtime row 或 proof oracle。
 - 如果 requirement/scenario 需要 proposal trace 无法到达的 source/scope detail，writer 必须报告 blocker 或修订上游 proposal trace；不得扩大读取范围后直接写入 specs trace。
 

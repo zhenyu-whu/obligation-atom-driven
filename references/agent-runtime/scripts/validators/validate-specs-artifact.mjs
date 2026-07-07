@@ -23,13 +23,23 @@ const NO_DELTA_TRACE_PATH = "trace/specs/no-spec-delta/README.trace.json";
 
 const GA_ID_RE = /^GA-\d{4}$/u;
 const SI_ID_RE = /^SI-\d{3}$/u;
-const ANY_GA_ID_RE = /GA-\d{4}/u;
-const ANY_SCOPE_ID_RE = /SI-\d{3}/u;
+const DELTA_ID_RE = /^SD-\d{3}$/u;
+const ANY_GA_ID_RE = /\bGA-\d{4}\b/u;
+const ANY_SCOPE_ID_RE = /\bSI-\d{3}\b/u;
 
-const OBLIGATION_SPEC_PROJECTIONS = new Set(["spec-requirement", "spec-guard"]);
 const DEFAULT_SPEC_HANDLINGS = new Set(["spec", "guard"]);
+const GUARD_PROJECTIONS = new Set(["spec-guard", "guard"]);
+const DELTA_OPS = new Set(["added", "modified", "removed", "renamed"]);
+const EXISTING_SPEC_STATUSES = new Set(["absent", "parsed", "parse-blocked"]);
 const GUARD_HANDLINGS = new Set(["must-not", "preserve-boundary", "non-goal"]);
-const DELIVERY_LEAK_KEY_RE = /(?:trace|gate|coverage|map)/iu;
+const SPEC_GATE_FIELDS = [
+  "blockers",
+  "orphan-source-ids",
+  "source-set-mismatch",
+  "existing-spec-state-violations",
+  "delivery-projection-mismatch",
+];
+const DELIVERY_LEAK_KEY_RE = /(?:trace|gate|coverage|map|register)/iu;
 
 export function validateSpecsArtifact(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
@@ -125,49 +135,45 @@ function buildObligationExpectedSpecsModel(ctx, proposalTrace) {
     ctx,
     "VAL-SPECS-PROPOSAL-010",
     PROPOSAL_TRACE_PATH,
-    proposalTrace["change-atom-coverage-register"],
-    "change-atom-coverage-register",
+    proposalTrace["change-ga-register"],
+    "change-ga-register",
   );
   const rows = [];
   const rowsById = new Map();
   for (const [index, row] of register.entries()) {
-    const projection = strip(row?.["artifact-projection"]);
-    if (!OBLIGATION_SPEC_PROJECTIONS.has(projection)) continue;
+    const specRoutes = getArtifactRoutes(row, "specs");
+    if (specRoutes.length === 0) continue;
 
-    const id = requireId(ctx, "VAL-SPECS-PROPOSAL-011", PROPOSAL_TRACE_PATH, row?.["global-atom-id"], `change-atom-coverage-register[${index}].global-atom-id`, GA_ID_RE);
+    const id = requireId(ctx, "VAL-SPECS-PROPOSAL-011", PROPOSAL_TRACE_PATH, row?.["ga-id"], `change-ga-register[${index}].ga-id`, GA_ID_RE);
     if (!id) continue;
-    const relation = strip(row?.["atom-relation"]);
-    const coverageStatus = strip(row?.["coverage-status"]);
-    if (relation !== "direct" || coverageStatus !== "direct") {
-      addError(ctx, "VAL-SPECS-PROPOSAL-012", PROPOSAL_TRACE_PATH, `${id} 是 specs projection，但不是 direct proposal register row。`);
-      continue;
-    }
     if (rowsById.has(id)) {
-      addError(ctx, "VAL-SPECS-PROPOSAL-013", PROPOSAL_TRACE_PATH, `change-atom-coverage-register global-atom-id 重复：${id}`);
+      addError(ctx, "VAL-SPECS-PROPOSAL-012", PROPOSAL_TRACE_PATH, `change-ga-register ga-id 重复：${id}`);
       continue;
     }
-    rows.push(row);
-    rowsById.set(id, row);
+    const role = specRoutes[0]?.role;
+    if (specRoutes.length > 1) {
+      addError(ctx, "VAL-SPECS-PROPOSAL-013", PROPOSAL_TRACE_PATH, `${id} 只能有一个 specs artifact route。`);
+    }
+    const routedRow = { ...row, "routing-role": role };
+    rows.push(routedRow);
+    rowsById.set(id, routedRow);
   }
 
   return buildExpectedModel({
     schemaName: OBLIGATION_SCHEMA,
-    idField: "global-atom-id",
+    idField: "ga-id",
     idRegex: GA_ID_RE,
-    capabilityField: "owner-capability",
-    projectionField: "artifact-projection",
+    capabilityField: "capability",
+    projectionField: "routing-role",
     requirementProjection: "spec-requirement",
     guardProjection: "spec-guard",
-    traceCapabilityField: "owner-capability",
-    sourceFields: ["source-document", "lines", "source-fact"],
-    gateGroupField: "spec-relevant-atoms",
-    gateOrphanField: "orphan-spec-atoms",
-    mapCapabilityField: "owner-capability",
-    mapRequirementIdsField: "spec-requirement-ids",
-    mapGuardIdsField: "spec-guard-ids",
     rows,
     rowsById,
   });
+}
+
+function getArtifactRoutes(row, artifact) {
+  return asArray(row?.["artifact-routes"]).filter((route) => strip(route?.artifact) === artifact);
 }
 
 function buildDefaultExpectedSpecsModel(ctx, proposalTrace) {
@@ -202,13 +208,6 @@ function buildDefaultExpectedSpecsModel(ctx, proposalTrace) {
     projectionField: "artifact-handling",
     requirementProjection: "spec",
     guardProjection: "guard",
-    traceCapabilityField: "capability",
-    sourceFields: ["source", "source-fact"],
-    gateGroupField: "spec-relevant-scope-items",
-    gateOrphanField: "orphan-spec-scope-items",
-    mapCapabilityField: "capability",
-    mapRequirementIdsField: "spec-scope-item-ids",
-    mapGuardIdsField: "guard-scope-item-ids",
     rows,
     rowsById,
   });
@@ -223,9 +222,8 @@ function buildExpectedModel(config) {
         capability,
         rows: [],
         rowsById: new Map(),
-        requirementIds: [],
-        guardIds: [],
         ids: [],
+        guardIds: [],
       });
     }
     const id = strip(row?.[config.idField]);
@@ -234,7 +232,6 @@ function buildExpectedModel(config) {
     group.rows.push(row);
     group.rowsById.set(id, row);
     group.ids.push(id);
-    if (projection === config.requirementProjection) group.requirementIds.push(id);
     if (projection === config.guardProjection) group.guardIds.push(id);
   }
 
@@ -316,16 +313,21 @@ function validateNoDeltaSpecsTrace(ctx, expected) {
   validateCommonTraceFields(ctx, trace, expected, NO_DELTA_TRACE_PATH, NO_DELTA_SPECS_ARTIFACT_PATH);
   expectEqual(ctx, "VAL-SPECS-NO-DELTA-001", NO_DELTA_TRACE_PATH, trace["specs-completion-mode"], NO_DELTA_SPECS_COMPLETION_MODE, "specs-completion-mode");
 
-  const sourceTrace = requireArray(ctx, "VAL-SPECS-NO-DELTA-002", NO_DELTA_TRACE_PATH, trace["requirement-source-trace"], "requirement-source-trace");
-  if (sourceTrace.length !== 0) {
-    addError(ctx, "VAL-SPECS-NO-DELTA-003", NO_DELTA_TRACE_PATH, "no-delta specs trace 的 requirement-source-trace 必须为空。");
+  const register = requireArray(ctx, "VAL-SPECS-NO-DELTA-002", NO_DELTA_TRACE_PATH, trace["spec-delta-register"], "spec-delta-register");
+  if (register.length !== 0) {
+    addError(ctx, "VAL-SPECS-NO-DELTA-003", NO_DELTA_TRACE_PATH, "no-delta specs trace 的 spec-delta-register 必须为空。");
   }
 
-  const gate = requireObject(ctx, "VAL-SPECS-NO-DELTA-004", NO_DELTA_TRACE_PATH, trace["production-alignment-gate"], "production-alignment-gate");
-  validateGateBasics(ctx, gate, expected, [], NO_DELTA_TRACE_PATH);
+  validateSpecGate(ctx, trace, expected, [], NO_DELTA_TRACE_PATH);
 
-  const delivery = requireObject(ctx, "VAL-SPECS-NO-DELTA-005", NO_DELTA_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
-  expectEqual(ctx, "VAL-SPECS-NO-DELTA-006", NO_DELTA_TRACE_PATH, delivery["completion-mode"], NO_DELTA_SPECS_COMPLETION_MODE, "delivery-plane.completion-mode");
+  const delivery = requireObject(ctx, "VAL-SPECS-NO-DELTA-004", NO_DELTA_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
+  validateDeliveryPlaneNoLeaks(ctx, delivery, NO_DELTA_TRACE_PATH);
+  expectEqual(ctx, "VAL-SPECS-NO-DELTA-005", NO_DELTA_TRACE_PATH, delivery["completion-mode"], NO_DELTA_SPECS_COMPLETION_MODE, "delivery-plane.completion-mode");
+  for (const key of ["added-requirements", "modified-requirements", "removed-requirements", "renamed-requirements"]) {
+    if (asArray(delivery[key]).length > 0) {
+      addError(ctx, "VAL-SPECS-NO-DELTA-006", NO_DELTA_TRACE_PATH, `no-delta delivery-plane 不得包含 ${key}。`);
+    }
+  }
 
   if (expected.schemaName === DEFAULT_SCHEMA) {
     validateDefaultTraceHasNoGa(ctx, trace, NO_DELTA_TRACE_PATH);
@@ -338,17 +340,14 @@ function validateNormalSpecsTrace(ctx, trace, group, expected, tracePath, artifa
   expectEqual(ctx, "VAL-SPECS-TRACE-021", tracePath, trace["specs-completion-mode"], "delta", "specs-completion-mode");
   expectEqual(ctx, "VAL-SPECS-TRACE-022", tracePath, trace.capability, group.capability, "capability");
 
-  requireArray(ctx, "VAL-SPECS-TRACE-023", tracePath, trace["existing-spec-read-set"], "existing-spec-read-set");
-  validateCapabilitySourceMap(ctx, trace, group, expected, tracePath, artifactPath);
+  validateSourceInterface(ctx, trace, tracePath);
+  const existingState = validateExistingSpecState(ctx, trace, tracePath);
 
-  const sourceTrace = requireArray(ctx, "VAL-SPECS-TRACE-024", tracePath, trace["requirement-source-trace"], "requirement-source-trace");
-  validateRequirementSourceTrace(ctx, sourceTrace, group, expected, tracePath);
-
-  const gate = requireObject(ctx, "VAL-SPECS-TRACE-025", tracePath, trace["production-alignment-gate"], "production-alignment-gate");
-  validateGateBasics(ctx, gate, expected, group.ids, tracePath);
-
-  const delivery = requireObject(ctx, "VAL-SPECS-TRACE-026", tracePath, trace["delivery-plane"], "delivery-plane");
-  validateDeliveryPlane(ctx, delivery, sourceTrace, tracePath);
+  const register = requireArray(ctx, "VAL-SPECS-TRACE-023", tracePath, trace["spec-delta-register"], "spec-delta-register");
+  const registerModel = validateSpecDeltaRegister(ctx, register, group, expected, existingState, tracePath);
+  const delivery = requireObject(ctx, "VAL-SPECS-TRACE-024", tracePath, trace["delivery-plane"], "delivery-plane");
+  validateDeliveryPlane(ctx, delivery, registerModel, tracePath);
+  validateSpecGate(ctx, trace, expected, group.ids, tracePath);
 
   if (expected.schemaName === DEFAULT_SCHEMA) {
     validateDefaultTraceHasNoGa(ctx, trace, tracePath);
@@ -363,132 +362,228 @@ function validateCommonTraceFields(ctx, trace, expected, tracePath, artifactPath
   expectEqual(ctx, "VAL-SPECS-TRACE-005", tracePath, trace["schema-name"], expected.schemaName, "schema-name");
   requireString(ctx, "VAL-SPECS-TRACE-006", tracePath, trace["agent-role"], "agent-role");
   requireObject(ctx, "VAL-SPECS-TRACE-007", tracePath, trace["delivery-plane"], "delivery-plane");
-  requireObject(ctx, "VAL-SPECS-TRACE-008", tracePath, trace["production-alignment-gate"], "production-alignment-gate");
+  requireObject(ctx, "VAL-SPECS-TRACE-008", tracePath, trace["source-interface"], "source-interface");
+  requireObject(ctx, "VAL-SPECS-TRACE-009", tracePath, trace["existing-spec-state"], "existing-spec-state");
+  requireArray(ctx, "VAL-SPECS-TRACE-010", tracePath, trace["spec-delta-register"], "spec-delta-register");
+  requireObject(ctx, "VAL-SPECS-TRACE-011", tracePath, trace["spec-gate"], "spec-gate");
 }
 
-function validateCapabilitySourceMap(ctx, trace, group, expected, tracePath, artifactPath) {
-  const rows = requireArray(ctx, "VAL-SPECS-MAP-001", tracePath, trace["capability-source-map"], "capability-source-map");
-  if (rows.length === 0) {
-    addError(ctx, "VAL-SPECS-MAP-002", tracePath, "capability-source-map 至少需要一行汇总当前 capability。");
+function validateSourceInterface(ctx, trace, tracePath) {
+  const sourceInterface = requireObject(ctx, "VAL-SPECS-SOURCE-IFACE-001", tracePath, trace["source-interface"], "source-interface");
+  const existingState = requireObject(ctx, "VAL-SPECS-SOURCE-IFACE-008", tracePath, trace["existing-spec-state"], "existing-spec-state");
+  expectEqual(ctx, "VAL-SPECS-SOURCE-IFACE-002", tracePath, sourceInterface["proposal-trace"], PROPOSAL_TRACE_PATH, "source-interface.proposal-trace");
+  requireString(ctx, "VAL-SPECS-SOURCE-IFACE-003", tracePath, sourceInterface["existing-spec"], "source-interface.existing-spec");
+  const mode = requireString(ctx, "VAL-SPECS-SOURCE-IFACE-004", tracePath, sourceInterface["existing-spec-read-mode"], "source-interface.existing-spec-read-mode");
+  if (mode && !EXISTING_SPEC_STATUSES.has(mode)) {
+    addError(ctx, "VAL-SPECS-SOURCE-IFACE-005", tracePath, "source-interface.existing-spec-read-mode 必须是 absent / parsed / parse-blocked。");
   }
+  if (mode && existingState.status && mode !== strip(existingState.status)) {
+    addError(ctx, "VAL-SPECS-SOURCE-IFACE-008", tracePath, "source-interface.existing-spec-read-mode 必须与 existing-spec-state.status 一致。");
+  }
+  requireString(ctx, "VAL-SPECS-SOURCE-IFACE-006", tracePath, sourceInterface["input-policy"], "source-interface.input-policy");
 
-  const requirementIds = [];
-  const guardIds = [];
-  for (const [index, row] of rows.entries()) {
-    const capability = strip(row?.[expected.mapCapabilityField]);
-    if (capability !== group.capability) {
-      addError(ctx, "VAL-SPECS-MAP-003", tracePath, `capability-source-map[${index}] capability 不一致：实际 ${capability || "(empty)"}，期望 ${group.capability}。`);
+  for (const [field, value] of Object.entries(sourceInterface)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      addError(ctx, "VAL-SPECS-SOURCE-IFACE-007", tracePath, `source-interface.${field} 必须是字符串或字符串数组，不能内联 object metadata。`);
     }
-    expectEqual(ctx, "VAL-SPECS-MAP-004", tracePath, row?.["artifact-path"], artifactPath, `capability-source-map[${index}].artifact-path`);
-    expectEqual(ctx, "VAL-SPECS-MAP-005", tracePath, row?.["trace-path"], tracePath, `capability-source-map[${index}].trace-path`);
-    requirementIds.push(...requireIdArray(ctx, "VAL-SPECS-MAP-006", tracePath, row?.[expected.mapRequirementIdsField] ?? [], `capability-source-map[${index}].${expected.mapRequirementIdsField}`, expected.idRegex));
-    guardIds.push(...requireIdArray(ctx, "VAL-SPECS-MAP-007", tracePath, row?.[expected.mapGuardIdsField] ?? [], `capability-source-map[${index}].${expected.mapGuardIdsField}`, expected.idRegex));
   }
-
-  expectSameSet(ctx, "VAL-SPECS-MAP-008", tracePath, requirementIds, group.requirementIds, "capability-source-map requirement IDs");
-  expectSameSet(ctx, "VAL-SPECS-MAP-009", tracePath, guardIds, group.guardIds, "capability-source-map guard IDs");
 }
 
-function validateRequirementSourceTrace(ctx, sourceTrace, group, expected, tracePath) {
-  const actualIds = [];
-  for (const [index, row] of sourceTrace.entries()) {
+function validateExistingSpecState(ctx, trace, tracePath) {
+  const state = requireObject(ctx, "VAL-SPECS-EXISTING-001", tracePath, trace["existing-spec-state"], "existing-spec-state");
+  const status = requireString(ctx, "VAL-SPECS-EXISTING-002", tracePath, state.status, "existing-spec-state.status");
+  if (status && !EXISTING_SPEC_STATUSES.has(status)) {
+    addError(ctx, "VAL-SPECS-EXISTING-003", tracePath, "existing-spec-state.status 必须是 absent / parsed / parse-blocked。");
+  }
+  requireString(ctx, "VAL-SPECS-EXISTING-004", tracePath, state.path, "existing-spec-state.path");
+  requireArray(ctx, "VAL-SPECS-EXISTING-005", tracePath, state["requirement-anchors"] ?? [], "existing-spec-state.requirement-anchors");
+  if (status === "parse-blocked" && !strip(state.blocker)) {
+    addError(ctx, "VAL-SPECS-EXISTING-006", tracePath, "existing-spec-state.parse-blocked 必须提供 blocker。");
+  }
+  return state;
+}
+
+function validateSpecDeltaRegister(ctx, register, group, expected, existingState, tracePath) {
+  const actualSourceIds = [];
+  const anchors = new Set();
+  const registerRows = [];
+  const seenDeltaIds = new Set();
+  const existingStatus = strip(existingState?.status);
+
+  if (register.length === 0) {
+    addError(ctx, "VAL-SPECS-DELTA-001", tracePath, "normal specs delta 必须包含至少一个 spec-delta-register row。");
+  }
+
+  for (const [index, row] of register.entries()) {
     rejectGroupedIds(ctx, row, tracePath, index);
-    const id = requireId(ctx, "VAL-SPECS-SOURCE-001", tracePath, row?.[expected.idField], `requirement-source-trace[${index}].${expected.idField}`, expected.idRegex);
-    if (!id) continue;
-    actualIds.push(id);
-
-    const proposalRow = group.rowsById.get(id);
-    if (!proposalRow) {
-      addError(ctx, "VAL-SPECS-SOURCE-002", tracePath, `${id} 不属于 ${group.capability} 的 proposal spec-relevant set。`);
-      continue;
+    const deltaId = requireId(ctx, "VAL-SPECS-DELTA-002", tracePath, row?.["delta-id"], `spec-delta-register[${index}].delta-id`, DELTA_ID_RE);
+    if (deltaId) {
+      if (seenDeltaIds.has(deltaId)) {
+        addError(ctx, "VAL-SPECS-DELTA-003", tracePath, `spec-delta-register delta-id 重复：${deltaId}`);
+      }
+      seenDeltaIds.add(deltaId);
     }
 
-    expectEqual(ctx, "VAL-SPECS-SOURCE-003", tracePath, row?.[expected.traceCapabilityField], group.capability, `requirement-source-trace[${index}].${expected.traceCapabilityField}`);
-    for (const field of expected.sourceFields) {
-      expectEqual(ctx, "VAL-SPECS-SOURCE-004", tracePath, row?.[field], proposalRow?.[field], `requirement-source-trace[${index}].${field}`);
+    const deltaOp = requireString(ctx, "VAL-SPECS-DELTA-004", tracePath, row?.["delta-op"], `spec-delta-register[${index}].delta-op`);
+    if (deltaOp && !DELTA_OPS.has(deltaOp)) {
+      addError(ctx, "VAL-SPECS-DELTA-005", tracePath, `spec-delta-register[${index}].delta-op 必须是 added / modified / removed / renamed。`);
+    }
+    if (existingStatus === "absent" && deltaOp && deltaOp !== "added") {
+      addError(ctx, "VAL-SPECS-DELTA-008", tracePath, `existing spec absent 时只能生成 added delta，不能生成 ${deltaOp}。`);
+    }
+    if (existingStatus === "parse-blocked" && deltaOp && deltaOp !== "added") {
+      addError(ctx, "VAL-SPECS-DELTA-009", tracePath, `existing spec parse-blocked 时不能 pass 非 added delta：${deltaOp}。`);
     }
 
-    const projection = strip(proposalRow?.[expected.projectionField]);
-    expectEqual(ctx, "VAL-SPECS-SOURCE-005", tracePath, row?.[expected.projectionField === "artifact-handling" ? "artifact-handling" : "source-projection"], projection, `requirement-source-trace[${index}] projection`);
-    validateSpecHandling(ctx, row, projection, expected, tracePath, index);
-    requireString(ctx, "VAL-SPECS-SOURCE-006", tracePath, row?.requirement, `requirement-source-trace[${index}].requirement`);
-    requireString(ctx, "VAL-SPECS-SOURCE-007", tracePath, row?.scenario, `requirement-source-trace[${index}].scenario`);
-  }
+    const requirement = requireString(ctx, "VAL-SPECS-DELTA-006", tracePath, row?.requirement, `spec-delta-register[${index}].requirement`);
+    const sourceIds = validateSourceIds(ctx, row?.["source-ids"] ?? [], group, expected, tracePath, `spec-delta-register[${index}].source-ids`);
+    actualSourceIds.push(...sourceIds);
 
-  expectSameSet(ctx, "VAL-SPECS-SOURCE-008", tracePath, actualIds, group.ids, "requirement-source-trace IDs");
-}
-
-function validateSpecHandling(ctx, row, projection, expected, tracePath, index) {
-  if (projection === expected.requirementProjection) {
-    expectEqual(ctx, "VAL-SPECS-SOURCE-020", tracePath, row?.["spec-handling"], "direct-spec-requirement", `requirement-source-trace[${index}].spec-handling`);
-    return;
-  }
-
-  if (projection === expected.guardProjection) {
-    expectEqual(ctx, "VAL-SPECS-SOURCE-021", tracePath, row?.["spec-handling"], "direct-spec-guard", `requirement-source-trace[${index}].spec-handling`);
-    const guardHandling = strip(row?.["guard-handling"]);
-    if (!GUARD_HANDLINGS.has(guardHandling)) {
-      addError(ctx, "VAL-SPECS-SOURCE-022", tracePath, `requirement-source-trace[${index}].guard-handling 必须是 must-not / preserve-boundary / non-goal。`);
+    const rowUsesGuard = sourceIds.some((id) => isGuardSource(id, group, expected));
+    if (rowUsesGuard) {
+      const guardHandling = strip(row?.["guard-handling"]);
+      if (!GUARD_HANDLINGS.has(guardHandling)) {
+        addError(ctx, "VAL-SPECS-DELTA-007", tracePath, `spec-delta-register[${index}].guard-handling 必须是 must-not / preserve-boundary / non-goal。`);
+      }
     }
-    return;
+
+    if (deltaOp === "added" || deltaOp === "modified") {
+      requireTextValue(ctx, "VAL-SPECS-DELTA-010", tracePath, row?.body, `spec-delta-register[${index}].body`);
+      const scenarios = requireArray(ctx, "VAL-SPECS-DELTA-011", tracePath, row?.scenarios, `spec-delta-register[${index}].scenarios`);
+      if (scenarios.length === 0) {
+        addError(ctx, "VAL-SPECS-DELTA-012", tracePath, `spec-delta-register[${index}] added/modified 必须包含至少一个 scenario。`);
+      }
+      if (deltaOp === "modified") {
+        requireString(ctx, "VAL-SPECS-DELTA-013", tracePath, row?.["existing-anchor"], `spec-delta-register[${index}].existing-anchor`);
+      }
+      for (const [scenarioIndex, scenario] of scenarios.entries()) {
+        const scenarioName = requireString(ctx, "VAL-SPECS-DELTA-014", tracePath, scenario?.name, `spec-delta-register[${index}].scenarios[${scenarioIndex}].name`);
+        if (!scenario?.body && !scenario?.given && !scenario?.when && !scenario?.then) {
+          addError(ctx, "VAL-SPECS-DELTA-015", tracePath, `spec-delta-register[${index}].scenarios[${scenarioIndex}] 必须包含 body 或 given/when/then。`);
+        }
+        const scenarioSourceIds = validateSourceIds(
+          ctx,
+          scenario?.["source-ids"] ?? sourceIds,
+          group,
+          expected,
+          tracePath,
+          `spec-delta-register[${index}].scenarios[${scenarioIndex}].source-ids`,
+        );
+        actualSourceIds.push(...scenarioSourceIds);
+        const pointer = `#/spec-delta-register/${index}/scenarios/${scenarioIndex}`;
+        anchors.add(anchorKey(requirement, scenarioName));
+        registerRows.push({ deltaOp, requirement, scenario: scenarioName, pointer });
+      }
+    }
+
+    if (deltaOp === "removed") {
+      requireString(ctx, "VAL-SPECS-DELTA-020", tracePath, row?.["existing-anchor"], `spec-delta-register[${index}].existing-anchor`);
+      requireTextValue(ctx, "VAL-SPECS-DELTA-021", tracePath, row?.reason, `spec-delta-register[${index}].reason`);
+      requireTextValue(ctx, "VAL-SPECS-DELTA-022", tracePath, row?.migration, `spec-delta-register[${index}].migration`);
+      if (Array.isArray(row?.scenarios) && row.scenarios.length > 0) {
+        addError(ctx, "VAL-SPECS-DELTA-023", tracePath, `spec-delta-register[${index}] removed 不得包含 scenarios。`);
+      }
+      registerRows.push({ deltaOp, requirement, pointer: `#/spec-delta-register/${index}` });
+    }
+
+    if (deltaOp === "renamed") {
+      requireString(ctx, "VAL-SPECS-DELTA-030", tracePath, row?.["existing-anchor"], `spec-delta-register[${index}].existing-anchor`);
+      const from = requireString(ctx, "VAL-SPECS-DELTA-031", tracePath, row?.from, `spec-delta-register[${index}].from`);
+      const to = requireString(ctx, "VAL-SPECS-DELTA-032", tracePath, row?.to, `spec-delta-register[${index}].to`);
+      if (row?.body || row?.reason || row?.migration || (Array.isArray(row?.scenarios) && row.scenarios.length > 0)) {
+        addError(ctx, "VAL-SPECS-DELTA-033", tracePath, `spec-delta-register[${index}] renamed 不得包含行为变化字段。`);
+      }
+      registerRows.push({ deltaOp, requirement, from, to, pointer: `#/spec-delta-register/${index}` });
+    }
   }
 
-  addError(ctx, "VAL-SPECS-SOURCE-023", tracePath, `不允许的 specs projection：${projection || "(empty)"}`);
+  expectSameSet(ctx, "VAL-SPECS-DELTA-040", tracePath, actualSourceIds, group.ids, "spec-delta-register source IDs");
+
+  return {
+    actualSourceIds,
+    anchors,
+    registerRows,
+  };
 }
 
-function validateGateBasics(ctx, gate, expected, expectedIds, tracePath) {
-  const blockers = requireArray(ctx, "VAL-SPECS-GATE-001", tracePath, gate.blockers ?? [], "production-alignment-gate.blockers");
-  if (blockers.length !== 0) {
-    addError(ctx, "VAL-SPECS-GATE-002", tracePath, "production-alignment-gate.blockers 必须为空；非空 blocker 不能进入 validator pass。");
+function validateSourceIds(ctx, value, group, expected, tracePath, label) {
+  const ids = requireIdArray(ctx, "VAL-SPECS-SOURCE-001", tracePath, value, label, expected.idRegex);
+  for (const id of ids) {
+    if (!group.rowsById.has(id)) {
+      addError(ctx, "VAL-SPECS-SOURCE-002", tracePath, `${label} 引用的 ${id} 不属于 ${group.capability} 的 proposal spec-relevant set。`);
+    }
+  }
+  return ids;
+}
+
+function isGuardSource(id, group, expected) {
+  const row = group.rowsById.get(id);
+  return GUARD_PROJECTIONS.has(strip(row?.[expected.projectionField]));
+}
+
+function validateSpecGate(ctx, trace, expected, expectedIds, tracePath) {
+  const gate = requireObject(ctx, "VAL-SPECS-GATE-001", tracePath, trace["spec-gate"], "spec-gate");
+  for (const field of SPEC_GATE_FIELDS) {
+    const values = requireArray(ctx, "VAL-SPECS-GATE-002", tracePath, gate[field] ?? [], `spec-gate.${field}`);
+    if (values.length !== 0) {
+      addError(ctx, "VAL-SPECS-GATE-003", tracePath, `spec-gate.${field} 必须为空；非空表示 specs 未闭合。`);
+    }
   }
 
-  const relevant = requireObject(ctx, "VAL-SPECS-GATE-003", tracePath, gate[expected.gateGroupField], `production-alignment-gate.${expected.gateGroupField}`);
-  const ids = requireIdArray(ctx, "VAL-SPECS-GATE-004", tracePath, relevant.ids ?? [], `production-alignment-gate.${expected.gateGroupField}.ids`, expected.idRegex);
-  expectEqual(ctx, "VAL-SPECS-GATE-005", tracePath, relevant.count, ids.length, `production-alignment-gate.${expected.gateGroupField}.count`);
-  expectSameSet(ctx, "VAL-SPECS-GATE-006", tracePath, ids, expectedIds, `production-alignment-gate.${expected.gateGroupField}.ids`);
-
-  const orphan = requireArray(ctx, "VAL-SPECS-GATE-007", tracePath, gate[expected.gateOrphanField] ?? [], `production-alignment-gate.${expected.gateOrphanField}`);
-  if (orphan.length !== 0) {
-    addError(ctx, "VAL-SPECS-GATE-008", tracePath, `production-alignment-gate.${expected.gateOrphanField} 必须为空。`);
-  }
-
-  const deliveryOnly = requireArray(ctx, "VAL-SPECS-GATE-009", tracePath, gate["delivery-only-scenarios"] ?? [], "production-alignment-gate.delivery-only-scenarios");
-  if (deliveryOnly.length !== 0) {
-    addError(ctx, "VAL-SPECS-GATE-010", tracePath, "production-alignment-gate.delivery-only-scenarios 必须为空。");
+  if (expectedIds.length === 0 && asArray(trace["spec-delta-register"]).length !== 0) {
+    addError(ctx, "VAL-SPECS-GATE-004", tracePath, "proposal 没有 spec-relevant item 时 spec-delta-register 必须为空。");
   }
 }
 
-function validateDeliveryPlane(ctx, delivery, sourceTrace, tracePath) {
+function validateDeliveryPlane(ctx, delivery, registerModel, tracePath) {
   validateDeliveryPlaneNoLeaks(ctx, delivery, tracePath);
 
-  const anchors = new Set();
-  for (const requirement of [
-    ...asArray(delivery["added-requirements"]),
-    ...asArray(delivery["modified-requirements"]),
+  const deliveryRows = [];
+  for (const [deltaOp, key] of [
+    ["added", "added-requirements"],
+    ["modified", "modified-requirements"],
   ]) {
-    const requirementName = strip(requirement?.name);
-    for (const scenario of asArray(requirement?.scenarios)) {
-      const scenarioName = strip(scenario?.name);
-      if (requirementName && scenarioName) anchors.add(anchorKey(requirementName, scenarioName));
+    for (const [requirementIndex, requirement] of asArray(delivery[key]).entries()) {
+      const requirementName = strip(requirement?.name);
+      requireTextValue(ctx, "VAL-SPECS-DELIVERY-020", tracePath, requirement?.body, `delivery-plane.${key}[${requirementName}].body`);
+      const scenarios = asArray(requirement?.scenarios);
+      if (scenarios.length === 0) {
+        addError(ctx, "VAL-SPECS-DELIVERY-021", tracePath, `delivery-plane.${key}[${requirementIndex}] 必须包含至少一个 scenario。`);
+      }
+      for (const scenario of scenarios) {
+        const scenarioName = strip(scenario?.name);
+        if (requirementName && scenarioName) {
+          deliveryRows.push(`${deltaOp}\u0000${requirementName}\u0000${scenarioName}`);
+        }
+      }
     }
   }
 
-  const traceAnchors = new Set(
-    sourceTrace
-      .map((row) => anchorKey(strip(row?.requirement), strip(row?.scenario)))
-      .filter((anchor) => anchor !== "\u0000"),
-  );
+  for (const requirement of asArray(delivery["removed-requirements"])) {
+    const name = strip(requirement?.name);
+    if (name) deliveryRows.push(`removed\u0000${name}\u0000`);
+    requireTextValue(ctx, "VAL-SPECS-DELIVERY-030", tracePath, requirement?.reason, `delivery-plane.removed-requirements[${name}].reason`);
+    requireTextValue(ctx, "VAL-SPECS-DELIVERY-031", tracePath, requirement?.migration, `delivery-plane.removed-requirements[${name}].migration`);
+  }
 
-  for (const anchor of anchors) {
-    if (!traceAnchors.has(anchor)) {
-      addError(ctx, "VAL-SPECS-DELIVERY-001", tracePath, `delivery-plane scenario 没有 requirement-source-trace row：${formatAnchor(anchor)}`);
+  for (const requirement of asArray(delivery["renamed-requirements"])) {
+    const from = strip(requirement?.from);
+    const to = strip(requirement?.to);
+    if (from && to) deliveryRows.push(`renamed\u0000${from}\u0000${to}`);
+  }
+
+  const normalizedRegisterRows = [];
+  const renamedRegisterRows = [];
+  for (const row of registerModel.registerRows) {
+    if (row.deltaOp === "renamed") {
+      renamedRegisterRows.push(`renamed\u0000${strip(row.from)}\u0000${strip(row.to)}`);
+    } else {
+      normalizedRegisterRows.push(`${row.deltaOp}\u0000${strip(row.requirement)}\u0000${strip(row.scenario)}`);
     }
   }
-  for (const anchor of traceAnchors) {
-    if (!anchors.has(anchor)) {
-      addError(ctx, "VAL-SPECS-DELIVERY-002", tracePath, `requirement-source-trace row 无法解析到 added/modified scenario：${formatAnchor(anchor)}`);
-    }
-  }
+
+  expectSameSet(ctx, "VAL-SPECS-DELIVERY-001", tracePath, deliveryRows.filter((row) => !row.startsWith("renamed\u0000")), normalizedRegisterRows, "delivery-plane requirements vs spec-delta-register");
+  expectSameSet(ctx, "VAL-SPECS-DELIVERY-040", tracePath, deliveryRows.filter((row) => row.startsWith("renamed\u0000")), renamedRegisterRows, "delivery-plane renamed requirements vs spec-delta-register");
 }
 
 function validateDeliveryPlaneNoLeaks(ctx, delivery, tracePath) {
@@ -499,7 +594,7 @@ function validateDeliveryPlaneNoLeaks(ctx, delivery, tracePath) {
 
   for (const key of collectObjectKeys(delivery)) {
     if (DELIVERY_LEAK_KEY_RE.test(key)) {
-      addError(ctx, "VAL-SPECS-DELIVERY-011", tracePath, `delivery-plane 不得包含 trace/gate/coverage/map 字段：${key}`);
+      addError(ctx, "VAL-SPECS-DELIVERY-011", tracePath, `delivery-plane 不得包含 trace/gate/coverage/map/register 字段：${key}`);
     }
   }
 }
@@ -540,7 +635,7 @@ function validateSpecsRender(ctx, options) {
 function rejectGroupedIds(ctx, row, tracePath, index) {
   for (const field of ["global-atom-ids", "atom-ids", "scope-item-ids", "ids"]) {
     if (field in Object(row)) {
-      addError(ctx, "VAL-SPECS-SOURCE-030", tracePath, `requirement-source-trace[${index}] 不得使用 ${field} 汇总多个 ID。`);
+      addError(ctx, "VAL-SPECS-SOURCE-030", tracePath, `spec-delta-register[${index}] 不得使用 ${field} 汇总多个 ID。`);
     }
   }
 }
@@ -620,6 +715,13 @@ function requireString(ctx, ruleId, file, value, label) {
   return strip(value);
 }
 
+function requireTextValue(ctx, ruleId, file, value, label) {
+  if (typeof value === "string" && strip(value)) return value;
+  if (Array.isArray(value) && value.length > 0 && value.every((item) => strip(item))) return value;
+  addError(ctx, ruleId, file, `${label} 必须是非空字符串或非空字符串数组。`);
+  return value;
+}
+
 function requireId(ctx, ruleId, file, value, label, regex) {
   const id = requireString(ctx, ruleId, file, value, label);
   if (id && !regex.test(id)) {
@@ -680,11 +782,6 @@ function collectObjectKeys(value, keys = []) {
 function anchorKey(requirement, scenario) {
   if (!requirement || !scenario) return "\u0000";
   return `${requirement}\u0000${scenario}`;
-}
-
-function formatAnchor(anchor) {
-  const [requirement, scenario] = anchor.split("\u0000");
-  return `${requirement} / ${scenario}`;
 }
 
 function addError(ctx, ruleId, file, message) {

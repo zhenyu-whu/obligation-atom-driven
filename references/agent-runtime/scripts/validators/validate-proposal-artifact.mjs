@@ -40,6 +40,19 @@ const DEFAULT_ARTIFACT_HANDLINGS = new Set([
   "context",
 ]);
 
+const ROUTING_DISPOSITIONS = new Set([
+  "projected",
+  "reference-only",
+  "deferred",
+  "out-of-scope",
+  "not-projected",
+]);
+const ROUTE_ARTIFACTS = new Set(["specs", "design"]);
+const ROUTE_ROLES_BY_ARTIFACT = {
+  specs: new Set(["spec-requirement", "spec-guard"]),
+  design: new Set(["design-input"]),
+};
+
 export function validateProposalArtifact(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const change = strip(options.change);
@@ -103,7 +116,6 @@ function validateCommonProposal(ctx, trace) {
   expectEqual(ctx, "VAL-PROPOSAL-012", PROPOSAL_TRACE_PATH, trace["artifact-path"], PROPOSAL_ARTIFACT_PATH, "artifact-path");
   expectEqual(ctx, "VAL-PROPOSAL-013", PROPOSAL_TRACE_PATH, trace["change-name"], ctx.change, "change-name");
   requireObject(ctx, "VAL-PROPOSAL-014", PROPOSAL_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
-  requireObject(ctx, "VAL-PROPOSAL-015", PROPOSAL_TRACE_PATH, trace["proposal-alignment-gate"], "proposal-alignment-gate");
 
   validateProposalRender(ctx);
   validateManifest(ctx);
@@ -159,79 +171,70 @@ function validateManifest(ctx) {
 }
 
 function validateObligationProposal(ctx, trace) {
-  const preconditions = requireObject(
+  const sourceInterface = requireObject(
     ctx,
     "VAL-OBLIGATION-PROPOSAL-001",
     PROPOSAL_TRACE_PATH,
-    trace["obligation-atom-preconditions"],
-    "obligation-atom-preconditions",
+    trace["source-interface"],
+    "source-interface",
   );
   const register = requireArray(
     ctx,
     "VAL-OBLIGATION-PROPOSAL-002",
     PROPOSAL_TRACE_PATH,
-    trace["change-atom-coverage-register"],
-    "change-atom-coverage-register",
+    trace["change-ga-register"],
+    "change-ga-register",
   );
-  const readSet = requireArray(
+  const boundaryRefs = requireArray(
     ctx,
     "VAL-OBLIGATION-PROPOSAL-003",
     PROPOSAL_TRACE_PATH,
-    trace["source-window-read-set"],
-    "source-window-read-set",
-  );
-  const sourceCoverage = requireArray(
-    ctx,
-    "VAL-OBLIGATION-PROPOSAL-004",
-    PROPOSAL_TRACE_PATH,
-    trace["production-source-coverage"],
-    "production-source-coverage",
+    trace["non-direct-boundary-ref"],
+    "non-direct-boundary-ref",
   );
   const gate = requireObject(
     ctx,
-    "VAL-OBLIGATION-PROPOSAL-005",
+    "VAL-OBLIGATION-PROPOSAL-004",
     PROPOSAL_TRACE_PATH,
-    trace["proposal-alignment-gate"],
-    "proposal-alignment-gate",
+    trace["proposal-gate"],
+    "proposal-gate",
   );
 
-  const handoff = loadObligationHandoff(ctx, preconditions);
+  const handoff = loadObligationHandoff(ctx, sourceInterface);
   if (!handoff) return;
 
   validateObligationDeliveryPlane(ctx, trace["delivery-plane"]);
-  validateObligationGateBasics(ctx, gate, preconditions, handoff);
-  validateDirectAtomRegister(ctx, register, handoff);
-  validateSourceWindowReadSet(ctx, readSet, register);
-  validateProductionSourceCoverage(ctx, sourceCoverage, register);
-  validateObligationGateCoverage(ctx, gate, register, readSet, handoff);
-  validateOwnerScopedBoundary(ctx, trace, gate, handoff);
+  validateChangeGaRegister(ctx, register, handoff);
+  validateNonDirectBoundaryRef(ctx, boundaryRefs, register, handoff);
+  validateObligationProposalGate(ctx, gate);
 }
 
-function loadObligationHandoff(ctx, preconditions) {
+function loadObligationHandoff(ctx, sourceInterface) {
   const requiredPathFields = [
     "orchestrate-manifest",
     "global-atom-index-json",
     "atom-plan-mapping-json",
     "final-packet-index-json",
   ];
+  expectEqual(ctx, "VAL-OBLIGATION-SOURCE-IFACE-001", PROPOSAL_TRACE_PATH, sourceInterface["input-mode"], "final-change-packet", "source-interface.input-mode");
   for (const field of requiredPathFields) {
-    requireString(ctx, "VAL-OBLIGATION-PRE-001", PROPOSAL_TRACE_PATH, preconditions[field], `obligation-atom-preconditions.${field}`);
+    requireString(ctx, "VAL-OBLIGATION-SOURCE-IFACE-002", PROPOSAL_TRACE_PATH, sourceInterface[field], `source-interface.${field}`);
   }
 
-  for (const [field, value] of Object.entries(preconditions)) {
+  for (const [field, value] of Object.entries(sourceInterface)) {
     if (value && typeof value === "object") {
-      addError(ctx, "VAL-OBLIGATION-PRE-002", PROPOSAL_TRACE_PATH, `obligation-atom-preconditions.${field} 必须是字符串路径，不能内联 object metadata。`);
+      addError(ctx, "VAL-OBLIGATION-SOURCE-IFACE-003", PROPOSAL_TRACE_PATH, `source-interface.${field} 必须是字符串路径，不能内联 object metadata。`);
       continue;
     }
-    if (typeof value === "string") {
-      expectRepoFile(ctx, "VAL-OBLIGATION-PRE-003", value, `precondition ${field}`);
+    if (field !== "input-mode" && typeof value === "string") {
+      expectRepoFile(ctx, "VAL-OBLIGATION-SOURCE-IFACE-004", value, `source-interface ${field}`);
     }
   }
 
-  const finalPacketIndexPath = strip(preconditions["final-packet-index-json"]);
-  const atomPlanMappingPath = strip(preconditions["atom-plan-mapping-json"]);
-  const globalAtomIndexPath = strip(preconditions["global-atom-index-json"]);
-  const orchestrateManifestPath = strip(preconditions["orchestrate-manifest"]);
+  const finalPacketIndexPath = strip(sourceInterface["final-packet-index-json"]);
+  const atomPlanMappingPath = strip(sourceInterface["atom-plan-mapping-json"]);
+  const globalAtomIndexPath = strip(sourceInterface["global-atom-index-json"]);
+  const orchestrateManifestPath = strip(sourceInterface["orchestrate-manifest"]);
 
   const finalPacketIndex = readRepoJson(ctx, finalPacketIndexPath);
   const atomPlanMapping = readRepoJson(ctx, atomPlanMappingPath);
@@ -316,279 +319,208 @@ function validateObligationDeliveryPlane(ctx, deliveryPlane) {
   if (/\bGA-\d{4}\b/u.test(text)) {
     addError(ctx, "VAL-OBLIGATION-DELIVERY-001", PROPOSAL_TRACE_PATH, "delivery-plane 不得包含 GA-#### coverage 或 direct atom 列表。");
   }
-  for (const phrase of ["Direct atoms", "Direct Atoms", "Projection mix", "Projection Mix", "Global Atoms:"]) {
+  for (const phrase of [
+    "Direct atoms",
+    "Direct Atoms",
+    "Projection mix",
+    "Projection Mix",
+    "Global Atoms:",
+    "change-ga-register",
+    "non-direct-boundary-ref",
+    "proposal-gate",
+  ]) {
     if (text.includes(phrase)) {
       addError(ctx, "VAL-OBLIGATION-DELIVERY-002", PROPOSAL_TRACE_PATH, `delivery-plane 不得包含 coverage 泄漏短语：${phrase}`);
     }
   }
 }
 
-function validateObligationGateBasics(ctx, gate, preconditions, handoff) {
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-001", PROPOSAL_TRACE_PATH, gate["change-slug"], ctx.change, "proposal-alignment-gate.change-slug");
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-002", PROPOSAL_TRACE_PATH, gate["change-kind"], handoff.changeKind, "proposal-alignment-gate.change-kind");
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-003", PROPOSAL_TRACE_PATH, gate["global-atom-index-json"], preconditions["global-atom-index-json"], "proposal-alignment-gate.global-atom-index-json");
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-004", PROPOSAL_TRACE_PATH, gate["final-packet-index-json"], preconditions["final-packet-index-json"], "proposal-alignment-gate.final-packet-index-json");
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-005", PROPOSAL_TRACE_PATH, gate["atom-plan-mapping-json"], preconditions["atom-plan-mapping-json"], "proposal-alignment-gate.atom-plan-mapping-json");
-
-  const packetPath = strip(handoff.packet["packet-path"]);
-  if (packetPath) {
-    expectEqual(ctx, "VAL-OBLIGATION-GATE-006", PROPOSAL_TRACE_PATH, gate["change-packet"], packetPath, "proposal-alignment-gate.change-packet");
-  }
-
-  const capabilityViewFiles = requireIdlessStringArray(
-    ctx,
-    "VAL-OBLIGATION-GATE-007",
-    PROPOSAL_TRACE_PATH,
-    gate["capability-atom-view-files"] ?? [],
-    "proposal-alignment-gate.capability-atom-view-files",
-  );
-  const packetCapabilityViews = asArray(handoff.packet["capability-view-paths"]).map(strip).filter(Boolean);
-  expectSameSet(ctx, "VAL-OBLIGATION-GATE-008", PROPOSAL_TRACE_PATH, capabilityViewFiles, packetCapabilityViews, "capability view files");
-
-  const blockers = requireArray(ctx, "VAL-OBLIGATION-GATE-009", PROPOSAL_TRACE_PATH, gate.blockers ?? [], "proposal-alignment-gate.blockers");
-  if (blockers.length !== 0) {
-    addError(ctx, "VAL-OBLIGATION-GATE-010", PROPOSAL_TRACE_PATH, "proposal-alignment-gate.blockers 必须为空；非空 blocker 不能进入 validator pass。");
-  }
-}
-
-function validateDirectAtomRegister(ctx, register, handoff) {
-  const registerById = indexRowsById(ctx, "VAL-OBLIGATION-REGISTER-001", PROPOSAL_TRACE_PATH, register, "global-atom-id");
-  expectSameSet(ctx, "VAL-OBLIGATION-REGISTER-002", PROPOSAL_TRACE_PATH, [...registerById.keys()], handoff.directAtomIds, "change-atom-coverage-register vs packet direct atoms");
+function validateChangeGaRegister(ctx, register, handoff) {
+  const registerById = indexRowsById(ctx, "VAL-OBLIGATION-REGISTER-001", PROPOSAL_TRACE_PATH, register, "ga-id");
+  expectSameSet(ctx, "VAL-OBLIGATION-REGISTER-002", PROPOSAL_TRACE_PATH, [...registerById.keys()], handoff.directAtomIds, "change-ga-register vs packet direct atoms");
 
   for (const id of handoff.directAtomIds) {
     const row = registerById.get(id);
     if (!row) continue;
-    validateDirectAtomRow(ctx, row, id, handoff);
+    validateChangeGaRow(ctx, row, id, handoff);
   }
 }
 
-function validateDirectAtomRow(ctx, row, id, handoff) {
+function validateChangeGaRow(ctx, row, id, handoff) {
   const requiredFields = [
-    "global-atom-id",
+    "ga-id",
     "source-document",
     "lines",
-    "atom-type",
     "source-fact",
     "normativity",
-    "coverage-status",
-    "artifact-projection",
-    "projection-source",
-    "owner-capability",
-    "atom-relation",
-    "propose-use",
-    "evidence-need",
-    "downstream-coverage-expectation",
+    "atom-type",
+    "capability",
+    "projection",
+    "routing-disposition",
+    "proposal-use",
+    "downstream-expectation",
+    "routing-rationale",
+    "routing-no-scope-expansion",
   ];
   for (const field of requiredFields) {
-    requireString(ctx, "VAL-OBLIGATION-REGISTER-003", PROPOSAL_TRACE_PATH, row[field], `change-atom-coverage-register[${id}].${field}`);
+    requireString(ctx, "VAL-OBLIGATION-REGISTER-003", PROPOSAL_TRACE_PATH, row[field], `change-ga-register[${id}].${field}`);
   }
+  validateArtifactRoutes(ctx, row, id);
 
-  expectEqual(ctx, "VAL-OBLIGATION-REGISTER-004", PROPOSAL_TRACE_PATH, row["coverage-status"], "direct", `change-atom-coverage-register[${id}].coverage-status`);
-  expectEqual(ctx, "VAL-OBLIGATION-REGISTER-005", PROPOSAL_TRACE_PATH, row["atom-relation"], "direct", `change-atom-coverage-register[${id}].atom-relation`);
-  if (strip(row["artifact-projection"]) === "contextual-only") {
-    addError(ctx, "VAL-OBLIGATION-REGISTER-006", PROPOSAL_TRACE_PATH, `${id} 是 direct atom，artifact-projection 不得为 contextual-only。`);
-  }
-  if (row.capability !== undefined && strip(row.capability) !== strip(row["owner-capability"])) {
-    addError(ctx, "VAL-OBLIGATION-REGISTER-007", PROPOSAL_TRACE_PATH, `${id} 的辅助 capability 与 owner-capability 不一致。`);
+  if (strip(row.projection) === "contextual-only") {
+    addError(ctx, "VAL-OBLIGATION-REGISTER-004", PROPOSAL_TRACE_PATH, `${id} 是 direct GA，projection 不得为 contextual-only。`);
   }
 
   const atom = handoff.atomById.get(id);
   const mapping = handoff.mappingById.get(id);
   if (!atom) {
-    addError(ctx, "VAL-OBLIGATION-REGISTER-008", PROPOSAL_TRACE_PATH, `${id} 在 obligation-atom-index.json 中不存在。`);
+    addError(ctx, "VAL-OBLIGATION-REGISTER-005", PROPOSAL_TRACE_PATH, `${id} 在 obligation-atom-index.json 中不存在。`);
   }
   if (!mapping) {
-    addError(ctx, "VAL-OBLIGATION-REGISTER-009", PROPOSAL_TRACE_PATH, `${id} 在 atom-plan-mapping.json 中不存在。`);
+    addError(ctx, "VAL-OBLIGATION-REGISTER-006", PROPOSAL_TRACE_PATH, `${id} 在 atom-plan-mapping.json 中不存在。`);
   }
   if (atom) {
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-010", PROPOSAL_TRACE_PATH, row["source-document"], atom["source-document"], `${id}.source-document`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-011", PROPOSAL_TRACE_PATH, row.lines, atom.lines, `${id}.lines`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-012", PROPOSAL_TRACE_PATH, row["atom-type"], atom["atom-type"], `${id}.atom-type`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-013", PROPOSAL_TRACE_PATH, row["source-fact"], atom["source-fact"], `${id}.source-fact`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-014", PROPOSAL_TRACE_PATH, row.normativity, atom.normativity, `${id}.normativity`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-007", PROPOSAL_TRACE_PATH, row["source-document"], atom["source-document"], `${id}.source-document`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-008", PROPOSAL_TRACE_PATH, row.lines, atom.lines, `${id}.lines`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-009", PROPOSAL_TRACE_PATH, row["source-fact"], atom["source-fact"], `${id}.source-fact`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-010", PROPOSAL_TRACE_PATH, row.normativity, atom.normativity, `${id}.normativity`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-011", PROPOSAL_TRACE_PATH, row["atom-type"], atom["atom-type"], `${id}.atom-type`);
   }
   if (mapping) {
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-015", PROPOSAL_TRACE_PATH, mapping["final-owner-change"], ctx.change, `${id}.final-owner-change`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-016", PROPOSAL_TRACE_PATH, mapping["final-relation"], "direct", `${id}.final-relation`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-017", PROPOSAL_TRACE_PATH, row["artifact-projection"], mapping["final-artifact-projection"], `${id}.artifact-projection`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-018", PROPOSAL_TRACE_PATH, row["owner-capability"], mapping["final-owner-capability"], `${id}.owner-capability`);
-    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-019", PROPOSAL_TRACE_PATH, row["atom-relation"], mapping["final-relation"], `${id}.atom-relation`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-012", PROPOSAL_TRACE_PATH, mapping["final-owner-change"], ctx.change, `${id}.final-owner-change`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-013", PROPOSAL_TRACE_PATH, mapping["final-relation"], "direct", `${id}.final-relation`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-014", PROPOSAL_TRACE_PATH, row.capability, mapping["final-owner-capability"], `${id}.capability`);
+    expectEqual(ctx, "VAL-OBLIGATION-REGISTER-015", PROPOSAL_TRACE_PATH, row.projection, mapping["final-artifact-projection"], `${id}.projection`);
   }
-  expectRepoFileIfPathLike(ctx, "VAL-OBLIGATION-REGISTER-020", row["source-document"], `${id}.source-document`);
+  expectRepoFileIfPathLike(ctx, "VAL-OBLIGATION-REGISTER-016", row["source-document"], `${id}.source-document`);
 }
 
-function validateSourceWindowReadSet(ctx, readSet, register) {
-  const registerById = indexRowsById(ctx, "VAL-OBLIGATION-READSET-001", PROPOSAL_TRACE_PATH, register, "global-atom-id");
-  const readSetById = indexRowsById(ctx, "VAL-OBLIGATION-READSET-002", PROPOSAL_TRACE_PATH, readSet, "global-atom-id");
-  expectSameSet(ctx, "VAL-OBLIGATION-READSET-003", PROPOSAL_TRACE_PATH, [...readSetById.keys()], [...registerById.keys()], "source-window-read-set vs direct register");
+function validateArtifactRoutes(ctx, row, id) {
+  const disposition = strip(row["routing-disposition"]);
+  if (!ROUTING_DISPOSITIONS.has(disposition)) {
+    addError(ctx, "VAL-OBLIGATION-ROUTING-001", PROPOSAL_TRACE_PATH, `${id}.routing-disposition 非法：${disposition || "(empty)"}`);
+  }
 
-  for (const [id, row] of readSetById.entries()) {
-    for (const field of ["global-atom-id", "source-document", "line-range", "source-fact", "read-purpose"]) {
-      requireString(ctx, "VAL-OBLIGATION-READSET-004", PROPOSAL_TRACE_PATH, row[field], `source-window-read-set[${id}].${field}`);
+  const routes = requireArray(ctx, "VAL-OBLIGATION-ROUTING-002", PROPOSAL_TRACE_PATH, row["artifact-routes"], `change-ga-register[${id}].artifact-routes`);
+  if (disposition === "projected" && routes.length === 0) {
+    addError(ctx, "VAL-OBLIGATION-ROUTING-003", PROPOSAL_TRACE_PATH, `${id}.routing-disposition=projected 时 artifact-routes 不能为空。`);
+  }
+  if (disposition && disposition !== "projected" && routes.length !== 0) {
+    addError(ctx, "VAL-OBLIGATION-ROUTING-004", PROPOSAL_TRACE_PATH, `${id}.routing-disposition=${disposition} 时 artifact-routes 必须为空。`);
+  }
+  if (usesProjectionAsRoutingBasis(row["routing-rationale"])) {
+    addError(ctx, "VAL-OBLIGATION-ROUTING-011", PROPOSAL_TRACE_PATH, `${id}.routing-rationale 不得以 final projection 作为 routing 依据；必须说明 source-fact 的 artifact-local 消费语义。`);
+  }
+
+  const seenRouteKeys = new Set();
+  for (const [index, route] of routes.entries()) {
+    const routeLabel = `change-ga-register[${id}].artifact-routes[${index}]`;
+    const artifact = requireString(ctx, "VAL-OBLIGATION-ROUTING-005", PROPOSAL_TRACE_PATH, route?.artifact, `${routeLabel}.artifact`);
+    const role = requireString(ctx, "VAL-OBLIGATION-ROUTING-006", PROPOSAL_TRACE_PATH, route?.role, `${routeLabel}.role`);
+    requireString(ctx, "VAL-OBLIGATION-ROUTING-007", PROPOSAL_TRACE_PATH, route?.use, `${routeLabel}.use`);
+
+    if (artifact && !ROUTE_ARTIFACTS.has(artifact)) {
+      addError(ctx, "VAL-OBLIGATION-ROUTING-008", PROPOSAL_TRACE_PATH, `${routeLabel}.artifact 只能是 specs 或 design，不能是 ${artifact}。`);
     }
-    const registerRow = registerById.get(id);
-    if (!registerRow) continue;
-    expectEqual(ctx, "VAL-OBLIGATION-READSET-005", PROPOSAL_TRACE_PATH, row["source-document"], registerRow["source-document"], `${id}.read-set.source-document`);
-    expectEqual(ctx, "VAL-OBLIGATION-READSET-006", PROPOSAL_TRACE_PATH, row["line-range"], registerRow.lines, `${id}.read-set.line-range`);
-    expectEqual(ctx, "VAL-OBLIGATION-READSET-007", PROPOSAL_TRACE_PATH, row["source-fact"], registerRow["source-fact"], `${id}.read-set.source-fact`);
-  }
-}
-
-function validateProductionSourceCoverage(ctx, sourceCoverage, register) {
-  const registerGroups = groupBy(register, (row) => strip(row["source-document"]));
-  const coverageGroups = groupBy(sourceCoverage, (row) => strip(row["source-document"]));
-  expectSameSet(ctx, "VAL-OBLIGATION-SOURCE-001", PROPOSAL_TRACE_PATH, [...coverageGroups.keys()], [...registerGroups.keys()], "production-source-coverage source-document groups");
-
-  for (const [sourceDocument, rows] of coverageGroups.entries()) {
-    if (rows.length !== 1) {
-      addError(ctx, "VAL-OBLIGATION-SOURCE-002", PROPOSAL_TRACE_PATH, `production-source-coverage 对 ${sourceDocument} 必须只有一行。`);
-      continue;
+    if (artifact && role && ROUTE_ARTIFACTS.has(artifact) && !ROUTE_ROLES_BY_ARTIFACT[artifact].has(role)) {
+      addError(ctx, "VAL-OBLIGATION-ROUTING-009", PROPOSAL_TRACE_PATH, `${routeLabel}.role=${role} 不适用于 artifact=${artifact}。`);
     }
-    const row = rows[0];
-    requireString(ctx, "VAL-OBLIGATION-SOURCE-003", PROPOSAL_TRACE_PATH, row["source-document"], `production-source-coverage[${sourceDocument}].source-document`);
-    requireString(ctx, "VAL-OBLIGATION-SOURCE-004", PROPOSAL_TRACE_PATH, row["proposal-use"], `production-source-coverage[${sourceDocument}].proposal-use`);
-    const ids = requireIdArray(ctx, "VAL-OBLIGATION-SOURCE-005", PROPOSAL_TRACE_PATH, row["global-atom-ids"], `${sourceDocument}.global-atom-ids`, GA_ID_RE);
-    const expectedRows = registerGroups.get(sourceDocument) ?? [];
-    const expectedIds = expectedRows.map((item) => strip(item["global-atom-id"]));
-    expectSameSet(ctx, "VAL-OBLIGATION-SOURCE-006", PROPOSAL_TRACE_PATH, ids, expectedIds, `${sourceDocument}.global-atom-ids`);
-    expectEqual(ctx, "VAL-OBLIGATION-SOURCE-007", PROPOSAL_TRACE_PATH, row["atom-count"], ids.length, `${sourceDocument}.atom-count`);
-    expectSameSet(
-      ctx,
-      "VAL-OBLIGATION-SOURCE-008",
-      PROPOSAL_TRACE_PATH,
-      asArray(row["line-ranges"]).map(strip).filter(Boolean),
-      expectedRows.map((item) => strip(item.lines)),
-      `${sourceDocument}.line-ranges`,
-    );
-    expectSameSet(
-      ctx,
-      "VAL-OBLIGATION-SOURCE-009",
-      PROPOSAL_TRACE_PATH,
-      asArray(row["artifact-projections"]).map(strip).filter(Boolean),
-      unique(expectedRows.map((item) => strip(item["artifact-projection"]))),
-      `${sourceDocument}.artifact-projections`,
-    );
-    expectSameSet(
-      ctx,
-      "VAL-OBLIGATION-SOURCE-010",
-      PROPOSAL_TRACE_PATH,
-      asArray(row["owner-capabilities"]).map(strip).filter(Boolean),
-      unique(expectedRows.map((item) => strip(item["owner-capability"]))),
-      `${sourceDocument}.owner-capabilities`,
-    );
+
+    const routeKey = `${artifact}\u0000${role}`;
+    if (artifact && role) {
+      if (seenRouteKeys.has(routeKey)) {
+        addError(ctx, "VAL-OBLIGATION-ROUTING-010", PROPOSAL_TRACE_PATH, `${id} 包含重复 artifact route：${artifact}/${role}。`);
+      }
+      seenRouteKeys.add(routeKey);
+    }
   }
 }
 
-function validateObligationGateCoverage(ctx, gate, register, readSet, handoff) {
-  const direct = requireObject(ctx, "VAL-OBLIGATION-GATE-020", PROPOSAL_TRACE_PATH, gate["direct-atoms"], "proposal-alignment-gate.direct-atoms");
-  const directIds = requireIdArray(ctx, "VAL-OBLIGATION-GATE-021", PROPOSAL_TRACE_PATH, direct.ids, "proposal-alignment-gate.direct-atoms.ids", GA_ID_RE);
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-022", PROPOSAL_TRACE_PATH, direct.count, directIds.length, "proposal-alignment-gate.direct-atoms.count");
-  expectSameSet(ctx, "VAL-OBLIGATION-GATE-023", PROPOSAL_TRACE_PATH, directIds, handoff.directAtomIds, "gate direct atoms vs packet direct atoms");
-
-  const registerByProjection = groupIdsBy(register, "artifact-projection", "global-atom-id");
-  validateGroupedGateRows(ctx, {
-    rulePrefix: "VAL-OBLIGATION-GATE-PROJECTION",
-    rows: requireArray(ctx, "VAL-OBLIGATION-GATE-024", PROPOSAL_TRACE_PATH, gate["artifact-projection-coverage"], "proposal-alignment-gate.artifact-projection-coverage"),
-    expectedGroups: registerByProjection,
-    groupField: "artifact-projection",
-    idField: "ids",
-    countField: "count",
-    requiredTextField: "downstream-expectation",
-    idRegex: GA_ID_RE,
-  });
-
-  const readSetIds = readSet.map((row) => strip(row["global-atom-id"])).filter(Boolean);
-  const reread = requireObject(ctx, "VAL-OBLIGATION-GATE-025", PROPOSAL_TRACE_PATH, gate["source-windows-re-read"], "proposal-alignment-gate.source-windows-re-read");
-  const rereadIds = requireIdArray(ctx, "VAL-OBLIGATION-GATE-026", PROPOSAL_TRACE_PATH, reread.ids, "proposal-alignment-gate.source-windows-re-read.ids", GA_ID_RE);
-  expectEqual(ctx, "VAL-OBLIGATION-GATE-027", PROPOSAL_TRACE_PATH, reread.count, rereadIds.length, "proposal-alignment-gate.source-windows-re-read.count");
-  expectSameSet(ctx, "VAL-OBLIGATION-GATE-028", PROPOSAL_TRACE_PATH, rereadIds, readSetIds, "gate source-windows-re-read vs read set");
-
-  const capabilityGroups = groupIdsBy(register, "owner-capability", "global-atom-id");
-  const capabilityRows = requireArray(ctx, "VAL-OBLIGATION-GATE-029", PROPOSAL_TRACE_PATH, gate["capability-increment-coverage"], "proposal-alignment-gate.capability-increment-coverage");
-  validateCapabilityRows(ctx, capabilityRows, capabilityGroups, "direct-atom-count", "VAL-OBLIGATION-GATE-CAPABILITY", handoff.changeKind);
-
-  const orphan = requireArray(ctx, "VAL-OBLIGATION-GATE-030", PROPOSAL_TRACE_PATH, gate["orphan-direct-atoms"] ?? [], "proposal-alignment-gate.orphan-direct-atoms");
-  if (orphan.length !== 0) {
-    addError(ctx, "VAL-OBLIGATION-GATE-031", PROPOSAL_TRACE_PATH, "proposal-alignment-gate.orphan-direct-atoms 必须为空。");
-  }
+function usesProjectionAsRoutingBasis(value) {
+  const text = strip(value).toLowerCase();
+  if (!text) return false;
+  return /\bfinal projection\b\s*进入/.test(text)
+    || /按\s*(?:final\s*)?projection\s*进入/i.test(text)
+    || /按\s*上游(?:原始|建议)?分类\s*进入/.test(text);
 }
 
-function validateOwnerScopedBoundary(ctx, trace, gate, handoff) {
-  const rows = asArray(trace["owner-scoped-non-direct-boundary-register"]);
-  if (handoff.ownerScopedIds.length > 0 && !Array.isArray(trace["owner-scoped-non-direct-boundary-register"])) {
-    addError(ctx, "VAL-OBLIGATION-BOUNDARY-001", PROPOSAL_TRACE_PATH, "final packet 有 owner-scoped non-direct atoms，trace 必须包含 owner-scoped-non-direct-boundary-register。");
-  }
+function validateNonDirectBoundaryRef(ctx, boundaryRefs, register, handoff) {
+  const boundaryById = indexRowsById(ctx, "VAL-OBLIGATION-BOUNDARY-001", PROPOSAL_TRACE_PATH, boundaryRefs, "ga-id");
+  expectSameSet(ctx, "VAL-OBLIGATION-BOUNDARY-002", PROPOSAL_TRACE_PATH, [...boundaryById.keys()], handoff.ownerScopedIds, "non-direct-boundary-ref vs packet owner-scoped ids");
 
-  const boundaryById = indexRowsById(ctx, "VAL-OBLIGATION-BOUNDARY-002", PROPOSAL_TRACE_PATH, rows, "global-atom-id");
-  expectSameSet(ctx, "VAL-OBLIGATION-BOUNDARY-003", PROPOSAL_TRACE_PATH, [...boundaryById.keys()], handoff.ownerScopedIds, "owner-scoped boundary rows vs packet owner-scoped ids");
-
-  const gateOwner = requireObject(ctx, "VAL-OBLIGATION-BOUNDARY-004", PROPOSAL_TRACE_PATH, gate["owner-scoped-non-direct-atoms"], "proposal-alignment-gate.owner-scoped-non-direct-atoms");
-  const gateOwnerIds = requireIdArray(ctx, "VAL-OBLIGATION-BOUNDARY-005", PROPOSAL_TRACE_PATH, gateOwner.ids ?? [], "proposal-alignment-gate.owner-scoped-non-direct-atoms.ids", GA_ID_RE);
-  expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-006", PROPOSAL_TRACE_PATH, gateOwner.count, gateOwnerIds.length, "proposal-alignment-gate.owner-scoped-non-direct-atoms.count");
-  expectSameSet(ctx, "VAL-OBLIGATION-BOUNDARY-007", PROPOSAL_TRACE_PATH, gateOwnerIds, [...boundaryById.keys()], "gate owner-scoped ids vs boundary rows");
-  expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-008", PROPOSAL_TRACE_PATH, gateOwner["downstream-trace-policy"], "do-not-propagate-ga", "owner-scoped-non-direct-atoms.downstream-trace-policy");
-
-  const directSet = new Set(handoff.directAtomIds);
+  const directSet = new Set(register.map((row) => strip(row?.["ga-id"])).filter(Boolean));
   for (const [id, row] of boundaryById.entries()) {
     if (directSet.has(id)) {
-      addError(ctx, "VAL-OBLIGATION-BOUNDARY-009", PROPOSAL_TRACE_PATH, `${id} 同时出现在 direct register 和 owner-scoped boundary。`);
+      addError(ctx, "VAL-OBLIGATION-BOUNDARY-003", PROPOSAL_TRACE_PATH, `${id} 同时出现在 change-ga-register 和 non-direct-boundary-ref。`);
     }
-    validateOwnerScopedBoundaryRow(ctx, row, id, handoff);
+    validateNonDirectBoundaryRefRow(ctx, row, id, handoff);
   }
 }
 
-function validateOwnerScopedBoundaryRow(ctx, row, id, handoff) {
+function validateNonDirectBoundaryRefRow(ctx, row, id, handoff) {
   const requiredFields = [
-    "global-atom-id",
+    "ga-id",
     "source-document",
     "lines",
-    "atom-type",
     "source-fact",
-    "normativity",
-    "coverage-status",
-    "owner-capability",
-    "atom-relation",
     "boundary-role",
-    "downstream-trace-policy",
-    "boundary-handling",
-    "original-artifact-projection",
-    "propose-use",
-    "evidence-need",
+    "proposal-use",
   ];
   for (const field of requiredFields) {
-    requireString(ctx, "VAL-OBLIGATION-BOUNDARY-010", PROPOSAL_TRACE_PATH, row[field], `owner-scoped-non-direct-boundary-register[${id}].${field}`);
+    requireString(ctx, "VAL-OBLIGATION-BOUNDARY-004", PROPOSAL_TRACE_PATH, row[field], `non-direct-boundary-ref[${id}].${field}`);
   }
-  if (row["reference-only"] !== true) {
-    addError(ctx, "VAL-OBLIGATION-BOUNDARY-011", PROPOSAL_TRACE_PATH, `${id}.reference-only 必须为 true。`);
+  if (row.propagate !== false) {
+    addError(ctx, "VAL-OBLIGATION-BOUNDARY-005", PROPOSAL_TRACE_PATH, `${id}.propagate 必须为 false。`);
   }
-  expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-012", PROPOSAL_TRACE_PATH, row["downstream-trace-policy"], "do-not-propagate-ga", `${id}.downstream-trace-policy`);
-  if (Object.hasOwn(row, "artifact-projection")) {
-    addError(ctx, "VAL-OBLIGATION-BOUNDARY-013", PROPOSAL_TRACE_PATH, `${id} 是 owner-scoped non-direct boundary，不得写 downstream artifact-projection；只能使用 original-artifact-projection。`);
+  for (const forbiddenField of [
+    "projection",
+    "artifact-projection",
+    "downstream-expectation",
+    "coverage-status",
+    "owner-capability",
+  ]) {
+    if (Object.hasOwn(row, forbiddenField)) {
+      addError(ctx, "VAL-OBLIGATION-BOUNDARY-006", PROPOSAL_TRACE_PATH, `${id} 是 non-direct boundary ref，不得包含 ${forbiddenField}。`);
+    }
   }
 
   const atom = handoff.atomById.get(id);
   const mapping = handoff.mappingById.get(id);
   if (!atom) {
-    addError(ctx, "VAL-OBLIGATION-BOUNDARY-014", PROPOSAL_TRACE_PATH, `${id} 在 obligation-atom-index.json 中不存在。`);
+    addError(ctx, "VAL-OBLIGATION-BOUNDARY-007", PROPOSAL_TRACE_PATH, `${id} 在 obligation-atom-index.json 中不存在。`);
   }
   if (!mapping) {
-    addError(ctx, "VAL-OBLIGATION-BOUNDARY-015", PROPOSAL_TRACE_PATH, `${id} 在 atom-plan-mapping.json 中不存在。`);
+    addError(ctx, "VAL-OBLIGATION-BOUNDARY-008", PROPOSAL_TRACE_PATH, `${id} 在 atom-plan-mapping.json 中不存在。`);
   }
   if (atom) {
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-016", PROPOSAL_TRACE_PATH, row["source-document"], atom["source-document"], `${id}.source-document`);
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-017", PROPOSAL_TRACE_PATH, row.lines, atom.lines, `${id}.lines`);
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-018", PROPOSAL_TRACE_PATH, row["atom-type"], atom["atom-type"], `${id}.atom-type`);
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-019", PROPOSAL_TRACE_PATH, row["source-fact"], atom["source-fact"], `${id}.source-fact`);
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-020", PROPOSAL_TRACE_PATH, row.normativity, atom.normativity, `${id}.normativity`);
+    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-009", PROPOSAL_TRACE_PATH, row["source-document"], atom["source-document"], `${id}.source-document`);
+    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-010", PROPOSAL_TRACE_PATH, row.lines, atom.lines, `${id}.lines`);
+    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-011", PROPOSAL_TRACE_PATH, row["source-fact"], atom["source-fact"], `${id}.source-fact`);
   }
   if (mapping) {
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-021", PROPOSAL_TRACE_PATH, mapping["final-owner-change"], ctx.change, `${id}.final-owner-change`);
+    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-012", PROPOSAL_TRACE_PATH, mapping["final-owner-change"], ctx.change, `${id}.final-owner-change`);
     if (strip(mapping["final-relation"]) === "direct") {
-      addError(ctx, "VAL-OBLIGATION-BOUNDARY-022", PROPOSAL_TRACE_PATH, `${id} 的 mapping final-relation 是 direct，不能进入 owner-scoped boundary。`);
+      addError(ctx, "VAL-OBLIGATION-BOUNDARY-013", PROPOSAL_TRACE_PATH, `${id} 的 mapping final-relation 是 direct，不能进入 non-direct-boundary-ref。`);
     }
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-023", PROPOSAL_TRACE_PATH, row["owner-capability"], mapping["final-owner-capability"], `${id}.owner-capability`);
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-024", PROPOSAL_TRACE_PATH, row["atom-relation"], mapping["final-relation"], `${id}.atom-relation`);
-    expectEqual(ctx, "VAL-OBLIGATION-BOUNDARY-025", PROPOSAL_TRACE_PATH, row["original-artifact-projection"], mapping["final-artifact-projection"], `${id}.original-artifact-projection`);
+  }
+  expectRepoFileIfPathLike(ctx, "VAL-OBLIGATION-BOUNDARY-014", row["source-document"], `${id}.source-document`);
+}
+
+function validateObligationProposalGate(ctx, gate) {
+  for (const field of [
+    "blockers",
+    "orphan-ga",
+    "source-set-mismatch",
+    "non-direct-propagation-violations",
+    "routing-missing",
+    "routing-invalid",
+    "routing-route-violations",
+    "routing-source-conflicts",
+  ]) {
+    const rows = requireArray(ctx, "VAL-OBLIGATION-GATE-001", PROPOSAL_TRACE_PATH, gate[field], `proposal-gate.${field}`);
+    if (rows.length !== 0) {
+      addError(ctx, "VAL-OBLIGATION-GATE-002", PROPOSAL_TRACE_PATH, `proposal-gate.${field} 必须为空；非空表示 proposal 未闭合。`);
+    }
   }
 }
 
