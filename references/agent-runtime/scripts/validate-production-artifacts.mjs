@@ -38,6 +38,24 @@ const ARTIFACT_VALIDATORS = [
   },
 ];
 
+const COMPLETE_REQUIRED_ARTIFACTS = [
+  {
+    artifactId: "runtime-acceptance",
+    artifactPath: "runtime-acceptance.md",
+    tracePath: "trace/runtime-acceptance.trace.json",
+  },
+  {
+    artifactId: "verification",
+    artifactPath: "verification.md",
+    tracePath: "trace/verification.trace.json",
+  },
+  {
+    artifactId: "tasks",
+    artifactPath: "tasks.md",
+    tracePath: "trace/tasks.trace.json",
+  },
+];
+
 export function validateChange(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
   const change = strip(options.change);
@@ -75,15 +93,123 @@ export function validateChange(options = {}) {
   }
 
   if (complete) {
-    addError(
-      ctx,
-      "VAL-COMPLETE-001",
-      rel(ctx, ctx.changeDir),
-      "complete validator 尚未实现；当前已拆分 artifact validators，现阶段只注册 proposal/specs/design/runtime-acceptance/verification/tasks partial validators。",
-    );
+    validateCompleteChange(ctx);
   }
 
   return resultFor(ctx);
+}
+
+function validateCompleteChange(ctx) {
+  const manifest = readJson(ctx, path.join(ctx.changeDir, "trace", "manifest.json"));
+  const manifestEntries = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
+
+  for (const artifact of COMPLETE_REQUIRED_ARTIFACTS) {
+    const artifactFullPath = path.join(ctx.changeDir, artifact.artifactPath);
+    const traceFullPath = path.join(ctx.changeDir, artifact.tracePath);
+
+    if (!fs.existsSync(artifactFullPath)) {
+      addError(ctx, "VAL-COMPLETE-ARTIFACT-001", artifact.artifactPath, `complete validation 要求 apply-required artifact 存在：${artifact.artifactId}`);
+    }
+    if (!fs.existsSync(traceFullPath)) {
+      addError(ctx, "VAL-COMPLETE-TRACE-001", artifact.tracePath, `complete validation 要求 apply-required trace 存在：${artifact.artifactId}`);
+    }
+
+    const manifestEntry = manifestEntries.find(
+      (entry) =>
+        strip(entry?.["artifact-id"]) === artifact.artifactId &&
+        strip(entry?.["artifact-path"]) === artifact.artifactPath &&
+        strip(entry?.["trace-path"]) === artifact.tracePath,
+    );
+    if (!manifestEntry) {
+      addError(ctx, "VAL-COMPLETE-MANIFEST-001", "trace/manifest.json", `manifest 缺少 apply-required registry entry：${artifact.artifactId} -> ${artifact.tracePath}`);
+    }
+  }
+
+  const runtimeTrace = readJson(ctx, path.join(ctx.changeDir, "trace", "runtime-acceptance.trace.json"));
+  const verificationTrace = readJson(ctx, path.join(ctx.changeDir, "trace", "verification.trace.json"));
+  const tasksTrace = readJson(ctx, path.join(ctx.changeDir, "trace", "tasks.trace.json"));
+
+  if (!runtimeTrace || !verificationTrace || !tasksTrace) return;
+
+  const runtimeRowIds = collectRuntimeRowIds(runtimeTrace);
+  const targetRuntimeRowIds = collectRuntimeRowIds(runtimeTrace, { targetOnly: true });
+  if (runtimeRowIds.length === 0) {
+    addError(ctx, "VAL-COMPLETE-RUNTIME-001", "trace/runtime-acceptance.trace.json", "complete validation 要求 runtime-acceptance 定义 runtime facts。");
+  }
+
+  const verificationSlices = verificationTrace["verification-slice-register"];
+  if (!Array.isArray(verificationSlices) || verificationSlices.length === 0) {
+    addError(ctx, "VAL-COMPLETE-VERIFICATION-001", "trace/verification.trace.json", "complete validation 要求 verification-slice-register[]。");
+  }
+
+  const verificationRowIds = new Set(
+    asArray(verificationSlices)
+      .flatMap((row) => asArray(row?.["runtime-fact-ids"]).map(strip).filter(Boolean)),
+  );
+  const taskRuntimeRowIds = collectTaskRuntimeRowIds(tasksTrace);
+
+  validateSameIdSet(ctx, {
+    rulePrefix: "VAL-COMPLETE-VERIFICATION-ROWS",
+    file: "trace/verification.trace.json",
+    expectedIds: runtimeRowIds,
+    actualIds: verificationRowIds,
+    description: "verification-slice-register runtime-fact coverage",
+  });
+  validateSameIdSet(ctx, {
+    rulePrefix: "VAL-COMPLETE-TASKS-ROWS",
+    file: "trace/tasks.trace.json",
+    expectedIds: targetRuntimeRowIds,
+    actualIds: taskRuntimeRowIds,
+    description: "tasks checkbox runtime-fact coverage",
+  });
+}
+
+function collectRuntimeRowIds(runtimeTrace, options = {}) {
+  return asArray(runtimeTrace["runtime-fact-register"])
+    .filter((row) => {
+      if (!options.targetOnly) return true;
+      const scopeRole = strip(row?.["scope-role"]);
+      return scopeRole === "required behavior" || scopeRole === "preserve boundary";
+    })
+    .map((row) => strip(row?.["runtime-fact-id"]))
+    .filter(Boolean);
+}
+
+function collectTaskRuntimeRowIds(tasksTrace) {
+  const ids = [];
+  for (const step of asArray(tasksTrace["implementation-step-register"])) {
+    for (const task of asArray(step?.tasks)) {
+      ids.push(...asArray(task?.["runtime-fact-ids"]).map(strip).filter(Boolean));
+    }
+  }
+  return new Set(ids);
+}
+
+function validateSameIdSet(ctx, config) {
+  const expected = new Set(config.expectedIds);
+  const missing = [...expected].filter((id) => !config.actualIds.has(id));
+  const extra = [...config.actualIds].filter((id) => !expected.has(id));
+
+  if (missing.length > 0) {
+    addError(ctx, `${config.rulePrefix}-001`, config.file, `${config.description} 缺少 runtime facts：${missing.join(", ")}`);
+  }
+  if (extra.length > 0) {
+    addError(ctx, `${config.rulePrefix}-002`, config.file, `${config.description} 引用了未定义 runtime facts：${extra.join(", ")}`);
+  }
+}
+
+function readJson(ctx, fullPath) {
+  if (!fs.existsSync(fullPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(fullPath, "utf8"));
+  } catch (error) {
+    addError(ctx, "VAL-COMPLETE-JSON-001", rel(ctx, fullPath), `无法解析 JSON：${error.message}`);
+    return null;
+  }
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function mergeResult(ctx, result) {

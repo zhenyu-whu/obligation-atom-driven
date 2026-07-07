@@ -5,34 +5,84 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  INLINE_PROOF_SLICES_MODEL_PATH,
   PROOF_SLICES_TRACE_PATH,
-  PROOF_SLICES_TRACE_SCHEMA,
   RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
+  VERIFICATION_SLICE_REGISTER_PATH,
   VERIFICATION_TRACE_PATH,
   renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const VERIFICATION_ARTIFACT_PATH = "verification.md";
 const RUNTIME_TRACE_PATH = "trace/runtime-acceptance.trace.json";
-const RUNTIME_ARTIFACT_PATH = "runtime-acceptance.md";
-const PROPOSAL_TRACE_PATH = "trace/proposal.trace.json";
+const DESIGN_TRACE_PATH = "trace/design.trace.json";
 
 const DEFAULT_SCHEMA = "production-default-acceptance-driven";
 const OBLIGATION_SCHEMA = "production-obligation-atom-driven";
 
-const RUNTIME_ROW_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
+const RUNTIME_FACT_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
 const PROOF_SLICE_ID_RE = /^PS-\d{3}$/u;
-const BRANCH_ID_RE = /^VRB-\d{3}$/u;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const TEST_FILE_RE = /(?:^|\/)[^/\s]+\.(?:test|spec)\.[cm]?[jt]sx?\b/u;
 const EVIDENCE_PATH_RE = /(?:^|\/)(?:openspec-results|test-results)\//u;
 const COMMAND_RE = /\b(?:pnpm|npm|yarn|npx|vitest|jest|playwright test|go test|pytest|cargo test|bun test|node\s+(?:--[a-z-]+|[-\w./]+\.m?js))\b/u;
-const OWNER_LIST_RE = /[,;，；、]|\s+(?:and|和)\s+/iu;
+const OWNER_LIST_RE = /[,;，；、]|\s+(?:and|和|与)\s+/iu;
 
-const PRIMITIVE_TYPES = new Set([
+const ALLOWED_TOP_LEVEL_KEYS = new Set([
+  "trace-schema",
+  "artifact-id",
+  "artifact-path",
+  "change-name",
+  "schema-name",
+  "agent-role",
+  "source-interface",
+  "verification-slice-register",
+  "verification-gate",
+  "delivery-plane",
+]);
+
+const FORBIDDEN_TOP_LEVEL_KEYS = new Set([
+  "proof-slice-model",
+  "proof-slice-summary",
+  "runtime-fact-branch-inventory",
+  "manual-not-applicable-inventory",
+  "runtime-coverage-reconciliation",
+  "slice-consistency-checklist",
+]);
+
+const REQUIRED_SLICE_FIELDS = [
+  "slice-id",
+  "runtime-fact-ids",
+  "primary-runtime-fact-id",
+  "proof-type",
+  "branch",
+  "oracle",
+  "failure-signal",
+  "test-layer",
+  "production-owner",
+  "assertion-shape",
+  "fixture-boundary",
+  "proof-evidence-mode",
+  "planned-test-directory",
+  "non-persistent-reason",
+];
+
+const FORBIDDEN_SLICE_KEYS = new Set([
+  "primitive-type",
+  "branch-variant",
+  "observable-surface",
+  "oracle-fragment",
+  "primary-layer",
+  "persistent-test-required",
+  "primary-assertion-shape",
+  "fixture-mock-boundary",
+  "regression-intent",
+  "manual-environment-gate",
+  "test-contract",
+]);
+
+const PROOF_TYPES = new Set([
   "operation",
   "state",
   "failure",
@@ -43,7 +93,7 @@ const PRIMITIVE_TYPES = new Set([
   "authorization",
 ]);
 
-const PRIMARY_LAYERS = new Set([
+const TEST_LAYERS = new Set([
   "unit",
   "component",
   "route/API",
@@ -66,16 +116,7 @@ const PROOF_EVIDENCE_MODES = new Set([
   "manual-environment",
 ]);
 
-const PLACEMENT_BASES = new Set([
-  "existing-tests-directory",
-  "planned-layer-subdirectory",
-  "workspace-tests-directory",
-  "nonpersistent-evidence",
-]);
-
-const BRANCH_HANDLINGS = new Set(["proof-slice", "manual-environment", "not-applicable"]);
-const RECONCILIATION_STATUSES = new Set(["covered", "manual-environment", "not-applicable", "blocked"]);
-const VERIFICATION_SCOPE_ROLES = new Set(["required behavior", "preserve boundary", "proof-only"]);
+const VERIFICATION_SCOPE_ROLES = new Set(["required behavior", "preserve boundary"]);
 
 const LAYER_TEST_SUBTREES = {
   unit: ["tests/unit/**"],
@@ -90,11 +131,14 @@ const LAYER_TEST_SUBTREES = {
   "security/negative": ["tests/security/**"],
 };
 
-const RUNTIME_INDEX_SECTIONS = [
-  ["surface-rows", "surface", /^RS-\d{3}$/u],
-  ["operation-rows", "operation", /^OP-\d{3}$/u],
-  ["state-rows", "state", /^ST-\d{3}$/u],
-  ["chain-rows", "chain", /^CH-\d{3}$/u],
+const REQUIRED_GATE_FIELDS = [
+  "blockers",
+  "uncovered-runtime-facts",
+  "invalid-runtime-refs",
+  "non-atomic-slices",
+  "invalid-proof-modes",
+  "invalid-test-placement",
+  "delivery-projection-mismatch",
 ];
 
 export function validateVerificationArtifact(options = {}) {
@@ -131,7 +175,7 @@ function validateVerificationIfPresent(ctx) {
   }
 
   if (inventory.legacySidecarExists) {
-    addError(ctx, "VAL-VERIFICATION-INLINE-001", PROOF_SLICES_TRACE_PATH, "新格式 verification 不得生成 legacy trace/verification.proof-slices.json sidecar。");
+    addError(ctx, "VAL-VERIFICATION-V2-LEGACY-001", PROOF_SLICES_TRACE_PATH, "verification-slice-register-v2 不得生成 legacy trace/verification.proof-slices.json sidecar。");
   }
 
   if (!inventory.traceExists) {
@@ -141,20 +185,20 @@ function validateVerificationIfPresent(ctx) {
 
   const verificationTrace = readJson(ctx, path.join(ctx.changeDir, VERIFICATION_TRACE_PATH));
   const runtimeTrace = readJson(ctx, path.join(ctx.changeDir, RUNTIME_TRACE_PATH));
-  const proposalTrace = readJson(ctx, path.join(ctx.changeDir, PROPOSAL_TRACE_PATH));
-  if (!verificationTrace || !runtimeTrace || !proposalTrace) return;
+  if (!verificationTrace || !runtimeTrace) return;
 
-  const expected = buildExpectedModel(ctx, verificationTrace, runtimeTrace, proposalTrace);
+  const expected = buildExpectedModel(ctx, verificationTrace, runtimeTrace);
   const runtimeModel = buildRuntimeModel(ctx, runtimeTrace);
 
   validateKebabCaseKeys(ctx, verificationTrace);
+  validateTopLevelShape(ctx, verificationTrace);
   validateCommonTrace(ctx, verificationTrace, expected);
   validateManifest(ctx);
   validateForbiddenStringLeaves(ctx, verificationTrace);
 
-  const proofModel = validateProofSliceModel(ctx, verificationTrace, runtimeModel, expected);
-  validateBranchInventory(ctx, verificationTrace, runtimeModel, proofModel);
-  validateRuntimeCoverageReconciliation(ctx, verificationTrace, runtimeModel, proofModel);
+  const sliceModel = validateSliceRegister(ctx, verificationTrace, runtimeModel);
+  validateVerificationGate(ctx, verificationTrace, runtimeModel, sliceModel);
+  validateDeliveryPlane(ctx, verificationTrace, sliceModel);
   validateRender(ctx);
 }
 
@@ -176,20 +220,28 @@ function collectVerificationInventory(ctx) {
   };
 }
 
-function buildExpectedModel(ctx, verificationTrace, runtimeTrace, proposalTrace) {
-  const proposalSchema = strip(proposalTrace["schema-name"]);
-  if (proposalSchema !== OBLIGATION_SCHEMA && proposalSchema !== DEFAULT_SCHEMA) {
-    addError(ctx, "VAL-VERIFICATION-PROPOSAL-001", PROPOSAL_TRACE_PATH, `不支持的 proposal schema-name：${proposalSchema || "(empty)"}`);
-  }
-
+function buildExpectedModel(ctx, verificationTrace, runtimeTrace) {
   const runtimeSchema = strip(runtimeTrace["schema-name"]);
   const traceSchema = strip(verificationTrace["schema-name"]);
-  const changeKind = strip(proposalTrace["proposal-alignment-gate"]?.["change-kind"]) || "business";
+  const schemaName = runtimeSchema || traceSchema;
+  if (schemaName !== OBLIGATION_SCHEMA && schemaName !== DEFAULT_SCHEMA) {
+    addError(ctx, "VAL-VERIFICATION-RUNTIME-SCHEMA-001", RUNTIME_TRACE_PATH, `不支持的 runtime schema-name：${schemaName || "(empty)"}`);
+  }
   return {
-    schemaName: proposalSchema || runtimeSchema || traceSchema,
+    schemaName,
     runtimeSchema,
-    changeKind,
   };
+}
+
+function validateTopLevelShape(ctx, trace) {
+  for (const key of Object.keys(trace)) {
+    if (!ALLOWED_TOP_LEVEL_KEYS.has(key)) {
+      addError(ctx, "VAL-VERIFICATION-SHAPE-001", VERIFICATION_TRACE_PATH, `verification trace 顶层字段不允许：${key}。`);
+    }
+    if (FORBIDDEN_TOP_LEVEL_KEYS.has(key)) {
+      addError(ctx, "VAL-VERIFICATION-SHAPE-002", VERIFICATION_TRACE_PATH, `verification-slice-register-v2 禁止旧字段：${key}。`);
+    }
+  }
 }
 
 function validateCommonTrace(ctx, trace, expected) {
@@ -200,12 +252,16 @@ function validateCommonTrace(ctx, trace, expected) {
   expectEqual(ctx, "VAL-VERIFICATION-TRACE-005", VERIFICATION_TRACE_PATH, trace["schema-name"], expected.schemaName, "schema-name");
   expectEqual(ctx, "VAL-VERIFICATION-TRACE-006", VERIFICATION_TRACE_PATH, expected.runtimeSchema, expected.schemaName, "runtime schema-name");
   requireString(ctx, "VAL-VERIFICATION-TRACE-007", VERIFICATION_TRACE_PATH, trace["agent-role"], "agent-role");
+
   const sourceInterface = requireObject(ctx, "VAL-VERIFICATION-TRACE-008", VERIFICATION_TRACE_PATH, trace["source-interface"], "source-interface");
   requireObject(ctx, "VAL-VERIFICATION-TRACE-009", VERIFICATION_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
 
-  expectEqual(ctx, "VAL-VERIFICATION-SOURCE-001", VERIFICATION_TRACE_PATH, sourceInterface["runtime-source-artifact"], RUNTIME_ARTIFACT_PATH, "source-interface.runtime-source-artifact");
-  expectEqual(ctx, "VAL-VERIFICATION-SOURCE-002", VERIFICATION_TRACE_PATH, sourceInterface["runtime-source-trace"], RUNTIME_TRACE_PATH, "source-interface.runtime-source-trace");
-  expectEqual(ctx, "VAL-VERIFICATION-SOURCE-003", VERIFICATION_TRACE_PATH, sourceInterface["proof-slice-model"], INLINE_PROOF_SLICES_MODEL_PATH, "source-interface.proof-slice-model");
+  expectEqual(ctx, "VAL-VERIFICATION-SOURCE-001", VERIFICATION_TRACE_PATH, sourceInterface["runtime-trace"], RUNTIME_TRACE_PATH, "source-interface.runtime-trace");
+  if (Object.prototype.hasOwnProperty.call(sourceInterface, "proposal-trace")) {
+    addError(ctx, "VAL-VERIFICATION-SOURCE-002", VERIFICATION_TRACE_PATH, "source-interface.proposal-trace 不再是 verification semantic input。");
+  }
+  expectEqual(ctx, "VAL-VERIFICATION-SOURCE-003", VERIFICATION_TRACE_PATH, sourceInterface["design-trace"], DESIGN_TRACE_PATH, "source-interface.design-trace");
+  requireArray(ctx, "VAL-VERIFICATION-SOURCE-004", VERIFICATION_TRACE_PATH, sourceInterface["spec-traces"], "source-interface.spec-traces");
 }
 
 function validateManifest(ctx) {
@@ -220,7 +276,7 @@ function validateManifest(ctx) {
   const artifacts = requireArray(ctx, "VAL-VERIFICATION-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts");
   const sidecarEntries = artifacts.filter((entry) => strip(entry?.["trace-path"]) === PROOF_SLICES_TRACE_PATH);
   if (sidecarEntries.length > 0) {
-    addError(ctx, "VAL-VERIFICATION-INLINE-002", manifestRelPath, "新格式 manifest 不得注册 trace/verification.proof-slices.json。");
+    addError(ctx, "VAL-VERIFICATION-V2-LEGACY-002", manifestRelPath, "verification-slice-register-v2 manifest 不得注册 trace/verification.proof-slices.json。");
   }
 
   const entries = artifacts.filter(isVerificationManifestEntry);
@@ -263,61 +319,31 @@ function validateRender(ctx) {
 }
 
 function buildRuntimeModel(ctx, runtimeTrace) {
-  const index = requireObject(ctx, "VAL-VERIFICATION-RUNTIME-001", RUNTIME_TRACE_PATH, runtimeTrace["canonical-row-index"], "canonical-row-index");
   const rowsById = new Map();
-  const indexIds = [];
-
-  for (const [section, rowType, regex] of RUNTIME_INDEX_SECTIONS) {
-    const ids = requireArray(ctx, "VAL-VERIFICATION-RUNTIME-002", RUNTIME_TRACE_PATH, index[section], `canonical-row-index.${section}`)
-      .map(strip)
-      .filter(Boolean);
-    for (const id of ids) {
-      if (!regex.test(id)) {
-        addError(ctx, "VAL-VERIFICATION-RUNTIME-003", RUNTIME_TRACE_PATH, `canonical-row-index.${section} 包含非法 runtime row id：${id}。`);
-        continue;
-      }
-      if (rowsById.has(id)) {
-        addError(ctx, "VAL-VERIFICATION-RUNTIME-004", RUNTIME_TRACE_PATH, `canonical-row-index runtime row id 重复：${id}。`);
-        continue;
-      }
-      rowsById.set(id, {
-        id,
-        rowType,
-        scopeRole: "",
-      });
-      indexIds.push(id);
-    }
-  }
-
-  const delivery = requireObject(ctx, "VAL-VERIFICATION-RUNTIME-005", RUNTIME_TRACE_PATH, runtimeTrace["delivery-plane"], "delivery-plane");
-  const canonicalRows = requireArray(ctx, "VAL-VERIFICATION-RUNTIME-006", RUNTIME_TRACE_PATH, delivery["canonical-rows"], "delivery-plane.canonical-rows");
-  const deliveryIds = new Set();
-  for (const [index, row] of canonicalRows.entries()) {
-    const id = strip(row?.id ?? row?.["surface-id"] ?? row?.["operation-id"] ?? row?.["state-id"] ?? row?.["chain-id"]);
+  const facts = requireArray(ctx, "VAL-VERIFICATION-RUNTIME-001", RUNTIME_TRACE_PATH, runtimeTrace["runtime-fact-register"], "runtime-fact-register");
+  for (const [index, row] of facts.entries()) {
+    const id = strip(row?.["runtime-fact-id"]);
     if (!id) {
-      addError(ctx, "VAL-VERIFICATION-RUNTIME-007", RUNTIME_TRACE_PATH, `delivery-plane.canonical-rows[${index}] 缺少 runtime row id。`);
+      addError(ctx, "VAL-VERIFICATION-RUNTIME-002", RUNTIME_TRACE_PATH, `runtime-fact-register[${index}] 缺少 runtime-fact-id。`);
       continue;
     }
-    if (!RUNTIME_ROW_ID_RE.test(id)) {
-      addError(ctx, "VAL-VERIFICATION-RUNTIME-008", RUNTIME_TRACE_PATH, `delivery-plane.canonical-rows[${index}] runtime row id 非法：${id}。`);
+    if (!RUNTIME_FACT_ID_RE.test(id)) {
+      addError(ctx, "VAL-VERIFICATION-RUNTIME-003", RUNTIME_TRACE_PATH, `runtime-fact-register[${index}] runtime fact id 非法：${id}。`);
       continue;
     }
-    deliveryIds.add(id);
-    const record = rowsById.get(id);
-    if (!record) {
-      addError(ctx, "VAL-VERIFICATION-RUNTIME-009", RUNTIME_TRACE_PATH, `delivery-plane.canonical-rows[${index}] 未出现在 canonical-row-index：${id}。`);
+    if (rowsById.has(id)) {
+      addError(ctx, "VAL-VERIFICATION-RUNTIME-004", RUNTIME_TRACE_PATH, `runtime fact id 重复：${id}。`);
       continue;
     }
-    record.scopeRole = strip(row?.["scope-role"]);
-    if (!VERIFICATION_SCOPE_ROLES.has(record.scopeRole)) {
-      addError(ctx, "VAL-VERIFICATION-RUNTIME-010", RUNTIME_TRACE_PATH, `${id} scope-role 必须是 required behavior、preserve boundary 或 proof-only。`);
+    const scopeRole = strip(row?.["scope-role"]);
+    if (!VERIFICATION_SCOPE_ROLES.has(scopeRole)) {
+      addError(ctx, "VAL-VERIFICATION-RUNTIME-010", RUNTIME_TRACE_PATH, `${id} scope-role 必须是 required behavior 或 preserve boundary。`);
     }
-  }
-
-  for (const id of indexIds) {
-    if (!deliveryIds.has(id)) {
-      addError(ctx, "VAL-VERIFICATION-RUNTIME-011", RUNTIME_TRACE_PATH, `canonical-row-index row 未出现在 delivery-plane.canonical-rows：${id}。`);
-    }
+    rowsById.set(id, {
+      id,
+      rowType: strip(row?.["fact-type"]) || rowTypeForRuntimeFactId(id),
+      scopeRole,
+    });
   }
 
   return {
@@ -328,320 +354,139 @@ function buildRuntimeModel(ctx, runtimeTrace) {
   };
 }
 
-function validateProofSliceModel(ctx, trace, runtimeModel, expected) {
-  const model = requireObject(ctx, "VAL-VERIFICATION-MODEL-001", VERIFICATION_TRACE_PATH, trace["proof-slice-model"], "proof-slice-model");
-  expectEqual(ctx, "VAL-VERIFICATION-MODEL-002", VERIFICATION_TRACE_PATH, model["model-schema"], PROOF_SLICES_TRACE_SCHEMA, "proof-slice-model.model-schema");
-  const summary = requireObject(ctx, "VAL-VERIFICATION-MODEL-003", VERIFICATION_TRACE_PATH, model["proof-slice-summary"], "proof-slice-model.proof-slice-summary");
-  const slices = requireArray(ctx, "VAL-VERIFICATION-MODEL-004", VERIFICATION_TRACE_PATH, model["proof-slices"], "proof-slice-model.proof-slices");
+function validateSliceRegister(ctx, trace, runtimeModel) {
+  const slices = requireArray(ctx, "VAL-VERIFICATION-SLICE-REGISTER-001", VERIFICATION_TRACE_PATH, trace["verification-slice-register"], "verification-slice-register");
   if (slices.length === 0) {
-    addError(ctx, "VAL-VERIFICATION-MODEL-005", VERIFICATION_TRACE_PATH, "proof-slice-model.proof-slices 不能为空。");
+    addError(ctx, "VAL-VERIFICATION-SLICE-REGISTER-002", VERIFICATION_TRACE_PATH, "verification-slice-register 不能为空。");
   }
 
-  const proofSlicesById = new Map();
+  const slicesById = new Map();
   const runtimeRowsBySlice = new Map();
-  let persistentCount = 0;
+  const coveredRuntimeFactIds = new Set();
   for (const [index, slice] of slices.entries()) {
-    const label = `proof-slice-model.proof-slices[${index}]`;
-    const sliceId = validateProofSliceId(ctx, slice?.["slice-id"], `${label}.slice-id`);
-    if (!sliceId) continue;
-    if (proofSlicesById.has(sliceId)) {
-      addError(ctx, "VAL-VERIFICATION-SLICE-002", VERIFICATION_TRACE_PATH, `Proof Slice ID 重复：${sliceId}。`);
+    const label = `verification-slice-register[${index}]`;
+    for (const field of REQUIRED_SLICE_FIELDS) {
+      if (field === "runtime-fact-ids") continue;
+      requireString(ctx, "VAL-VERIFICATION-SLICE-001", VERIFICATION_TRACE_PATH, slice?.[field], `${label}.${field}`);
     }
-    proofSlicesById.set(sliceId, slice);
+    for (const key of Object.keys(asObject(slice))) {
+      if (FORBIDDEN_SLICE_KEYS.has(key)) {
+        addError(ctx, "VAL-VERIFICATION-SLICE-002", VERIFICATION_TRACE_PATH, `${label} 禁止旧字段：${key}。`);
+      }
+    }
 
-    const rowIds = requireRuntimeRowIdArray(ctx, "VAL-VERIFICATION-SLICE-003", VERIFICATION_TRACE_PATH, slice?.["runtime-row-ids"], `${label}.runtime-row-ids`);
+    const sliceId = requireId(ctx, "VAL-VERIFICATION-SLICE-003", VERIFICATION_TRACE_PATH, slice?.["slice-id"], `${label}.slice-id`, PROOF_SLICE_ID_RE);
+    if (!sliceId) continue;
+    if (slicesById.has(sliceId)) {
+      addError(ctx, "VAL-VERIFICATION-SLICE-004", VERIFICATION_TRACE_PATH, `Proof Slice ID 重复：${sliceId}。`);
+    }
+    slicesById.set(sliceId, slice);
+
+    const rowIds = requireRuntimeFactIdArray(ctx, "VAL-VERIFICATION-SLICE-005", VERIFICATION_TRACE_PATH, slice?.["runtime-fact-ids"], `${label}.runtime-fact-ids`);
     if (rowIds.length === 0) {
-      addError(ctx, "VAL-VERIFICATION-SLICE-004", VERIFICATION_TRACE_PATH, `${sliceId} 必须至少引用一个 runtime row。`);
+      addError(ctx, "VAL-VERIFICATION-SLICE-006", VERIFICATION_TRACE_PATH, `${sliceId} 必须至少引用一个 runtime fact。`);
     }
     for (const rowId of rowIds) {
       if (!runtimeModel.rowsById.has(rowId)) {
-        addError(ctx, "VAL-VERIFICATION-SLICE-005", VERIFICATION_TRACE_PATH, `${sliceId} 引用未定义 runtime row：${rowId}。`);
+        addError(ctx, "VAL-VERIFICATION-SLICE-007", VERIFICATION_TRACE_PATH, `${sliceId} 引用未定义 runtime fact：${rowId}。`);
+      } else {
+        coveredRuntimeFactIds.add(rowId);
       }
     }
     runtimeRowsBySlice.set(sliceId, new Set(rowIds));
 
-    const primaryRowId = requireId(ctx, "VAL-VERIFICATION-SLICE-006", VERIFICATION_TRACE_PATH, slice?.["primary-runtime-row-id"], `${label}.primary-runtime-row-id`, RUNTIME_ROW_ID_RE);
+    const primaryRowId = requireId(ctx, "VAL-VERIFICATION-SLICE-008", VERIFICATION_TRACE_PATH, slice?.["primary-runtime-fact-id"], `${label}.primary-runtime-fact-id`, RUNTIME_FACT_ID_RE);
     if (primaryRowId && !rowIds.includes(primaryRowId)) {
-      addError(ctx, "VAL-VERIFICATION-SLICE-007", VERIFICATION_TRACE_PATH, `${sliceId} primary-runtime-row-id 必须包含在 runtime-row-ids 中。`);
+      addError(ctx, "VAL-VERIFICATION-SLICE-009", VERIFICATION_TRACE_PATH, `${sliceId} primary-runtime-fact-id 必须包含在 runtime-fact-ids 中。`);
     }
     if (primaryRowId && !runtimeModel.rowsById.has(primaryRowId)) {
-      addError(ctx, "VAL-VERIFICATION-SLICE-008", VERIFICATION_TRACE_PATH, `${sliceId} primary-runtime-row-id 未定义：${primaryRowId}。`);
+      addError(ctx, "VAL-VERIFICATION-SLICE-010", VERIFICATION_TRACE_PATH, `${sliceId} primary-runtime-fact-id 未定义：${primaryRowId}。`);
     }
 
-    validateEnum(ctx, "VAL-VERIFICATION-SLICE-009", VERIFICATION_TRACE_PATH, slice?.["primitive-type"], PRIMITIVE_TYPES, `${label}.primitive-type`);
-    validateEnum(ctx, "VAL-VERIFICATION-SLICE-010", VERIFICATION_TRACE_PATH, slice?.["primary-layer"], PRIMARY_LAYERS, `${label}.primary-layer`);
-    validateEnum(ctx, "VAL-VERIFICATION-SLICE-011", VERIFICATION_TRACE_PATH, slice?.["proof-evidence-mode"], PROOF_EVIDENCE_MODES, `${label}.proof-evidence-mode`);
-    for (const field of [
-      "branch-variant",
-      "observable-surface",
-      "oracle-fragment",
-      "failure-signal",
-      "primary-assertion-shape",
-      "fixture-mock-boundary",
-      "regression-intent",
-    ]) {
-      requireString(ctx, "VAL-VERIFICATION-SLICE-012", VERIFICATION_TRACE_PATH, slice?.[field], `${label}.${field}`);
-    }
+    validateEnum(ctx, "VAL-VERIFICATION-SLICE-011", VERIFICATION_TRACE_PATH, slice?.["proof-type"], PROOF_TYPES, `${label}.proof-type`);
+    const layer = validateEnum(ctx, "VAL-VERIFICATION-SLICE-012", VERIFICATION_TRACE_PATH, slice?.["test-layer"], TEST_LAYERS, `${label}.test-layer`);
+    const evidenceMode = validateEnum(ctx, "VAL-VERIFICATION-SLICE-013", VERIFICATION_TRACE_PATH, slice?.["proof-evidence-mode"], PROOF_EVIDENCE_MODES, `${label}.proof-evidence-mode`);
     validateProductionOwner(ctx, slice?.["production-owner"], `${label}.production-owner`);
-
-    const persistent = requireBoolean(ctx, "VAL-VERIFICATION-SLICE-013", VERIFICATION_TRACE_PATH, slice?.["persistent-test-required"], `${label}.persistent-test-required`);
-    if (persistent) persistentCount += 1;
-    if (!Object.hasOwn(slice ?? {}, "manual-environment-gate")) {
-      addError(ctx, "VAL-VERIFICATION-SLICE-014", VERIFICATION_TRACE_PATH, `${label}.manual-environment-gate 必须存在。`);
-    }
-
-    validateTestContract(ctx, {
-      slice,
-      sliceId,
-      label,
-      persistent,
-      primaryLayer: strip(slice?.["primary-layer"]),
-      proofEvidenceMode: strip(slice?.["proof-evidence-mode"]),
-      changeKind: expected.changeKind,
-    });
+    validatePlacement(ctx, { slice, sliceId, label, layer, evidenceMode });
   }
 
-  validateSummary(ctx, summary, {
-    sliceCount: slices.length,
-    persistentCount,
-    runtimeRowCount: new Set([...runtimeRowsBySlice.values()].flatMap((ids) => [...ids])).size,
-  });
-
   return {
-    proofSlicesById,
+    slicesById,
     runtimeRowsBySlice,
+    coveredRuntimeFactIds,
   };
 }
 
-function validateTestContract(ctx, options) {
-  const contract = requireObject(ctx, "VAL-VERIFICATION-CONTRACT-001", VERIFICATION_TRACE_PATH, options.slice?.["test-contract"], `${options.label}.test-contract`);
-  expectEqual(ctx, "VAL-VERIFICATION-CONTRACT-002", VERIFICATION_TRACE_PATH, contract["allow-shared-setup"], true, `${options.label}.test-contract.allow-shared-setup`);
-  expectEqual(ctx, "VAL-VERIFICATION-CONTRACT-003", VERIFICATION_TRACE_PATH, contract["allow-multi-slice-primary-test"], false, `${options.label}.test-contract.allow-multi-slice-primary-test`);
-  expectEqual(ctx, "VAL-VERIFICATION-CONTRACT-004", VERIFICATION_TRACE_PATH, contract["waiver-required-for-multi-slice"], true, `${options.label}.test-contract.waiver-required-for-multi-slice`);
-
-  const placement = requireObject(ctx, "VAL-VERIFICATION-CONTRACT-005", VERIFICATION_TRACE_PATH, contract.placement, `${options.label}.test-contract.placement`);
-  const plannedDirectory = requireString(ctx, "VAL-VERIFICATION-CONTRACT-006", VERIFICATION_TRACE_PATH, placement["planned-test-directory"], `${options.label}.test-contract.placement.planned-test-directory`);
-  const placementBasis = validateEnum(ctx, "VAL-VERIFICATION-CONTRACT-007", VERIFICATION_TRACE_PATH, placement["placement-basis"], PLACEMENT_BASES, `${options.label}.test-contract.placement.placement-basis`);
-  requireString(ctx, "VAL-VERIFICATION-CONTRACT-008", VERIFICATION_TRACE_PATH, placement["placement-reason"], `${options.label}.test-contract.placement.placement-reason`);
-
-  if (options.changeKind !== "foundation" && isNoManualGate(options.slice?.["manual-environment-gate"]) && options.persistent !== true) {
-    addError(ctx, "VAL-VERIFICATION-PERSISTENCE-001", VERIFICATION_TRACE_PATH, `${options.sliceId} business change 且 manual-environment-gate 为 None/空/null 时必须 persistent-test-required=true。`);
-  }
-
-  if (options.persistent === true) {
-    expectEqual(ctx, "VAL-VERIFICATION-PERSISTENCE-002", VERIFICATION_TRACE_PATH, options.proofEvidenceMode, "durable-test", `${options.sliceId}.proof-evidence-mode`);
-    expectEqual(ctx, "VAL-VERIFICATION-PERSISTENCE-003", VERIFICATION_TRACE_PATH, contract["primary-test-cardinality"], "exactly-one", `${options.sliceId}.test-contract.primary-test-cardinality`);
-    expectEqual(ctx, "VAL-VERIFICATION-PERSISTENCE-004", VERIFICATION_TRACE_PATH, contract["test-title-prefix"], options.sliceId, `${options.sliceId}.test-contract.test-title-prefix`);
-    if (placementBasis === "nonpersistent-evidence") {
-      addError(ctx, "VAL-VERIFICATION-PLACEMENT-001", VERIFICATION_TRACE_PATH, `${options.sliceId} persistent slice 不得使用 nonpersistent-evidence placement-basis。`);
+function validatePlacement(ctx, options) {
+  const plannedDirectory = strip(options.slice?.["planned-test-directory"]);
+  const reason = strip(options.slice?.["non-persistent-reason"]);
+  if (options.evidenceMode === "durable-test") {
+    if (/^(?:N\/A|None|null)$/iu.test(plannedDirectory)) {
+      addError(ctx, "VAL-VERIFICATION-PLACEMENT-001", VERIFICATION_TRACE_PATH, `${options.sliceId} durable-test slice 必须声明外置 tests/** 目录 glob。`);
     }
-    validatePersistentPlacement(ctx, options.sliceId, options.primaryLayer, plannedDirectory);
+    validatePersistentPlacement(ctx, options.sliceId, options.layer, plannedDirectory);
+    if (!reason) {
+      addError(ctx, "VAL-VERIFICATION-PLACEMENT-002", VERIFICATION_TRACE_PATH, `${options.sliceId}.non-persistent-reason 必须存在；durable-test 使用 N/A。`);
+    }
     return;
   }
 
-  if (options.persistent === false) {
-    if (options.proofEvidenceMode === "durable-test") {
-      addError(ctx, "VAL-VERIFICATION-PERSISTENCE-005", VERIFICATION_TRACE_PATH, `${options.sliceId} non-persistent slice 不得使用 durable-test evidence mode。`);
-    }
-    expectEqual(ctx, "VAL-VERIFICATION-PERSISTENCE-006", VERIFICATION_TRACE_PATH, contract["primary-test-cardinality"], "none", `${options.sliceId}.test-contract.primary-test-cardinality`);
-    if (strip(contract["test-title-prefix"]) && strip(contract["test-title-prefix"]) !== options.sliceId) {
-      addError(ctx, "VAL-VERIFICATION-PERSISTENCE-007", VERIFICATION_TRACE_PATH, `${options.sliceId}.test-contract.test-title-prefix 如提供必须等于 slice-id。`);
-    }
-    expectEqual(ctx, "VAL-VERIFICATION-PLACEMENT-002", VERIFICATION_TRACE_PATH, plannedDirectory, "N/A", `${options.sliceId}.placement.planned-test-directory`);
-    expectEqual(ctx, "VAL-VERIFICATION-PLACEMENT-003", VERIFICATION_TRACE_PATH, placementBasis, "nonpersistent-evidence", `${options.sliceId}.placement.placement-basis`);
+  expectEqual(ctx, "VAL-VERIFICATION-PLACEMENT-003", VERIFICATION_TRACE_PATH, plannedDirectory, "N/A", `${options.sliceId}.planned-test-directory`);
+  if (!reason || /^(?:N\/A|None|null)$/iu.test(reason)) {
+    addError(ctx, "VAL-VERIFICATION-PLACEMENT-004", VERIFICATION_TRACE_PATH, `${options.sliceId} non-durable slice 必须给出 non-persistent-reason。`);
   }
 }
 
-function validatePersistentPlacement(ctx, sliceId, primaryLayer, plannedDirectory) {
+function validatePersistentPlacement(ctx, sliceId, testLayer, plannedDirectory) {
   if (!plannedDirectory.endsWith("/**")) {
-    addError(ctx, "VAL-VERIFICATION-PLACEMENT-004", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 必须是以 /** 结尾的目录 glob。`);
+    addError(ctx, "VAL-VERIFICATION-PLACEMENT-005", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 必须是以 /** 结尾的目录 glob。`);
   }
   if (!/(?:^|\/)tests\//u.test(plannedDirectory)) {
-    addError(ctx, "VAL-VERIFICATION-PLACEMENT-005", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 必须落在外置 tests/ 子树。`);
+    addError(ctx, "VAL-VERIFICATION-PLACEMENT-006", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 必须落在外置 tests/ 子树。`);
   }
   if (TEST_FILE_RE.test(plannedDirectory)) {
-    addError(ctx, "VAL-VERIFICATION-PLACEMENT-006", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 不得写具体 .test/.spec 文件。`);
+    addError(ctx, "VAL-VERIFICATION-PLACEMENT-007", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 不得写具体 .test/.spec 文件。`);
   }
-  const allowedSubtrees = LAYER_TEST_SUBTREES[primaryLayer] ?? [];
+  if (/(?:^|\/)tests\/runtime(?:\/|$)/u.test(plannedDirectory)) {
+    addError(ctx, "VAL-VERIFICATION-PLACEMENT-008", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 不得使用 tests/runtime/**。`);
+  }
+  const allowedSubtrees = LAYER_TEST_SUBTREES[testLayer] ?? [];
   if (allowedSubtrees.length > 0 && !allowedSubtrees.some((subtree) => plannedDirectory.endsWith(subtree))) {
-    addError(ctx, "VAL-VERIFICATION-PLACEMENT-007", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 与 primary-layer ${primaryLayer} 的默认 tests 子树不匹配。`);
+    addError(ctx, "VAL-VERIFICATION-PLACEMENT-009", VERIFICATION_TRACE_PATH, `${sliceId} planned-test-directory 与 test-layer ${testLayer} 的默认 tests 子树不匹配。`);
   }
 }
 
-function validateBranchInventory(ctx, trace, runtimeModel, proofModel) {
-  const manualRows = requireArray(
-    ctx,
-    "VAL-VERIFICATION-MANUAL-001",
-    VERIFICATION_TRACE_PATH,
-    trace["manual-not-applicable-inventory"],
-    "manual-not-applicable-inventory",
-  );
-  const manualByBranchId = new Map();
-  for (const [index, row] of manualRows.entries()) {
-    const branchId = requireId(ctx, "VAL-VERIFICATION-MANUAL-002", VERIFICATION_TRACE_PATH, row?.["branch-id"], `manual-not-applicable-inventory[${index}].branch-id`, BRANCH_ID_RE);
-    const runtimeRowId = requireId(ctx, "VAL-VERIFICATION-MANUAL-003", VERIFICATION_TRACE_PATH, row?.["runtime-row-id"], `manual-not-applicable-inventory[${index}].runtime-row-id`, RUNTIME_ROW_ID_RE);
-    const handling = validateEnum(ctx, "VAL-VERIFICATION-MANUAL-004", VERIFICATION_TRACE_PATH, row?.handling, new Set(["manual-environment", "not-applicable"]), `manual-not-applicable-inventory[${index}].handling`);
-    requireString(ctx, "VAL-VERIFICATION-MANUAL-005", VERIFICATION_TRACE_PATH, row?.["basis-field"], `manual-not-applicable-inventory[${index}].basis-field`);
-    requireString(ctx, "VAL-VERIFICATION-MANUAL-006", VERIFICATION_TRACE_PATH, row?.reason, `manual-not-applicable-inventory[${index}].reason`);
-    if (runtimeRowId && !runtimeModel.rowsById.has(runtimeRowId)) {
-      addError(ctx, "VAL-VERIFICATION-MANUAL-007", VERIFICATION_TRACE_PATH, `manual-not-applicable-inventory[${index}] 引用未定义 runtime row：${runtimeRowId}。`);
-    }
-    if (branchId) {
-      if (manualByBranchId.has(branchId)) {
-        addError(ctx, "VAL-VERIFICATION-MANUAL-008", VERIFICATION_TRACE_PATH, `manual-not-applicable-inventory branch-id 重复：${branchId}。`);
-      }
-      manualByBranchId.set(branchId, { index, row, runtimeRowId, handling });
+function validateVerificationGate(ctx, trace, runtimeModel, sliceModel) {
+  const gate = requireObject(ctx, "VAL-VERIFICATION-GATE-001", VERIFICATION_TRACE_PATH, trace["verification-gate"], "verification-gate");
+  for (const field of REQUIRED_GATE_FIELDS) {
+    const rows = requireArray(ctx, "VAL-VERIFICATION-GATE-002", VERIFICATION_TRACE_PATH, gate[field], `verification-gate.${field}`);
+    if (rows.length > 0) {
+      addError(ctx, "VAL-VERIFICATION-GATE-003", VERIFICATION_TRACE_PATH, `verification-gate.${field} 必须为空；非空表示 artifact 未闭合。`);
     }
   }
 
-  const branchRows = requireArray(
-    ctx,
-    "VAL-VERIFICATION-BRANCH-001",
-    VERIFICATION_TRACE_PATH,
-    trace["runtime-row-branch-inventory"],
-    "runtime-row-branch-inventory",
-  );
-  const seenBranchIds = new Set();
-  const referencedManualBranchIds = new Set();
-  for (const [index, row] of branchRows.entries()) {
-    const label = `runtime-row-branch-inventory[${index}]`;
-    const branchId = requireId(ctx, "VAL-VERIFICATION-BRANCH-002", VERIFICATION_TRACE_PATH, row?.["branch-id"], `${label}.branch-id`, BRANCH_ID_RE);
-    if (branchId) {
-      if (seenBranchIds.has(branchId)) {
-        addError(ctx, "VAL-VERIFICATION-BRANCH-003", VERIFICATION_TRACE_PATH, `${label}.branch-id 重复：${branchId}。`);
-      }
-      seenBranchIds.add(branchId);
-    }
-    const runtimeRowId = requireId(ctx, "VAL-VERIFICATION-BRANCH-004", VERIFICATION_TRACE_PATH, row?.["runtime-row-id"], `${label}.runtime-row-id`, RUNTIME_ROW_ID_RE);
-    const runtimeRow = runtimeModel.rowsById.get(runtimeRowId);
-    if (runtimeRowId && !runtimeRow) {
-      addError(ctx, "VAL-VERIFICATION-BRANCH-005", VERIFICATION_TRACE_PATH, `${label} 引用未定义 runtime row：${runtimeRowId}。`);
-    }
-    if (runtimeRow) {
-      expectEqual(ctx, "VAL-VERIFICATION-BRANCH-006", VERIFICATION_TRACE_PATH, row?.["runtime-row-type"], runtimeRow.rowType, `${label}.runtime-row-type`);
-      expectEqual(ctx, "VAL-VERIFICATION-BRANCH-007", VERIFICATION_TRACE_PATH, row?.["scope-role"], runtimeRow.scopeRole, `${label}.scope-role`);
-    }
-    requireString(ctx, "VAL-VERIFICATION-BRANCH-008", VERIFICATION_TRACE_PATH, row?.["branch-source-field"], `${label}.branch-source-field`);
-    requireString(ctx, "VAL-VERIFICATION-BRANCH-009", VERIFICATION_TRACE_PATH, row?.["branch-variant"], `${label}.branch-variant`);
-    requireString(ctx, "VAL-VERIFICATION-BRANCH-010", VERIFICATION_TRACE_PATH, row?.["handling-reason"], `${label}.handling-reason`);
-    const handling = validateEnum(ctx, "VAL-VERIFICATION-BRANCH-011", VERIFICATION_TRACE_PATH, row?.handling, BRANCH_HANDLINGS, `${label}.handling`);
-    const expectedSlices = requireProofSliceIdArray(ctx, "VAL-VERIFICATION-BRANCH-012", VERIFICATION_TRACE_PATH, row?.["expected-proof-slice-ids"], `${label}.expected-proof-slice-ids`);
-
-    if (handling === "proof-slice") {
-      if (expectedSlices.length === 0) {
-        addError(ctx, "VAL-VERIFICATION-BRANCH-013", VERIFICATION_TRACE_PATH, `${label} handling=proof-slice 时必须声明 expected-proof-slice-ids。`);
-      }
-      for (const sliceId of expectedSlices) {
-        if (!proofModel.proofSlicesById.has(sliceId)) {
-          addError(ctx, "VAL-VERIFICATION-BRANCH-014", VERIFICATION_TRACE_PATH, `${label} 引用不存在的 Proof Slice：${sliceId}。`);
-          continue;
-        }
-        if (runtimeRowId && !proofModel.runtimeRowsBySlice.get(sliceId)?.has(runtimeRowId)) {
-          addError(ctx, "VAL-VERIFICATION-BRANCH-015", VERIFICATION_TRACE_PATH, `${label} 引用的 ${sliceId} 未反向包含 runtime row ${runtimeRowId}。`);
-        }
-      }
-      continue;
-    }
-
-    if (expectedSlices.length > 0) {
-      addError(ctx, "VAL-VERIFICATION-BRANCH-016", VERIFICATION_TRACE_PATH, `${label} manual/not-applicable branch 不得声明 expected-proof-slice-ids。`);
-    }
-    const manualRow = manualByBranchId.get(branchId);
-    if (!manualRow) {
-      addError(ctx, "VAL-VERIFICATION-BRANCH-017", VERIFICATION_TRACE_PATH, `${label} manual/not-applicable branch 必须在 manual-not-applicable-inventory 中有同 branch-id row。`);
-    } else {
-      referencedManualBranchIds.add(branchId);
-      expectEqual(ctx, "VAL-VERIFICATION-BRANCH-018", VERIFICATION_TRACE_PATH, manualRow.runtimeRowId, runtimeRowId, `${label} manual inventory runtime-row-id`);
-      expectEqual(ctx, "VAL-VERIFICATION-BRANCH-019", VERIFICATION_TRACE_PATH, manualRow.handling, handling, `${label} manual inventory handling`);
-    }
+  const missing = runtimeModel.verificationRowIds.filter((rowId) => !sliceModel.coveredRuntimeFactIds.has(rowId));
+  if (missing.length > 0) {
+    addError(ctx, "VAL-VERIFICATION-COVERAGE-001", VERIFICATION_TRACE_PATH, `verification-slice-register 缺少 required / preserve runtime facts：${missing.join(", ")}。`);
   }
 
-  for (const branchId of manualByBranchId.keys()) {
-    if (!referencedManualBranchIds.has(branchId)) {
-      addError(ctx, "VAL-VERIFICATION-MANUAL-009", VERIFICATION_TRACE_PATH, `manual-not-applicable-inventory 包含未被 runtime-row-branch-inventory 引用的 branch-id：${branchId}。`);
+  const invalidGateRefs = asArray(gate["invalid-runtime-refs"]).map(strip).filter(Boolean);
+  for (const rowId of invalidGateRefs) {
+    if (!RUNTIME_FACT_ID_RE.test(rowId)) {
+      addError(ctx, "VAL-VERIFICATION-GATE-004", VERIFICATION_TRACE_PATH, `verification-gate.invalid-runtime-refs 包含非法 runtime fact id：${rowId}。`);
     }
   }
 }
 
-function validateRuntimeCoverageReconciliation(ctx, trace, runtimeModel, proofModel) {
-  const rows = requireArray(
-    ctx,
-    "VAL-VERIFICATION-RECONCILIATION-001",
-    VERIFICATION_TRACE_PATH,
-    trace["runtime-coverage-reconciliation"],
-    "runtime-coverage-reconciliation",
-  );
-  const recordsByRuntimeRowId = new Map();
-  for (const [index, row] of rows.entries()) {
-    const label = `runtime-coverage-reconciliation[${index}]`;
-    const runtimeRowId = requireId(ctx, "VAL-VERIFICATION-RECONCILIATION-002", VERIFICATION_TRACE_PATH, row?.["runtime-row-id"], `${label}.runtime-row-id`, RUNTIME_ROW_ID_RE);
-    if (!runtimeRowId) continue;
-    if (recordsByRuntimeRowId.has(runtimeRowId)) {
-      addError(ctx, "VAL-VERIFICATION-RECONCILIATION-003", VERIFICATION_TRACE_PATH, `${label}.runtime-row-id 重复：${runtimeRowId}。`);
-    }
-    recordsByRuntimeRowId.set(runtimeRowId, { index, row });
-
-    const runtimeRow = runtimeModel.rowsById.get(runtimeRowId);
-    if (!runtimeRow) {
-      addError(ctx, "VAL-VERIFICATION-RECONCILIATION-004", VERIFICATION_TRACE_PATH, `${label} 引用未定义 runtime row：${runtimeRowId}。`);
-      continue;
-    }
-    expectEqual(ctx, "VAL-VERIFICATION-RECONCILIATION-005", VERIFICATION_TRACE_PATH, row?.["row-type"], runtimeRow.rowType, `${label}.row-type`);
-    expectEqual(ctx, "VAL-VERIFICATION-RECONCILIATION-006", VERIFICATION_TRACE_PATH, row?.["scope-role"], runtimeRow.scopeRole, `${label}.scope-role`);
-
-    const expectedSlices = requireProofSliceIdArray(ctx, "VAL-VERIFICATION-RECONCILIATION-007", VERIFICATION_TRACE_PATH, row?.["expected-proof-slice-ids"], `${label}.expected-proof-slice-ids`);
-    const missingSlices = requireProofSliceIdArray(ctx, "VAL-VERIFICATION-RECONCILIATION-008", VERIFICATION_TRACE_PATH, row?.["missing-proof-slice-ids"], `${label}.missing-proof-slice-ids`);
-    const coverageStatus = validateEnum(ctx, "VAL-VERIFICATION-RECONCILIATION-009", VERIFICATION_TRACE_PATH, row?.["coverage-status"], RECONCILIATION_STATUSES, `${label}.coverage-status`);
-    if (coverageStatus === "blocked") {
-      addError(ctx, "VAL-VERIFICATION-RECONCILIATION-010", VERIFICATION_TRACE_PATH, `${label} coverage-status=blocked 是 artifact blocker。`);
-    }
-
-    if (coverageStatus === "covered") {
-      if (missingSlices.length > 0) {
-        addError(ctx, "VAL-VERIFICATION-RECONCILIATION-011", VERIFICATION_TRACE_PATH, `${label} coverage-status=covered 时 missing-proof-slice-ids 必须为空。`);
-      }
-      if (expectedSlices.length === 0) {
-        addError(ctx, "VAL-VERIFICATION-RECONCILIATION-012", VERIFICATION_TRACE_PATH, `${label} coverage-status=covered 时必须声明 expected-proof-slice-ids。`);
-      }
-      for (const sliceId of expectedSlices) {
-        if (!proofModel.proofSlicesById.has(sliceId)) {
-          addError(ctx, "VAL-VERIFICATION-RECONCILIATION-013", VERIFICATION_TRACE_PATH, `${label} 引用不存在的 Proof Slice：${sliceId}。`);
-          continue;
-        }
-        if (!proofModel.runtimeRowsBySlice.get(sliceId)?.has(runtimeRowId)) {
-          addError(ctx, "VAL-VERIFICATION-RECONCILIATION-014", VERIFICATION_TRACE_PATH, `${label} 引用的 ${sliceId} 未反向包含 runtime row ${runtimeRowId}。`);
-        }
-      }
-      continue;
-    }
-
-    if (coverageStatus === "manual-environment" || coverageStatus === "not-applicable") {
-      if (expectedSlices.length > 0 || missingSlices.length > 0) {
-        addError(ctx, "VAL-VERIFICATION-RECONCILIATION-015", VERIFICATION_TRACE_PATH, `${label} manual/not-applicable reconciliation 不得声明 expected/missing Proof Slice。`);
-      }
-      const reason = strip(row?.["gap-not-covered-reason"]);
-      if (!reason || /^none$/iu.test(reason)) {
-        addError(ctx, "VAL-VERIFICATION-RECONCILIATION-016", VERIFICATION_TRACE_PATH, `${label}.gap-not-covered-reason 必须给出 source/scope-backed reason。`);
-      }
-    }
+function validateDeliveryPlane(ctx, trace, sliceModel) {
+  const delivery = requireObject(ctx, "VAL-VERIFICATION-DELIVERY-001", VERIFICATION_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
+  const intent = requireObject(ctx, "VAL-VERIFICATION-DELIVERY-002", VERIFICATION_TRACE_PATH, delivery["verification-intent"], "delivery-plane.verification-intent");
+  for (const field of ["scope", "runtime-source", "out-of-scope"]) {
+    requireString(ctx, "VAL-VERIFICATION-DELIVERY-003", VERIFICATION_TRACE_PATH, intent[field], `delivery-plane.verification-intent.${field}`);
   }
-
-  expectSameSet(
-    ctx,
-    "VAL-VERIFICATION-RECONCILIATION-017",
-    VERIFICATION_TRACE_PATH,
-    [...recordsByRuntimeRowId.keys()],
-    runtimeModel.verificationRowIds,
-    "runtime-coverage-reconciliation runtime rows",
-  );
-}
-
-function validateSummary(ctx, summary, expected) {
-  expectEqual(ctx, "VAL-VERIFICATION-SUMMARY-001", VERIFICATION_TRACE_PATH, summary["proof-slice-count"], expected.sliceCount, "proof-slice-summary.proof-slice-count");
-  expectEqual(ctx, "VAL-VERIFICATION-SUMMARY-002", VERIFICATION_TRACE_PATH, summary["persistent-test-required-count"], expected.persistentCount, "proof-slice-summary.persistent-test-required-count");
-  expectEqual(ctx, "VAL-VERIFICATION-SUMMARY-003", VERIFICATION_TRACE_PATH, summary["non-persistent-proof-slice-count"], expected.sliceCount - expected.persistentCount, "proof-slice-summary.non-persistent-proof-slice-count");
-  expectEqual(ctx, "VAL-VERIFICATION-SUMMARY-004", VERIFICATION_TRACE_PATH, summary["runtime-row-count"], expected.runtimeRowCount, "proof-slice-summary.runtime-row-count");
-  expectEqual(ctx, "VAL-VERIFICATION-SUMMARY-005", VERIFICATION_TRACE_PATH, summary["slice-id-format"], "PS-###", "proof-slice-summary.slice-id-format");
+  if (sliceModel.slicesById.size === 0) {
+    addError(ctx, "VAL-VERIFICATION-DELIVERY-004", VERIFICATION_TRACE_PATH, "Proof Slice Matrix 无法从空 verification-slice-register 投影。");
+  }
 }
 
 function validateKebabCaseKeys(ctx, value, pointer = "") {
@@ -742,14 +587,6 @@ function requireString(ctx, ruleId, file, value, label) {
   return strip(value);
 }
 
-function requireBoolean(ctx, ruleId, file, value, label) {
-  if (typeof value !== "boolean") {
-    addError(ctx, ruleId, file, `${label} 必须是 boolean。`);
-    return null;
-  }
-  return value;
-}
-
 function requireId(ctx, ruleId, file, value, label, regex) {
   const id = requireString(ctx, ruleId, file, value, label);
   if (id && !regex.test(id)) {
@@ -758,16 +595,8 @@ function requireId(ctx, ruleId, file, value, label, regex) {
   return id;
 }
 
-function validateProofSliceId(ctx, value, label) {
-  return requireId(ctx, "VAL-VERIFICATION-SLICE-001", VERIFICATION_TRACE_PATH, value, label, PROOF_SLICE_ID_RE);
-}
-
-function requireProofSliceIdArray(ctx, ruleId, file, value, label) {
-  return requireIdArray(ctx, ruleId, file, value, label, PROOF_SLICE_ID_RE);
-}
-
-function requireRuntimeRowIdArray(ctx, ruleId, file, value, label) {
-  return requireIdArray(ctx, ruleId, file, value, label, RUNTIME_ROW_ID_RE);
+function requireRuntimeFactIdArray(ctx, ruleId, file, value, label) {
+  return requireIdArray(ctx, ruleId, file, value, label, RUNTIME_FACT_ID_RE);
 }
 
 function requireIdArray(ctx, ruleId, file, value, label, regex) {
@@ -788,65 +617,60 @@ function requireIdArray(ctx, ruleId, file, value, label, regex) {
 function validateEnum(ctx, ruleId, file, value, allowed, label) {
   const actual = requireString(ctx, ruleId, file, value, label);
   if (actual && !allowed.has(actual)) {
-    addError(ctx, ruleId, file, `${label} 非法：${actual}。允许值：${[...allowed].join(", ")}。`);
+    addError(ctx, ruleId, file, `${label} 必须是 ${[...allowed].join(", ")}；实际为 ${actual}。`);
   }
   return actual;
 }
 
 function expectEqual(ctx, ruleId, file, actual, expected, label) {
   if (actual !== expected) {
-    addError(ctx, ruleId, file, `${label} 不一致：实际 ${formatValue(actual)}，期望 ${formatValue(expected)}。`);
+    addError(ctx, ruleId, file, `${label} 必须为 ${expected}；实际为 ${actual ?? "(missing)"}。`);
   }
 }
 
-function expectSameSet(ctx, ruleId, file, actualValues, expectedValues, label) {
-  const actual = unique(actualValues.map(strip).filter(Boolean));
-  const expected = unique(expectedValues.map(strip).filter(Boolean));
-  const actualSet = new Set(actual);
-  const expectedSet = new Set(expected);
-  const missing = expected.filter((value) => !actualSet.has(value));
-  const extra = actual.filter((value) => !expectedSet.has(value));
-  if (missing.length > 0 || extra.length > 0) {
-    const parts = [];
-    if (missing.length > 0) parts.push(`缺失 ${missing.join(", ")}`);
-    if (extra.length > 0) parts.push(`多出 ${extra.join(", ")}`);
-    addError(ctx, ruleId, file, `${label} 集合不一致：${parts.join("；")}。`);
-  }
+function rowTypeForRuntimeFactId(id) {
+  if (id.startsWith("RS-")) return "surface";
+  if (id.startsWith("OP-")) return "operation";
+  if (id.startsWith("ST-")) return "state";
+  if (id.startsWith("CH-")) return "chain";
+  return "";
 }
 
 function collectStringLeaves(value, pointer = "") {
-  if (typeof value === "string") {
-    return [{ value, pointer }];
-  }
+  if (typeof value === "string") return [{ pointer, value }];
   if (!value || typeof value !== "object") return [];
-  const rows = [];
   if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      rows.push(...collectStringLeaves(item, `${pointer}/${index}`));
-    }
-    return rows;
+    return value.flatMap((item, index) => collectStringLeaves(item, `${pointer}/${index}`));
   }
-  for (const [key, child] of Object.entries(value)) {
-    rows.push(...collectStringLeaves(child, `${pointer}/${escapePointer(key)}`));
-  }
-  return rows;
-}
-
-function isNoManualGate(value) {
-  if (value === null || value === undefined) return true;
-  return strip(value) === "" || /^none$/iu.test(strip(value));
+  return Object.entries(value).flatMap(([key, child]) => collectStringLeaves(child, `${pointer}/${escapePointer(key)}`));
 }
 
 function escapePointer(value) {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
 }
 
-function addError(ctx, ruleId, file, message) {
-  ctx.errors.push({ level: "error", ruleId, file, message });
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function strip(value) {
+  return typeof value === "string" ? value.trim() : String(value ?? "").trim();
+}
+
+function rel(ctx, fullPath) {
+  return path.relative(ctx.root, fullPath) || ".";
 }
 
 function addWarning(ctx, ruleId, file, message) {
   ctx.warnings.push({ level: "warning", ruleId, file, message });
+}
+
+function addError(ctx, ruleId, file, message) {
+  ctx.errors.push({ level: "error", ruleId, file, message });
 }
 
 function resultFor(ctx) {
@@ -874,7 +698,7 @@ function formatResult(result, options = {}) {
       lines.push(`- ${item.ruleId} ${item.file}: ${item.message}`);
     }
   }
-  return `${lines.join("\n")}\n`;
+  return lines.join("\n");
 }
 
 function parseArgs(argv) {
@@ -889,44 +713,20 @@ function parseArgs(argv) {
   return options;
 }
 
-function usage() {
-  return `Usage:
+function printHelp() {
+  console.log(`Usage:
   node openspec/agent-runtime/scripts/validators/validate-verification-artifact.mjs --change <slug> [--root <path>]
-`;
+`);
 }
 
-function rel(ctx, fullPath) {
-  return path.relative(ctx.root, fullPath) || ".";
-}
-
-function formatValue(value) {
-  return value === undefined ? "(undefined)" : JSON.stringify(value);
-}
-
-function strip(value) {
-  return String(value ?? "").trim();
-}
-
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function unique(values) {
-  return [...new Set(values)];
-}
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    const options = parseArgs(process.argv.slice(2));
-    if (options.help) {
-      process.stdout.write(usage());
-      process.exit(0);
-    }
-    const result = validateVerificationArtifact(options);
-    process.stdout.write(formatResult(result, options));
-    process.exit(result.ok ? 0 : 1);
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exit(1);
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) {
+  const options = parseArgs(process.argv.slice(2));
+  if (options.help) {
+    printHelp();
+    process.exit(0);
   }
+  const result = validateVerificationArtifact(options);
+  console.log(formatResult(result, options));
+  process.exit(result.ok ? 0 : 1);
 }

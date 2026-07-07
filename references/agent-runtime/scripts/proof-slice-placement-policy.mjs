@@ -1,14 +1,14 @@
 export function isAutomatedProofSliceRequired(slice) {
-  const gate = field(slice, "manual-environment-gate", "manual").toLowerCase();
-  return !gate || gate === "none" || gate === "null";
+  return field(slice, "proof-evidence-mode", "evidenceMode") !== "manual-environment";
 }
 
 export function isPersistentTestRequired(slice) {
-  return slice?.["persistent-test-required"] === true || field(slice, "persistent-test-required", "persistent").toLowerCase() === "true";
+  return field(slice, "proof-evidence-mode", "evidenceMode") === "durable-test";
 }
 
 export function isProofEvidenceRequired(slice) {
-  return slice?.["persistent-test-required"] === false || field(slice, "persistent-test-required", "persistent").toLowerCase() === "false";
+  const mode = field(slice, "proof-evidence-mode", "evidenceMode");
+  return Boolean(mode && mode !== "durable-test");
 }
 
 export function isForbiddenTestPlacement(file) {
@@ -46,9 +46,9 @@ export function isForbiddenPlannedTestDirectory(directory) {
 export function isProofSlicePlacementSupported(slice) {
   const placement = placementFor(slice);
   if (isProofEvidenceRequired(slice)) {
-    return placement.directory === "N/A" && placement.basis === "nonpersistent-evidence";
+    return placement.directory === "N/A";
   }
-  return isPlannedDirectoryAllowedForLayer(placement.directory, field(slice, "primary-layer", "layer"));
+  return isPlannedDirectoryAllowedForLayer(placement.directory, field(slice, "test-layer", "layer"));
 }
 
 export function isPlacementAllowed(file, slice = {}) {
@@ -65,17 +65,10 @@ export function isActualFileWithinPlannedDirectory(file, slice = {}) {
 }
 
 export function placementFor(slice = {}) {
-  const contract = slice?.["test-contract"];
-  const placement = contract && typeof contract === "object" && !Array.isArray(contract)
-    ? contract.placement
-    : null;
-  const normalized = placement && typeof placement === "object" && !Array.isArray(placement)
-    ? placement
-    : {};
   return {
-    directory: normalizeDirectory(normalized["planned-test-directory"]),
-    basis: strip(normalized["placement-basis"]),
-    reason: strip(normalized["placement-reason"]),
+    directory: normalizeDirectory(slice?.["planned-test-directory"]),
+    basis: isPersistentTestRequired(slice) ? "durable-test" : "nonpersistent-evidence",
+    reason: strip(slice?.["non-persistent-reason"]),
   };
 }
 

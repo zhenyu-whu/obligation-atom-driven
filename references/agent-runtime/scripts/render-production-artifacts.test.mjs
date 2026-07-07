@@ -18,7 +18,7 @@ test("renderer 从 trace fixture 渲染 proposal/spec/design/runtime/tasks", () 
     { artifact: "specs", capability: "capability", expected: "## ADDED Requirements\n\n### Requirement: Trace spec\n" },
     { artifact: "design", expected: "## Context\n\n- design 来自 trace。\n" },
     { artifact: "runtime-acceptance", expected: "## Runtime Acceptance Intent\n\n- Scope: runtime 来自 trace。\n" },
-    { artifact: "tasks", expected: "## AC-001 Trace task\n\nOutcome:\n\n- tasks 来自 trace。\n" },
+    { artifact: "tasks", expected: "## AC-001 Trace task\n\nRuntime Facts:\n\n- RS-001\n" },
   ];
 
   for (const item of cases) {
@@ -30,106 +30,91 @@ test("renderer 从 trace fixture 渲染 proposal/spec/design/runtime/tasks", () 
       assert.match(result.markdown, /## Impact\n\n- 无/);
       assert.match(result.markdown, /## Rollout \/ Readiness\n\n- 无/);
     }
+    if (item.artifact === "tasks") {
+      assert.match(result.markdown, /      Work: 实现 trace task。/);
+      assert.doesNotMatch(result.markdown, /Depends On:\n\n- None/);
+      assert.doesNotMatch(result.markdown, /Outcome:/);
+      assert.doesNotMatch(result.markdown, /Preserve:/);
+      assert.doesNotMatch(result.markdown, /Proof:/);
+      assert.doesNotMatch(result.markdown, /Acceptance:/);
+      assert.doesNotMatch(result.markdown, /Resolved Runtime Contract/);
+    }
   }
 });
 
-test("renderer 从 inline proof-slice-model 渲染 verification matrix", () => {
+test("renderer 从 verification-slice-register 渲染 verification matrix", () => {
   const root = makeRenderChange("render-verification-change");
   const result = renderChangeArtifact({ root, change: "render-verification-change", artifact: "verification" });
 
   assert.match(result.markdown, /## Proof Slice Matrix/);
   assert.match(result.markdown, /\| PS-001 \| RS-001 \| RS-001 \| authorization \| actor resolution \|/);
-  assert.match(result.markdown, /## Planned Test Placement Matrix/);
-  assert.match(result.markdown, /\| PS-001 \| true \| durable-test \| apps\/web\/tests\/security\/\*\* \| existing-tests-directory \|/);
+  assert.match(result.markdown, /\| PS-001 \| RS-001 \| RS-001 \| authorization \| actor resolution \| 登录态解析到内部 actor。 \| actor 缺失。 \| security\/negative \| apps\/web \| authorization result \| session fixture \| durable-test \| apps\/web\/tests\/security\/\*\* \| N\/A \|/);
+  assert.doesNotMatch(result.markdown, /## Planned Test Placement Matrix/);
   assert.match(result.markdown, /Trace file: `trace\/verification.trace.json`/);
 });
 
-test("renderer 兼容 legacy proof-slices sidecar 渲染 verification matrix", () => {
-  const change = "render-verification-legacy-sidecar-change";
-  const root = makeRenderChange(change, { legacyProofSlices: true });
-  const result = renderChangeArtifact({ root, change, artifact: "verification" });
-
-  assert.match(result.markdown, /## Proof Slice Matrix/);
-  assert.match(result.markdown, /\| PS-001 \| RS-001 \| RS-001 \| authorization \| actor resolution \|/);
-  assert.match(result.markdown, /Trace file: `trace\/verification.trace.json`/);
-});
-
-test("renderer 拒绝 verification 缺少 inline proof-slice-model", () => {
-  const change = "render-verification-missing-inline-model-change";
+test("renderer 拒绝 verification 缺少 verification-slice-register", () => {
+  const change = "render-verification-missing-register-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "verification.trace.json");
   const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  delete trace["proof-slice-model"];
+  delete trace["verification-slice-register"];
   fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
 
   assert.throws(
     () => renderChangeArtifact({ root, change, artifact: "verification" }),
-    /VAL-RENDER-002.*缺少 proof-slice-model/u,
+    /VAL-RENDER-002.*缺少 verification-slice-register/u,
   );
 });
 
-test("renderer 拒绝 verification proof-slice-model schema 错误", () => {
-  const change = "render-verification-bad-inline-schema-change";
+test("renderer 拒绝 verification-slice-register 为空", () => {
+  const change = "render-verification-empty-register-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "verification.trace.json");
   const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  trace["proof-slice-model"]["model-schema"] = "openspec-trace-v1";
+  trace["verification-slice-register"] = [];
   fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
 
   assert.throws(
     () => renderChangeArtifact({ root, change, artifact: "verification" }),
-    /VAL-RENDER-002.*openspec-proof-slices-v1/u,
+    /VAL-RENDER-002.*verification-slice-register 不能为空/u,
   );
 });
 
-test("renderer 拒绝 verification proof-slice-model 为空", () => {
-  const change = "render-verification-empty-inline-model-change";
+test("renderer 拒绝 verification slice 缺少 planned-test-directory", () => {
+  const change = "render-verification-missing-planned-directory-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "verification.trace.json");
   const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  trace["proof-slice-model"]["proof-slices"] = [];
+  delete trace["verification-slice-register"][0]["planned-test-directory"];
   fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
 
   assert.throws(
     () => renderChangeArtifact({ root, change, artifact: "verification" }),
-    /VAL-RENDER-002.*proof-slices 不能为空/u,
+    /VAL-RENDER-002.*PS-001 缺少 planned-test-directory/u,
   );
 });
 
-test("renderer 拒绝 verification proof slice 缺少 placement", () => {
-  const change = "render-verification-missing-placement-change";
+test("renderer 拒绝 verification slice 缺少 non-persistent-reason", () => {
+  const change = "render-verification-missing-non-persistent-reason-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "verification.trace.json");
   const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  delete trace["proof-slice-model"]["proof-slices"][0]["test-contract"].placement;
+  delete trace["verification-slice-register"][0]["non-persistent-reason"];
   fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
 
   assert.throws(
     () => renderChangeArtifact({ root, change, artifact: "verification" }),
-    /VAL-RENDER-002.*PS-001 缺少 test-contract\.placement/u,
+    /VAL-RENDER-002.*PS-001 缺少 non-persistent-reason/u,
   );
 });
 
-test("renderer 拒绝 verification proof slice placement 字段缺失", () => {
-  const change = "render-verification-missing-placement-field-change";
-  const root = makeRenderChange(change);
-  const tracePath = path.join(root, "openspec", "changes", change, "trace", "verification.trace.json");
-  const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  delete trace["proof-slice-model"]["proof-slices"][0]["test-contract"].placement["placement-reason"];
-  fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
-
-  assert.throws(
-    () => renderChangeArtifact({ root, change, artifact: "verification" }),
-    /VAL-RENDER-002.*placement 缺少 placement-reason/u,
-  );
-});
-
-test("renderer 拒绝 runtime canonical row 必填字段缺失", () => {
+test("renderer 拒绝 runtime fact 必填字段缺失", () => {
   const change = "render-runtime-required-field-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "runtime-acceptance.trace.json");
   const runtime = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  delete runtime["delivery-plane"]["canonical-rows"][0]["default-path-policy"];
+  delete runtime["runtime-fact-register"][0]["default-path-policy"];
   fs.writeFileSync(tracePath, `${JSON.stringify(runtime, null, 2)}\n`);
 
   assert.throws(
@@ -138,12 +123,12 @@ test("renderer 拒绝 runtime canonical row 必填字段缺失", () => {
   );
 });
 
-test("renderer 拒绝 runtime canonical row 未进入 index", () => {
-  const change = "render-runtime-row-index-gap-change";
+test("renderer 拒绝 runtime fact 未进入 section", () => {
+  const change = "render-runtime-fact-section-gap-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "runtime-acceptance.trace.json");
   const runtime = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  runtime["canonical-row-index"]["surface-rows"] = [];
+  runtime["delivery-plane"]["fact-sections"]["surface-facts"] = [];
   fs.writeFileSync(tracePath, `${JSON.stringify(runtime, null, 2)}\n`);
 
   assert.throws(
@@ -152,18 +137,18 @@ test("renderer 拒绝 runtime canonical row 未进入 index", () => {
   );
 });
 
-test("renderer 拒绝 runtime row 类型放错 index 分组", () => {
-  const change = "render-runtime-row-type-change";
+test("renderer 拒绝 runtime fact 类型放错 section 分组", () => {
+  const change = "render-runtime-fact-type-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "runtime-acceptance.trace.json");
   const runtime = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  runtime["canonical-row-index"]["surface-rows"] = [];
-  runtime["canonical-row-index"]["operation-rows"] = ["RS-001"];
+  runtime["delivery-plane"]["fact-sections"]["surface-facts"] = [];
+  runtime["delivery-plane"]["fact-sections"]["operation-facts"] = ["RS-001"];
   fs.writeFileSync(tracePath, `${JSON.stringify(runtime, null, 2)}\n`);
 
   assert.throws(
     () => renderChangeArtifact({ root, change, artifact: "runtime-acceptance" }),
-    /VAL-RENDER-002.*RS-001 不属于 operation-rows/u,
+    /VAL-RENDER-002.*RS-001 不属于 operation-facts/u,
   );
 });
 
@@ -297,12 +282,17 @@ test("renderer 拒绝空 normal specs delta", () => {
   );
 });
 
-test("renderer 将 design decision 数组字段渲染为块级可读内容", () => {
+test("renderer 从 implementation-design-register 渲染 design decision", () => {
   const change = "render-readable-design-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "design.trace.json");
   const design = JSON.parse(fs.readFileSync(tracePath, "utf8"));
-  design["delivery-plane"].decisions[0].decision = [
+  design["delivery-plane"].decisions[0].title = "delivery title 不应渲染";
+  design["delivery-plane"].decisions[0].decision = "delivery decision 不应渲染";
+  design["delivery-plane"].decisions[0]["source-gap"] = "delivery source gap 不应渲染";
+  design["delivery-plane"].decisions[0]["minimal-shape"] = "delivery minimal shape 不应渲染";
+  design["delivery-plane"].decisions[0]["rejected-expansion"] = "delivery rejected expansion 不应渲染";
+  design["implementation-design-register"][0].decision = [
     "- 采用一个最小生产边界：前端只读 foundation 状态。",
     "- 后端只暴露 health/readiness。",
     "- worker 只启动独立进程。",
@@ -315,9 +305,13 @@ test("renderer 将 design decision 数组字段渲染为块级可读内容", () 
   assert.match(result.markdown, /Decision:\n\n- 采用一个最小生产边界/);
   assert.match(result.markdown, /\n- 后端只暴露 health\/readiness/);
   assert.match(result.markdown, /\n- executor 只保留 adapter seam。/);
+  assert.doesNotMatch(result.markdown, /delivery decision 不应渲染/);
+  assert.doesNotMatch(result.markdown, /Source Gap/);
+  assert.doesNotMatch(result.markdown, /Minimal Shape/);
+  assert.doesNotMatch(result.markdown, /Rejected Expansion/);
 });
 
-test("renderer 兼容 default profile frontend-ux-design key", () => {
+test("renderer 忽略 design 旧 frontend section payload", () => {
   const change = "render-default-design-frontend-alias-change";
   const root = makeRenderChange(change);
   const tracePath = path.join(root, "openspec", "changes", change, "trace", "design.trace.json");
@@ -329,7 +323,64 @@ test("renderer 兼容 default profile frontend-ux-design key", () => {
 
   const result = renderChangeArtifact({ root, change, artifact: "design" });
 
-  assert.match(result.markdown, /## Frontend \/ UX \/ Prototype Fidelity Design\n\n- default frontend UX 来自 alias。/);
+  assert.match(result.markdown, /## Implementation Details/);
+  assert.doesNotMatch(result.markdown, /## Frontend \/ UX/);
+  assert.doesNotMatch(result.markdown, /default frontend UX 来自 alias/);
+});
+
+test("renderer 按 detail-render-order 分组渲染 design implementation details", () => {
+  const change = "render-design-details-change";
+  const root = makeRenderChange(change);
+  const tracePath = path.join(root, "openspec", "changes", change, "trace", "design.trace.json");
+  const design = JSON.parse(fs.readFileSync(tracePath, "utf8"));
+  design["implementation-design-register"][0]["implementation-details"].push({
+    "detail-id": "IDR-001-D002",
+    "detail-type": "api-contract",
+    owner: "DecisionFlowModule",
+    subject: "Readiness API",
+    basis: {
+      "inherits-parent-spec-anchors": true,
+      "spec-anchors": [],
+      "design-inputs": [],
+    },
+    content: "- control-api 暴露只读 readiness endpoint，并返回可展示状态。",
+    "no-scope-expansion": "不新增写入 API。",
+  });
+  fs.writeFileSync(tracePath, `${JSON.stringify(design, null, 2)}\n`);
+
+  const result = renderChangeArtifact({ root, change, artifact: "design" });
+
+  assert.match(result.markdown, /## Implementation Details/);
+  assert.match(result.markdown, /### module-boundary/);
+  assert.match(result.markdown, /- renderer 从 IDR 子项渲染 implementation detail。/);
+  assert.match(result.markdown, /### api-contract/);
+  assert.match(result.markdown, /- control-api 暴露只读 readiness endpoint，并返回可展示状态。/);
+  assert.doesNotMatch(result.markdown, /#### IDR-001-D001/);
+  assert.doesNotMatch(result.markdown, /#### IDR-001-D002/);
+  assert.doesNotMatch(result.markdown, /- Parent IDR: IDR-001/);
+  assert.doesNotMatch(result.markdown, /- Detail Type: module-boundary/);
+  assert.doesNotMatch(result.markdown, /- Owner: renderer-test/);
+  assert.doesNotMatch(result.markdown, /- Subject: design renderer detail/);
+  assert.doesNotMatch(result.markdown, /No Scope Expansion:/);
+  assert.doesNotMatch(result.markdown, /inherits-parent-spec-anchors/);
+  assert.doesNotMatch(result.markdown, /## Architecture \/ Module Boundary Design/);
+  assert.match(result.markdown, /## Implementation Details[\s\S]*## Trace Appendix/);
+});
+
+test("renderer 拒绝 design detail content 数组", () => {
+  const change = "render-design-detail-content-array-change";
+  const root = makeRenderChange(change);
+  const tracePath = path.join(root, "openspec", "changes", change, "trace", "design.trace.json");
+  const design = JSON.parse(fs.readFileSync(tracePath, "utf8"));
+  design["implementation-design-register"][0]["implementation-details"][0].content = [
+    "- 错误地把 content 写成数组。",
+  ];
+  fs.writeFileSync(tracePath, `${JSON.stringify(design, null, 2)}\n`);
+
+  assert.throws(
+    () => renderChangeArtifact({ root, change, artifact: "design" }),
+    /design\.IDR-001-D001\.content 必须是非空字符串 render payload/u,
+  );
 });
 
 test("renderer --write 更新 artifact 和 manifest registry 且重复运行稳定", () => {
@@ -349,7 +400,7 @@ test("renderer --write 更新 artifact 和 manifest registry 且重复运行稳�
   assert.equal(firstManifest, secondManifest);
 
   const manifest = JSON.parse(secondManifest);
-  assert.equal(manifest["trace-contract-version"], "verification-inline-proof-slices-v1");
+  assert.equal(manifest["trace-contract-version"], "verification-slice-register-v2");
   assert.equal(manifest["render-contract-version"], RENDER_CONTRACT_VERSION);
   assertManifestEntry(manifest, "trace/verification.trace.json");
   assertNoManifestEntry(manifest, "trace/verification.proof-slices.json");
@@ -380,19 +431,6 @@ test("renderer --no-delta-specs --write 生成 no-delta marker 与 manifest entr
   assertManifestEntry(manifest, "trace/specs/no-spec-delta/README.trace.json");
 });
 
-test("renderer --write 非 verification artifact 保留 legacy sidecar manifest", () => {
-  const change = "render-legacy-sidecar-preserve-change";
-  const root = makeRenderChange(change, { legacyProofSlices: true });
-  const changeDir = path.join(root, "openspec", "changes", change);
-
-  renderChangeArtifact({ root, change, artifact: "proposal", write: true });
-
-  const manifest = JSON.parse(fs.readFileSync(path.join(changeDir, "trace", "manifest.json"), "utf8"));
-  assert.equal(manifest["trace-contract-version"], "proof-slices-v1");
-  assertManifestEntry(manifest, "trace/proposal.trace.json");
-  assertManifestEntry(manifest, "trace/verification.proof-slices.json");
-});
-
 function makeRenderChange(change, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "openspec-renderer-"));
   const changeDir = path.join(root, "openspec", "changes", change);
@@ -409,42 +447,28 @@ function makeRenderChange(change, options = {}) {
     "trace-schema": "openspec-trace-v1",
     "artifact-id": "verification",
     "artifact-path": "verification.md",
-    "runtime-row-branch-inventory": [
-      {
-        "branch-id": "VRB-001",
-        "runtime-row-id": "RS-001",
-        "runtime-row-type": "surface",
-        "scope-role": "required behavior",
-        "branch-source-field": "runtime-obligation",
-        "branch-variant": "actor resolution",
-        "handling": "proof-slice",
-        "expected-proof-slice-ids": ["PS-001"],
-        "handling-reason": "PS-001 覆盖 actor resolution 分支。",
-      },
-    ],
-    "manual-not-applicable-inventory": [],
+    "verification-slice-register": verificationSliceRegister(),
+    "verification-gate": {
+      blockers: [],
+      "uncovered-runtime-facts": [],
+      "invalid-runtime-refs": [],
+      "non-atomic-slices": [],
+      "invalid-proof-modes": [],
+      "invalid-test-placement": [],
+      "delivery-projection-mismatch": [],
+    },
     "delivery-plane": {
       "verification-intent": {
         scope: "verification 来自 trace。",
-        "runtime-source": "runtime-acceptance.md canonical rows。",
+        "runtime-source": "trace/runtime-acceptance.trace.json#/runtime-fact-register",
         "out-of-scope": "None。",
       },
-      "layer-harness-fixture-notes": [],
-      "do-not-test": [],
     },
-    "runtime-coverage-reconciliation": [],
-    "slice-consistency-checklist": [],
   };
-  if (!options.legacyProofSlices) {
-    verification["proof-slice-model"] = proofSliceModel();
-  }
   writeTrace(traceDir, "verification.trace.json", verification);
-  if (options.legacyProofSlices) {
-    writeTrace(traceDir, "verification.proof-slices.json", proofSlicesTrace());
-  }
   writeTrace(traceDir, "manifest.json", {
     "trace-schema": "openspec-trace-v1",
-    "trace-contract-version": options.legacyProofSlices ? "proof-slices-v1" : "verification-inline-proof-slices-v1",
+    "trace-contract-version": "verification-slice-register-v2",
     "render-contract-version": "trace-render-v1",
     change,
     "schema-name": "production-obligation-atom-driven",
@@ -460,17 +484,37 @@ function trace(artifactId, artifactPath, delivery) {
     "artifact-path": artifactPath,
     "delivery-plane": delivery,
     "proposal-alignment-gate": {},
-    "requirement-source-trace": [],
-    "production-alignment-gate": {},
-    "production-source-map": [],
-    "design-obligation-matrix": [],
-    "canonical-row-index": { "surface-rows": [], "operation-rows": [], "state-rows": [], "chain-rows": [] },
-    "runtime-upstream-coverage-map": [],
-    "runtime-coverage-source-map": [],
-    "coverage-closure-checklist": [],
-    "acceptance-driven-coverage": {},
-    "runtime-acceptance-index": {},
-    "runtime-acceptance-projection": {},
+    "spec-delta-register": [],
+    "spec-gate": {
+      blockers: [],
+      "orphan-source-ids": [],
+      "source-set-mismatch": [],
+      "existing-spec-state-violations": [],
+      "delivery-projection-mismatch": [],
+    },
+    "implementation-design-register": [],
+    "design-gate": {
+      blockers: [],
+      "uncovered-spec-anchors": [],
+      "uncovered-design-inputs": [],
+      "invalid-design-inputs": [],
+      "missing-implementation-details": [],
+      "invalid-implementation-details": [],
+      "detail-basis-violations": [],
+      "layer-detail-coverage-gaps": [],
+      "fragmented-design-subjects": [],
+      "placeholder-detail-content": [],
+      "delivery-projection-mismatch": [],
+    },
+    "runtime-fact-register": [],
+    "runtime-gate": {
+      blockers: [],
+      "uncovered-spec-scenarios": [],
+      "uncovered-runtime-design-decisions": [],
+      "orphan-runtime-facts": [],
+      "invalid-source-refs": [],
+      "delivery-projection-mismatch": [],
+    },
   };
 }
 
@@ -515,22 +559,16 @@ function noDeltaSpecsTrace() {
   });
   value["schema-name"] = "production-obligation-atom-driven";
   value["specs-completion-mode"] = NO_DELTA_SPECS_COMPLETION_MODE;
-  value["production-alignment-gate"] = { blockers: [] };
   return value;
 }
 
 function designTrace() {
-  return trace("design", "design.md", {
+  const value = trace("design", "design.md", {
     context: ["- design 来自 trace。"],
     "goals-non-goals": ["- goal 来自 trace。"],
     decisions: [
       {
-        "decision-id": "D-001",
-        title: "Trace design",
-        decision: "从 trace 渲染 design。",
-        "source-gap": "无。",
-        "minimal-shape": "结构化 delivery payload。",
-        "rejected-expansion": "不推导新需求。",
+        "decision-id": "IDR-001",
       },
     ],
     "architecture-module-boundary-design": ["- 无"],
@@ -543,122 +581,140 @@ function designTrace() {
     "rollout-compatibility": ["- 无"],
     "risks-trade-offs": ["- 无"],
     "open-questions": ["无"],
+    "detail-render-order": [
+      "module-boundary",
+      "data-model",
+      "json-shape",
+      "api-contract",
+      "dto-contract",
+      "frontend-contract",
+      "validation-error-contract",
+      "state-lifecycle",
+      "integration-boundary",
+      "migration-compatibility",
+      "observability-ops",
+      "rollout-compatibility",
+      "non-applicable",
+    ],
   });
+  value["implementation-design-register"] = [
+    {
+      "implementation-design-id": "IDR-001",
+      layer: "architecture-module-boundary",
+      title: "Trace design",
+      "spec-anchors": [],
+      "design-inputs": [],
+      decision: "从 trace 渲染 design。",
+      "implementation-boundary": "renderer-test",
+      "implementation-contract": "渲染 design delivery payload。",
+      "guard-failure-handling": "N/A",
+      "verification-handoff": "N/A",
+      "no-scope-expansion": "不推导新需求。",
+      blocker: "无",
+      "implementation-details": [
+        {
+          "detail-id": "IDR-001-D001",
+          "detail-type": "module-boundary",
+          owner: "renderer-test",
+          subject: "design renderer detail",
+          basis: {
+            "inherits-parent-spec-anchors": true,
+            "spec-anchors": [],
+            "design-inputs": [],
+          },
+          content: "- renderer 从 IDR 子项渲染 implementation detail。",
+          "no-scope-expansion": "不推导新需求。",
+        },
+      ],
+    },
+  ];
+  return value;
 }
 
 function runtimeTrace() {
   const runtime = trace("runtime-acceptance", "runtime-acceptance.md", {
     "runtime-acceptance-intent": {
       scope: "runtime 来自 trace。",
-      "source-basis": "proposal/spec/design trace。",
+      "source-basis": "spec/design trace。",
       "out-of-scope": "None。",
     },
-    "canonical-rows": [
-      {
-        "surface-id": "RS-001",
-        "surface-type": "auth surface",
-        "owner-candidate": "apps/web",
-        "entry-point": "route",
-        "runtime-obligation": "登录态解析。",
-        "observable-fact": "auth fact",
-        "default-path-policy": "real path",
-        "external-boundary": "none",
-        "source-basis": "GA-0001、D-001",
-        "projection-type": "spec-requirement / design",
-        "scope-role": "required behavior",
-        "no-scope-expansion-check": "no expansion",
-      },
-    ],
+    "fact-sections": {
+      "surface-facts": ["RS-001"],
+      "operation-facts": [],
+      "state-facts": [],
+      "chain-facts": [],
+    },
   });
-  runtime["canonical-row-index"]["surface-rows"] = ["RS-001"];
+  runtime["runtime-fact-register"] = [
+    {
+      "runtime-fact-id": "RS-001",
+      "fact-type": "surface",
+      "scope-role": "required behavior",
+      "source-basis": {
+        "spec-scenarios": ["trace/specs/capability.trace.json#/spec-delta-register/0/scenarios/0"],
+        "design-decisions": ["IDR-001"],
+      },
+      "owner-candidate": "apps/web",
+      "runtime-fact": "登录态解析。",
+      "observable-fact": "auth fact",
+      "default-path-policy": "real path",
+      "external-boundary": "none",
+      "no-scope-expansion-check": "no expansion",
+    },
+  ];
   return runtime;
 }
 
 function tasksTrace() {
-  return trace("tasks", "tasks.md", {
-    "acceptance-slices": [
-      {
-        "ac-id": "AC-001",
-        title: "Trace task",
-        outcome: ["- tasks 来自 trace。"],
-        "start-gate": ["- None"],
-        "runtime-rows": ["RS-001"],
-        "resolved-runtime-contract": [
-          {
-            row: "RS-001",
-            "worker-facing-obligation": "生产义务。",
-            "observable-proof": "可观察 proof。",
-            "default-no-scope-boundary": "默认边界。",
-          },
-        ],
-        "implementation-scope": ["- 实现 trace task。"],
-        preserve: ["- 不扩展。"],
-        "proof-contract": ["- 可观察。"],
-        tasks: [
-          {
-            "task-id": "AC-001.1",
-            title: "实现 trace task",
-            "runtime-rows": ["RS-001"],
-            acceptance: "可观察。",
-            preserve: "不扩展。",
-            proof: "可观察。",
-            "mock-default-path-policy": "默认真实路径。",
-          },
-        ],
-      },
-    ],
+  const value = trace("tasks", "tasks.md", {
+    "step-sections": ["AC-001"],
   });
-}
-
-function proofSlicesTrace() {
-  return {
-    "trace-schema": "openspec-proof-slices-v1",
-    "artifact-id": "verification",
-    "artifact-path": "verification.md",
-    "source-interface": {},
-    "proof-slice-summary": { "proof-slice-count": 1 },
-    "proof-slices": [
-      {
-        "slice-id": "PS-001",
-        "runtime-row-ids": ["RS-001"],
-        "primary-runtime-row-id": "RS-001",
-        "primitive-type": "authorization",
-        "branch-variant": "actor resolution",
-        "observable-surface": "auth surface",
-        "oracle-fragment": "登录态解析到内部 actor。",
-        "failure-signal": "actor 缺失。",
-        "primary-layer": "security/negative",
-        "production-owner": "apps/web",
-        "persistent-test-required": true,
-        "proof-evidence-mode": "durable-test",
-        "primary-assertion-shape": "authorization result",
-        "fixture-mock-boundary": "session fixture",
-        "regression-intent": "high",
-        "manual-environment-gate": "None",
-        "test-contract": {
-          "primary-test-cardinality": "exactly-one",
-          "test-title-prefix": "PS-001",
-          "allow-shared-setup": true,
-          "allow-multi-slice-primary-test": false,
-          "waiver-required-for-multi-slice": true,
-          placement: {
-            "planned-test-directory": "apps/web/tests/security/**",
-            "placement-basis": "existing-tests-directory",
-            "placement-reason": "security proof 使用 apps/web security tests。",
-          },
+  value["implementation-step-register"] = [
+    {
+      "step-id": "AC-001",
+      title: "Trace task",
+      "depends-on-step-ids": [],
+      "runtime-fact-ids": ["RS-001"],
+      tasks: [
+        {
+          "task-id": "AC-001.1",
+          title: "实现 trace task",
+          "runtime-fact-ids": ["RS-001"],
+          work: "实现 trace task。",
         },
-      },
-    ],
+      ],
+    },
+  ];
+  value["task-gate"] = {
+    blockers: [],
+    "uncovered-target-runtime-facts": [],
+    "invalid-runtime-fact-refs": [],
+    "dependency-order-violations": [],
+    "non-production-task-violations": [],
+    "delivery-projection-mismatch": [],
   };
+  return value;
 }
 
-function proofSliceModel() {
-  const { "trace-schema": _traceSchema, "artifact-id": _artifactId, "artifact-path": _artifactPath, ...model } = proofSlicesTrace();
-  return {
-    "model-schema": "openspec-proof-slices-v1",
-    "proof-slice-summary": model["proof-slice-summary"],
-    "proof-slices": model["proof-slices"],
-  };
+function verificationSliceRegister() {
+  return [
+    {
+      "slice-id": "PS-001",
+      "runtime-fact-ids": ["RS-001"],
+      "primary-runtime-fact-id": "RS-001",
+      "proof-type": "authorization",
+      branch: "actor resolution",
+      oracle: "登录态解析到内部 actor。",
+      "failure-signal": "actor 缺失。",
+      "test-layer": "security/negative",
+      "production-owner": "apps/web",
+      "assertion-shape": "authorization result",
+      "fixture-boundary": "session fixture",
+      "proof-evidence-mode": "durable-test",
+      "planned-test-directory": "apps/web/tests/security/**",
+      "non-persistent-reason": "N/A",
+    },
+  ];
 }
 
 function writeTrace(traceDir, relPath, value) {

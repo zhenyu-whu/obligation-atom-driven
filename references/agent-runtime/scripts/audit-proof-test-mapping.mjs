@@ -13,13 +13,12 @@ import {
 } from "./proof-slice-placement-policy.mjs";
 import {
   RenderContractError,
-  resolveVerificationProofSliceModel,
+  TRACE_CONTRACT_VERSION,
+  VERIFICATION_SLICE_REGISTER_PATH,
+  resolveVerificationSliceRegister,
 } from "./render-production-artifacts.mjs";
 
-const PROOF_SLICES_TRACE_SCHEMA = "openspec-proof-slices-v1";
 const PROOF_TEST_MAP_SCHEMA = "openspec-proof-test-map-v1";
-const TRACE_CONTRACT_INLINE_PROOF_SLICES = "verification-inline-proof-slices-v1";
-const TRACE_CONTRACT_PROOF_SLICES = "proof-slices-v1";
 const PROOF_SLICE_RE = /\bPS-\d{3}\b/g;
 const KNOWN_EXECUTION_SCOPES = new Set(["focused-test", "containing-file", "related-suite", "workspace"]);
 const ROBUST_EXECUTION_SCOPES = new Set(["containing-file", "related-suite", "workspace"]);
@@ -34,7 +33,6 @@ export function auditProofTestMapping(options = {}) {
 
   const issues = [];
   const changeDir = path.join(root, "openspec", "changes", change);
-  const proofSlicesPath = path.join(changeDir, "trace", "verification.proof-slices.json");
   const proofMapPath =
     options.proofTestMapPath ??
     path.join(root, "openspec-results", change, "proof-test-map.json");
@@ -45,9 +43,6 @@ export function auditProofTestMapping(options = {}) {
     return summarize(issues);
   }
 
-  if (proofSlicesTrace["trace-schema"] !== PROOF_SLICES_TRACE_SCHEMA) {
-    addIssue(issues, "error", "MAP-PS-001", proofSlicesTrace["source-path"] ?? path.relative(root, proofSlicesPath), `trace-schema 必须为 ${PROOF_SLICES_TRACE_SCHEMA}。`);
-  }
   if (proofTestMap["trace-schema"] !== PROOF_TEST_MAP_SCHEMA) {
     addIssue(issues, "error", "MAP-TM-001", path.relative(root, proofMapPath), `trace-schema 必须为 ${PROOF_TEST_MAP_SCHEMA}。`);
   }
@@ -104,9 +99,9 @@ export function auditProofTestMapping(options = {}) {
   for (const sliceId of durableSliceIds) {
     const rows = rowsBySlice.get(sliceId) ?? [];
     if (rows.length === 0) {
-      addIssue(issues, "error", "MAP-TM-004", sliceId, "persistent-test-required Proof Slice 缺少 primary test mapping。");
+      addIssue(issues, "error", "MAP-TM-004", sliceId, "durable-test Proof Slice 缺少 primary test mapping。");
     } else if (rows.length > 1) {
-      addIssue(issues, "error", "MAP-TM-005", sliceId, "persistent-test-required Proof Slice 只能有一个 primary test mapping。");
+      addIssue(issues, "error", "MAP-TM-005", sliceId, "durable-test Proof Slice 只能有一个 primary test mapping。");
     }
   }
 
@@ -187,30 +182,24 @@ export function auditProofTestMapping(options = {}) {
 function loadProofSlicesForAudit(changeDir, root, issues) {
   const manifestPath = path.join(changeDir, "trace", "manifest.json");
   const verificationTracePath = path.join(changeDir, "trace", "verification.trace.json");
-  const sidecarPath = path.join(changeDir, "trace", "verification.proof-slices.json");
   const manifest = fs.existsSync(manifestPath) ? readJson(manifestPath, root, issues, "MAP-READ-001") : null;
   const contractVersion = strip(manifest?.["trace-contract-version"]);
-  if (contractVersion === TRACE_CONTRACT_INLINE_PROOF_SLICES) {
-    const verificationTrace = readJson(verificationTracePath, root, issues, "MAP-READ-001");
-    if (!verificationTrace) return null;
-    const model = verificationTrace["proof-slice-model"];
-    if (!model || typeof model !== "object" || Array.isArray(model)) {
-      addIssue(issues, "error", "MAP-READ-001", "trace/verification.trace.json#/proof-slice-model", "缺少 proof-slice-model。");
-      return null;
-    }
-    return resolveProofSliceModelForAudit({ trace: verificationTrace }, issues);
-  }
-  if (contractVersion && contractVersion !== TRACE_CONTRACT_PROOF_SLICES) {
+  if (contractVersion && contractVersion !== TRACE_CONTRACT_VERSION) {
     addIssue(issues, "error", "MAP-READ-001", "trace/manifest.json", `trace-contract-version 不支持：${contractVersion}。`);
     return null;
   }
-  const sidecar = readJson(sidecarPath, root, issues, "MAP-READ-001");
-  return sidecar ? resolveProofSliceModelForAudit({ trace: sidecar, proofSlicesTrace: sidecar }, issues) : null;
+  const verificationTrace = readJson(verificationTracePath, root, issues, "MAP-READ-001");
+  if (!verificationTrace) return null;
+  return resolveProofSliceModelForAudit(verificationTrace, issues);
 }
 
-function resolveProofSliceModelForAudit(options, issues) {
+function resolveProofSliceModelForAudit(trace, issues) {
   try {
-    return resolveVerificationProofSliceModel(options);
+    const slices = resolveVerificationSliceRegister(trace);
+    return {
+      "source-path": VERIFICATION_SLICE_REGISTER_PATH,
+      "proof-slices": slices,
+    };
   } catch (error) {
     if (error instanceof RenderContractError) {
       addIssue(issues, "error", "MAP-READ-001", error.file, error.message.replace(/^VAL-RENDER-\d+:\s*/u, ""));
@@ -276,25 +265,7 @@ function isValidSingleSliceTitle(title, sliceId, row, slice) {
   if (ids.length === 1 && ids[0] === sliceId && (title === sliceId || title.startsWith(`${sliceId} `) || title.startsWith(`${sliceId}:`))) {
     return true;
   }
-  return hasMultiSliceWaiver(row, slice, ids, sliceId);
-}
-
-function hasMultiSliceWaiver(row, slice, titleSliceIds, sliceId) {
-  const mapWaiver = row["multi-slice-waiver"];
-  const contract = slice["test-contract"];
-  const sliceWaiver = contract?.["multi-slice-waiver"];
-  if (contract?.["allow-multi-slice-primary-test"] !== true) return false;
-  if (!mapWaiver || typeof mapWaiver !== "object") return false;
-  if (!sliceWaiver || typeof sliceWaiver !== "object") return false;
-  const mapIds = idsFromArray(mapWaiver["slice-ids"]);
-  const sliceIds = idsFromArray(sliceWaiver["slice-ids"]);
-  return (
-    mapIds.includes(sliceId) &&
-    sliceIds.includes(sliceId) &&
-    titleSliceIds.every((id) => mapIds.includes(id) && sliceIds.includes(id)) &&
-    strip(mapWaiver.reason) &&
-    strip(sliceWaiver.reason)
-  );
+  return false;
 }
 
 function isDiscovered(discoveredTests, row) {
@@ -357,7 +328,7 @@ function auditRobustExecutionEvidence(row, sliceId, ref, issues) {
 }
 
 function requiresRobustExecution(slice) {
-  const layer = strip(slice["primary-layer"]).toLowerCase();
+  const layer = strip(slice["test-layer"]).toLowerCase();
   return layer === "browser/e2e" || layer === "visual/responsive";
 }
 
@@ -425,10 +396,6 @@ function readJson(fullPath, root, issues, ruleId) {
     addIssue(issues, "error", ruleId, path.relative(root, fullPath), `JSON 无法读取或解析：${error.message}`);
     return null;
   }
-}
-
-function idsFromArray(value) {
-  return Array.isArray(value) ? value.map(strip).filter((id) => /^PS-\d{3}$/.test(id)) : [];
 }
 
 function asArray(value) {

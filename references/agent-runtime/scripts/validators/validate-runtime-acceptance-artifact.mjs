@@ -15,20 +15,55 @@ import {
 const OBLIGATION_SCHEMA = "production-obligation-atom-driven";
 const DEFAULT_SCHEMA = "production-default-acceptance-driven";
 
-const PROPOSAL_TRACE_PATH = "trace/proposal.trace.json";
 const DESIGN_TRACE_PATH = "trace/design.trace.json";
 const SPECS_TRACE_DIR = "trace/specs";
 const NO_DELTA_TRACE_PATH = "trace/specs/no-spec-delta/README.trace.json";
 const RUNTIME_TRACE_PATH = "trace/runtime-acceptance.trace.json";
 const RUNTIME_ARTIFACT_PATH = "runtime-acceptance.md";
 
-const GA_ID_RE = /^GA-\d{4}$/u;
-const SI_ID_RE = /^SI-\d{3}$/u;
 const ANY_GA_ID_RE = /\bGA-\d{4}\b/u;
 const ANY_SI_ID_RE = /\bSI-\d{3}\b/u;
-const DECISION_ID_RE = /^D-\d{3}$/u;
-const RUNTIME_ROW_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
+const IMPLEMENTATION_DESIGN_ID_RE = /^IDR-\d{3}$/u;
+const RUNTIME_FACT_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
 const MARKDOWN_INPUT_RE = /(?:^|\/)(?:proposal|design)\.md$|(?:^|\/)specs\/.+\.md$/iu;
+const OWNER_LIST_RE = /[,，;+、]|(?:^|\s)(?:and|和|与)(?:\s|$)/iu;
+
+const FACT_TYPES = new Set(["surface", "operation", "state", "chain"]);
+const SCOPE_ROLES = new Set(["required behavior", "preserve boundary"]);
+const RUNTIME_GATE_FIELDS = [
+  "blockers",
+  "uncovered-spec-scenarios",
+  "uncovered-runtime-design-decisions",
+  "orphan-runtime-facts",
+  "invalid-source-refs",
+  "delivery-projection-mismatch",
+];
+
+const LEGACY_RUNTIME_FIELDS = [
+  "canonical-row-index",
+  "upstream-runtime-obligation-inventory",
+  "runtime-not-applicable-inventory",
+  "runtime-upstream-coverage-map",
+  "runtime-coverage-source-map",
+  "coverage-closure-checklist",
+  "design-decision-index",
+  "design-obligation-matrix",
+  "ui-control-contracts",
+  "proof-expectation-handoff",
+];
+
+const LEGACY_RUNTIME_FACT_FIELDS = [
+  "fact-id",
+  "source-anchor",
+  "source-type",
+  "source-handling",
+  "fact-layer",
+  "fact-kind",
+  "fact",
+  "runtime-row-id",
+  "runtime-row-ids",
+  "not-applicable-reason",
+];
 
 const FORBIDDEN_TRACE_KEYS = new Set([
   "tasks",
@@ -82,16 +117,16 @@ function validateRuntimeIfPresent(ctx) {
   }
 
   const runtimeTrace = readJson(ctx, path.join(ctx.changeDir, RUNTIME_TRACE_PATH));
-  const proposalTrace = readJson(ctx, path.join(ctx.changeDir, PROPOSAL_TRACE_PATH));
-  if (!runtimeTrace || !proposalTrace) return;
+  if (!runtimeTrace) return;
 
-  const expected = buildExpectedRuntimeModel(ctx, proposalTrace);
+  const expected = buildExpectedRuntimeModel(ctx, runtimeTrace);
   if (!expected) return;
 
   const specs = buildSpecsTraceModel(ctx, expected.schemaName);
   const designTrace = readJson(ctx, path.join(ctx.changeDir, DESIGN_TRACE_PATH));
 
   validateCommonRuntimeTrace(ctx, runtimeTrace, expected, specs);
+  validateLegacyRuntimeFieldsAbsent(ctx, runtimeTrace);
   validateRuntimeManifest(ctx);
   validateRuntimeRender(ctx);
   validateProfileLeaks(ctx, runtimeTrace, expected);
@@ -99,21 +134,11 @@ function validateRuntimeIfPresent(ctx) {
 
   if (!designTrace) return;
 
-  const expectedUpstream = buildExpectedUpstreamModel(ctx, expected, specs, designTrace);
-  const canonicalRows = collectCanonicalRuntimeRowIds(ctx, runtimeTrace);
-  const inventoryModel = validateRuntimeObligationInventory(ctx, runtimeTrace, expected, expectedUpstream);
-  const notApplicableKeys = validateRuntimeNotApplicableInventory(ctx, runtimeTrace, inventoryModel);
-  const upstreamCoverage = validateRuntimeUpstreamCoverageMap(
-    ctx,
-    runtimeTrace,
-    expected,
-    expectedUpstream,
-    inventoryModel,
-    notApplicableKeys,
-    canonicalRows,
-  );
-  validateRuntimeCoverageSourceMap(ctx, runtimeTrace, canonicalRows);
-  validateCanonicalRuntimeRowCoverage(ctx, canonicalRows, upstreamCoverage.coveredRuntimeRows);
+  const design = buildDesignModel(ctx, designTrace);
+  const factModel = validateRuntimeFactRegister(ctx, runtimeTrace, expected, specs, design);
+  validateRuntimeDeliveryProjection(ctx, runtimeTrace, factModel);
+  validateRuntimeCoverage(ctx, specs, design, factModel);
+  validateRuntimeGate(ctx, runtimeTrace);
 }
 
 function collectRuntimeInventory(ctx) {
@@ -128,65 +153,29 @@ function collectRuntimeInventory(ctx) {
   };
 }
 
-function buildExpectedRuntimeModel(ctx, proposalTrace) {
-  const schemaName = strip(proposalTrace["schema-name"]);
+function buildExpectedRuntimeModel(ctx, runtimeTrace) {
+  const schemaName = strip(runtimeTrace["schema-name"]);
   if (schemaName === OBLIGATION_SCHEMA) {
-    const register = requireArray(
-      ctx,
-      "VAL-RUNTIME-PROPOSAL-001",
-      PROPOSAL_TRACE_PATH,
-      proposalTrace["change-atom-coverage-register"],
-      "change-atom-coverage-register",
-    );
-    return buildExpectedModel({
+    return {
       schemaName,
-      rows: register,
-      idField: "global-atom-id",
-      idRegex: GA_ID_RE,
-      projectionField: "artifact-projection",
-      proposalUpstreamType: "proposal-direct-atom",
       oppositeIdRegex: ANY_SI_ID_RE,
       oppositeIdLabel: "SI-###",
       forbiddenIdentityKey: "scope-item-id",
-    });
+      forbiddenLegacyIdentityKey: "global-atom-id",
+    };
   }
 
   if (schemaName === DEFAULT_SCHEMA) {
-    const scopeCoverage = requireArray(
-      ctx,
-      "VAL-RUNTIME-PROPOSAL-010",
-      PROPOSAL_TRACE_PATH,
-      proposalTrace["change-scope-coverage"],
-      "change-scope-coverage",
-    );
-    return buildExpectedModel({
+    return {
       schemaName,
-      rows: scopeCoverage,
-      idField: "scope-item-id",
-      idRegex: SI_ID_RE,
-      projectionField: "artifact-handling",
-      proposalUpstreamType: "proposal-scope-item",
       oppositeIdRegex: ANY_GA_ID_RE,
       oppositeIdLabel: "GA-####",
       forbiddenIdentityKey: "global-atom-id",
-    });
+    };
   }
 
-  addError(ctx, "VAL-RUNTIME-PROPOSAL-020", PROPOSAL_TRACE_PATH, `不支持的 proposal schema-name：${schemaName || "(empty)"}`);
+  addError(ctx, "VAL-RUNTIME-TRACE-013", RUNTIME_TRACE_PATH, `不支持的 runtime schema-name：${schemaName || "(empty)"}`);
   return null;
-}
-
-function buildExpectedModel(config) {
-  const proposalRowsByKey = new Map();
-  for (const row of config.rows) {
-    const id = strip(row?.[config.idField]);
-    if (!id) continue;
-    proposalRowsByKey.set(upstreamKey(config.proposalUpstreamType, id), row);
-  }
-  return {
-    ...config,
-    proposalRowsByKey,
-  };
 }
 
 function buildSpecsTraceModel(ctx, schemaName) {
@@ -201,6 +190,7 @@ function buildSpecsTraceModel(ctx, schemaName) {
       mode: "",
       tracePaths,
       scenarios: [],
+      scenarioIds: new Set(),
     };
   }
 
@@ -219,6 +209,7 @@ function buildSpecsTraceModel(ctx, schemaName) {
       mode: NO_DELTA_SPECS_COMPLETION_MODE,
       tracePaths,
       scenarios: [],
+      scenarioIds: new Set(),
     };
   }
 
@@ -229,16 +220,20 @@ function buildSpecsTraceModel(ctx, schemaName) {
     expectEqual(ctx, "VAL-RUNTIME-SPECS-010", tracePath, trace["artifact-id"], "specs", "artifact-id");
     expectEqual(ctx, "VAL-RUNTIME-SPECS-011", tracePath, trace["schema-name"], schemaName, "schema-name");
     expectEqual(ctx, "VAL-RUNTIME-SPECS-012", tracePath, trace["specs-completion-mode"], "delta", "specs-completion-mode");
-    const rows = requireArray(ctx, "VAL-RUNTIME-SPECS-013", tracePath, trace["requirement-source-trace"], "requirement-source-trace");
-    for (const [index, row] of rows.entries()) {
-      requireString(ctx, "VAL-RUNTIME-SPECS-014", tracePath, row?.requirement, `requirement-source-trace[${index}].requirement`);
-      requireString(ctx, "VAL-RUNTIME-SPECS-015", tracePath, row?.scenario, `requirement-source-trace[${index}].scenario`);
-      scenarios.push({
-        tracePath,
-        tracePointer: `#/requirement-source-trace/${index}`,
-        requirement: strip(row?.requirement),
-        scenario: strip(row?.scenario),
-      });
+    const rows = requireArray(ctx, "VAL-RUNTIME-SPECS-013", tracePath, trace["spec-delta-register"], "spec-delta-register");
+    for (const [deltaIndex, row] of rows.entries()) {
+      const deltaOp = strip(row?.["delta-op"]);
+      if (deltaOp !== "added" && deltaOp !== "modified") continue;
+      const requirement = requireString(ctx, "VAL-RUNTIME-SPECS-014", tracePath, row?.requirement, `spec-delta-register[${deltaIndex}].requirement`);
+      for (const [scenarioIndex, scenario] of requireArray(ctx, "VAL-RUNTIME-SPECS-015", tracePath, row?.scenarios, `spec-delta-register[${deltaIndex}].scenarios`).entries()) {
+        const scenarioName = requireString(ctx, "VAL-RUNTIME-SPECS-016", tracePath, scenario?.name, `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].name`);
+        scenarios.push({
+          tracePath,
+          tracePointer: `#/spec-delta-register/${deltaIndex}/scenarios/${scenarioIndex}`,
+          requirement,
+          scenario: scenarioName,
+        });
+      }
     }
   }
 
@@ -246,6 +241,7 @@ function buildSpecsTraceModel(ctx, schemaName) {
     mode: "delta",
     tracePaths,
     scenarios,
+    scenarioIds: new Set(scenarios.map((scenario) => `${scenario.tracePath}${scenario.tracePointer}`)),
   };
 }
 
@@ -257,9 +253,18 @@ function validateCommonRuntimeTrace(ctx, trace, expected, specs) {
   expectEqual(ctx, "VAL-RUNTIME-TRACE-005", RUNTIME_TRACE_PATH, trace["schema-name"], expected.schemaName, "schema-name");
   requireString(ctx, "VAL-RUNTIME-TRACE-006", RUNTIME_TRACE_PATH, trace["agent-role"], "agent-role");
   const sourceInterface = requireObject(ctx, "VAL-RUNTIME-TRACE-007", RUNTIME_TRACE_PATH, trace["source-interface"], "source-interface");
-  requireObject(ctx, "VAL-RUNTIME-TRACE-008", RUNTIME_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
+  const delivery = requireObject(ctx, "VAL-RUNTIME-TRACE-008", RUNTIME_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
+  requireArray(ctx, "VAL-RUNTIME-TRACE-009", RUNTIME_TRACE_PATH, trace["runtime-fact-register"], "runtime-fact-register");
+  requireObject(ctx, "VAL-RUNTIME-TRACE-010", RUNTIME_TRACE_PATH, trace["runtime-gate"], "runtime-gate");
+  requireObject(ctx, "VAL-RUNTIME-TRACE-011", RUNTIME_TRACE_PATH, delivery["runtime-acceptance-intent"], "delivery-plane.runtime-acceptance-intent");
+  requireObject(ctx, "VAL-RUNTIME-TRACE-012", RUNTIME_TRACE_PATH, delivery["fact-sections"], "delivery-plane.fact-sections");
+  if (Object.prototype.hasOwnProperty.call(delivery, "canonical-rows")) {
+    addError(ctx, "VAL-RUNTIME-LEGACY-002", RUNTIME_TRACE_PATH, "delivery-plane 不得包含旧字段：canonical-rows。");
+  }
 
-  expectEqual(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-001", RUNTIME_TRACE_PATH, sourceInterface["proposal-trace"], PROPOSAL_TRACE_PATH, "source-interface.proposal-trace");
+  if (Object.prototype.hasOwnProperty.call(sourceInterface, "proposal-trace")) {
+    addError(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-001", RUNTIME_TRACE_PATH, "source-interface.proposal-trace 不再是 runtime semantic input。");
+  }
   expectEqual(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-002", RUNTIME_TRACE_PATH, sourceInterface["design-trace"], DESIGN_TRACE_PATH, "source-interface.design-trace");
   expectEqual(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-003", RUNTIME_TRACE_PATH, sourceInterface["specs-completion-mode"], specs.mode, "source-interface.specs-completion-mode");
   const specTraces = requireArray(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-004", RUNTIME_TRACE_PATH, sourceInterface["spec-traces"], "source-interface.spec-traces")
@@ -270,14 +275,14 @@ function validateCommonRuntimeTrace(ctx, trace, expected, specs) {
 }
 
 function validateSourceInterfaceStringLeaves(ctx, sourceInterface, specTracePaths) {
-  const allowedTracePaths = new Set([PROPOSAL_TRACE_PATH, DESIGN_TRACE_PATH, ...specTracePaths]);
+  const allowedTracePaths = new Set([DESIGN_TRACE_PATH, ...specTracePaths]);
   for (const item of collectStringLeaves(sourceInterface)) {
     const value = item.value.replace(/\\/gu, "/");
     if (MARKDOWN_INPUT_RE.test(value)) {
       addError(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-010", RUNTIME_TRACE_PATH, `source-interface${item.pointer} 不得把 proposal/spec/design Markdown 作为 semantic input。`);
     }
     if (/^trace\/.+\.json$/u.test(value) && !allowedTracePaths.has(value)) {
-      addError(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-011", RUNTIME_TRACE_PATH, `source-interface${item.pointer} 只能列 proposal/spec/design JSON trace 输入，不能引用 ${value}。`);
+      addError(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-011", RUNTIME_TRACE_PATH, `source-interface${item.pointer} 只能列 specs/design JSON trace 输入，不能引用 ${value}。`);
     }
   }
 }
@@ -330,8 +335,8 @@ function validateRuntimeRender(ctx) {
 function validateProfileLeaks(ctx, trace, expected) {
   const keyRefs = collectObjectKeyRefs(trace);
   for (const ref of keyRefs) {
-    if (ref.key === expected.forbiddenIdentityKey) {
-      addError(ctx, "VAL-RUNTIME-PROFILE-001", RUNTIME_TRACE_PATH, `${expected.schemaName} runtime trace 不得包含 ${expected.forbiddenIdentityKey}。`);
+    if (ref.key === expected.forbiddenIdentityKey || ref.key === expected.forbiddenLegacyIdentityKey) {
+      addError(ctx, "VAL-RUNTIME-PROFILE-001", RUNTIME_TRACE_PATH, `${expected.schemaName} runtime trace 不得包含 ${ref.key}。`);
     }
   }
   for (const ref of collectIds(trace, expected.oppositeIdRegex)) {
@@ -347,233 +352,239 @@ function validateForbiddenTraceShape(ctx, trace) {
   }
 }
 
-function buildExpectedUpstreamModel(ctx, expected, specs, designTrace) {
-  const expectedRows = new Map();
-  for (const [key, row] of expected.proposalRowsByKey.entries()) {
-    expectedRows.set(key, {
-      type: expected.proposalUpstreamType,
-      id: strip(row?.[expected.idField]),
-      proposalRow: row,
-    });
+function validateLegacyRuntimeFieldsAbsent(ctx, trace) {
+  for (const field of LEGACY_RUNTIME_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(trace, field)) {
+      addError(ctx, "VAL-RUNTIME-LEGACY-001", RUNTIME_TRACE_PATH, `runtime trace 不得包含旧字段：${field}。`);
+    }
   }
-
-  for (const scenario of specs.scenarios) {
-    const id = `${scenario.tracePath}${scenario.tracePointer}`;
-    expectedRows.set(upstreamKey("spec-scenario", id), {
-      type: "spec-scenario",
-      id,
-      scenario,
-    });
-  }
-
-  const decisionRows = requireArray(ctx, "VAL-RUNTIME-DESIGN-001", DESIGN_TRACE_PATH, designTrace["design-decision-index"], "design-decision-index");
-  for (const [index, row] of decisionRows.entries()) {
-    const id = requireId(ctx, "VAL-RUNTIME-DESIGN-002", DESIGN_TRACE_PATH, row?.["decision-id"], `design-decision-index[${index}].decision-id`, DECISION_ID_RE);
-    if (!id) continue;
-    expectedRows.set(upstreamKey("design-decision", id), {
-      type: "design-decision",
-      id,
-      designDecision: row,
-    });
-  }
-
-  return expectedRows;
 }
 
-function collectCanonicalRuntimeRowIds(ctx, trace) {
-  const delivery = requireObject(ctx, "VAL-RUNTIME-CANONICAL-001", RUNTIME_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
-  const value = delivery["canonical-rows"];
-  if (value === undefined) {
-    addError(ctx, "VAL-RUNTIME-CANONICAL-002", RUNTIME_TRACE_PATH, "delivery-plane.canonical-rows 必须存在。");
-    return new Set();
+function buildDesignModel(ctx, designTrace) {
+  const rows = requireArray(ctx, "VAL-RUNTIME-DESIGN-001", DESIGN_TRACE_PATH, designTrace["implementation-design-register"], "implementation-design-register");
+  const designIds = new Set();
+  const runtimeDesignIds = new Set();
+  for (const [index, row] of rows.entries()) {
+    const id = requireId(ctx, "VAL-RUNTIME-DESIGN-002", DESIGN_TRACE_PATH, row?.["implementation-design-id"], `implementation-design-register[${index}].implementation-design-id`, IMPLEMENTATION_DESIGN_ID_RE);
+    if (!id) continue;
+    designIds.add(id);
+    if (isRuntimeAffectingDesignDecision(row)) {
+      runtimeDesignIds.add(id);
+    }
   }
+  return {
+    designIds,
+    runtimeDesignIds,
+  };
+}
 
-  const ids = [];
-  const rows = Array.isArray(value)
-    ? value
-    : Object.entries(requireObject(ctx, "VAL-RUNTIME-CANONICAL-003", RUNTIME_TRACE_PATH, value, "delivery-plane.canonical-rows"))
-        .map(([id, row]) => ({ id, ...Object(row) }));
+function isRuntimeAffectingDesignDecision(row) {
+  const layer = strip(row?.layer);
+  const text = [
+    row?.title,
+    row?.decision,
+    row?.["implementation-boundary"],
+    row?.["implementation-contract"],
+    row?.["guard-failure-handling"],
+    row?.["verification-handoff"],
+    row?.["no-scope-expansion"],
+  ].map(strip).join("\n");
+
+  if (/不产生(?:独立)?可观察运行态事实|无可观察运行态事实|只(?:约束|涉及)(?:验证|rollout|发布|回滚|实现组织)/u.test(text)) {
+    return false;
+  }
+  if (layer === "verification-rollout" && !/(API|UI|DB|data|状态|分支|异步|worker|queue|SSE|权限|auth|运行|可观察|surface|operation|state|chain)/iu.test(text)) {
+    return false;
+  }
+  return true;
+}
+
+function validateRuntimeFactRegister(ctx, trace, expected, specs, design) {
+  const rows = requireArray(
+    ctx,
+    "VAL-RUNTIME-FACT-001",
+    RUNTIME_TRACE_PATH,
+    trace["runtime-fact-register"],
+    "runtime-fact-register",
+  );
+
+  const factIds = new Set();
+  const coveredSpecScenarios = new Set();
+  const coveredDesignDecisions = new Set();
+  const factTypesById = new Map();
+  const scopeRolesById = new Map();
 
   for (const [index, row] of rows.entries()) {
-    const id = strip(row?.id ?? row?.["surface-id"] ?? row?.["operation-id"] ?? row?.["state-id"] ?? row?.["chain-id"]);
-    if (!id) {
-      addError(ctx, "VAL-RUNTIME-CANONICAL-004", RUNTIME_TRACE_PATH, `delivery-plane.canonical-rows[${index}] 缺少 runtime row id。`);
-      continue;
-    }
-    if (!RUNTIME_ROW_ID_RE.test(id)) {
-      addError(ctx, "VAL-RUNTIME-CANONICAL-005", RUNTIME_TRACE_PATH, `delivery-plane.canonical-rows[${index}] runtime row id 非法：${id}。`);
-      continue;
-    }
-    ids.push(id);
-  }
+    const label = `runtime-fact-register[${index}]`;
+    validateLegacyRuntimeFactFieldsAbsent(ctx, row, label);
 
-  return new Set(ids);
-}
-
-function validateRuntimeObligationInventory(ctx, trace, expected, expectedUpstream) {
-  const rows = requireArray(
-    ctx,
-    "VAL-RUNTIME-INVENTORY-001",
-    RUNTIME_TRACE_PATH,
-    trace["upstream-runtime-obligation-inventory"],
-    "upstream-runtime-obligation-inventory",
-  );
-  const records = parseUpstreamRows(ctx, rows, "upstream-runtime-obligation-inventory", "VAL-RUNTIME-INVENTORY-002");
-  expectSameSet(ctx, "VAL-RUNTIME-INVENTORY-003", RUNTIME_TRACE_PATH, [...records.byKey.keys()], [...expectedUpstream.keys()], "upstream-runtime-obligation-inventory upstream keys");
-
-  for (const [key, record] of records.byKey.entries()) {
-    const expectedRecord = expectedUpstream.get(key);
-    if (!expectedRecord) continue;
-    validateProposalProjectionIfNeeded(ctx, record.row, expected, expectedRecord, `upstream-runtime-obligation-inventory[${record.index}]`);
-  }
-
-  return records;
-}
-
-function validateRuntimeNotApplicableInventory(ctx, trace, inventoryModel) {
-  const rows = requireArray(
-    ctx,
-    "VAL-RUNTIME-NOT-APPLICABLE-001",
-    RUNTIME_TRACE_PATH,
-    trace["runtime-not-applicable-inventory"],
-    "runtime-not-applicable-inventory",
-  );
-  const records = parseUpstreamRows(ctx, rows, "runtime-not-applicable-inventory", "VAL-RUNTIME-NOT-APPLICABLE-002");
-  for (const [key, record] of records.byKey.entries()) {
-    if (!inventoryModel.byKey.has(key)) {
-      addError(ctx, "VAL-RUNTIME-NOT-APPLICABLE-003", RUNTIME_TRACE_PATH, `runtime-not-applicable-inventory[${record.index}] 不属于 upstream-runtime-obligation-inventory：${key}。`);
-    }
-    requireString(ctx, "VAL-RUNTIME-NOT-APPLICABLE-004", RUNTIME_TRACE_PATH, record.row?.["not-applicable-reason"], `runtime-not-applicable-inventory[${record.index}].not-applicable-reason`);
-    const rowIds = idArrayFromValue(record.row?.["runtime-row-ids"] ?? record.row?.["row-ids"]);
-    if (rowIds.length > 0) {
-      addError(ctx, "VAL-RUNTIME-NOT-APPLICABLE-005", RUNTIME_TRACE_PATH, `runtime-not-applicable-inventory[${record.index}] 不得声明 runtime-row-ids。`);
-    }
-  }
-  return new Set(records.byKey.keys());
-}
-
-function validateRuntimeUpstreamCoverageMap(ctx, trace, expected, expectedUpstream, inventoryModel, notApplicableKeys, canonicalRows) {
-  const rows = requireArray(
-    ctx,
-    "VAL-RUNTIME-COVERAGE-001",
-    RUNTIME_TRACE_PATH,
-    trace["runtime-upstream-coverage-map"],
-    "runtime-upstream-coverage-map",
-  );
-  const records = parseUpstreamRows(ctx, rows, "runtime-upstream-coverage-map", "VAL-RUNTIME-COVERAGE-002");
-  expectSameSet(ctx, "VAL-RUNTIME-COVERAGE-003", RUNTIME_TRACE_PATH, [...records.byKey.keys()], [...inventoryModel.byKey.keys()], "runtime-upstream-coverage-map upstream keys");
-
-  const coveredRuntimeRows = new Set();
-  for (const [key, record] of records.byKey.entries()) {
-    const row = record.row;
-    const label = `runtime-upstream-coverage-map[${record.index}]`;
-    requireString(ctx, "VAL-RUNTIME-COVERAGE-004", RUNTIME_TRACE_PATH, row?.["projection-handling"], `${label}.projection-handling`);
-    const coverageMode = strip(row?.["coverage-mode"]);
-    if (notApplicableKeys.has(key)) {
-      expectEqual(ctx, "VAL-RUNTIME-COVERAGE-005", RUNTIME_TRACE_PATH, coverageMode, "not-applicable", `${label}.coverage-mode`);
-    }
-
-    validateProposalProjectionIfNeeded(ctx, row, expected, expectedUpstream.get(key), label);
-
-    const rowIds = requireRuntimeRowIds(ctx, row?.["runtime-row-ids"], `${label}.runtime-row-ids`);
-    if (coverageMode === "covered-by-runtime-rows") {
-      if (rowIds.length === 0) {
-        addError(ctx, "VAL-RUNTIME-COVERAGE-006", RUNTIME_TRACE_PATH, `${label} covered row 必须映射至少一个 runtime row。`);
+    const factId = requireId(ctx, "VAL-RUNTIME-FACT-002", RUNTIME_TRACE_PATH, row?.["runtime-fact-id"], `${label}.runtime-fact-id`, RUNTIME_FACT_ID_RE);
+    if (factId) {
+      if (factIds.has(factId)) {
+        addError(ctx, "VAL-RUNTIME-FACT-003", RUNTIME_TRACE_PATH, `${label}.runtime-fact-id 重复：${factId}。`);
       }
-      for (const rowId of rowIds) {
-        if (!canonicalRows.has(rowId)) {
-          addError(ctx, "VAL-RUNTIME-COVERAGE-007", RUNTIME_TRACE_PATH, `${label} 引用未定义 runtime row：${rowId}。`);
-        }
-        coveredRuntimeRows.add(rowId);
+      factIds.add(factId);
+    }
+
+    const factType = requireString(ctx, "VAL-RUNTIME-FACT-004", RUNTIME_TRACE_PATH, row?.["fact-type"], `${label}.fact-type`);
+    if (factType && !FACT_TYPES.has(factType)) {
+      addError(ctx, "VAL-RUNTIME-FACT-005", RUNTIME_TRACE_PATH, `${label}.fact-type 非法：${factType}。`);
+    }
+    if (factId && factType && runtimeFactTypeForId(factId) !== factType) {
+      addError(ctx, "VAL-RUNTIME-FACT-006", RUNTIME_TRACE_PATH, `${label}.runtime-fact-id 前缀与 fact-type 不一致：${factId} / ${factType}。`);
+    }
+    if (factId) factTypesById.set(factId, factType);
+
+    const scopeRole = requireString(ctx, "VAL-RUNTIME-FACT-007", RUNTIME_TRACE_PATH, row?.["scope-role"], `${label}.scope-role`);
+    if (scopeRole && !SCOPE_ROLES.has(scopeRole)) {
+      addError(ctx, "VAL-RUNTIME-FACT-008", RUNTIME_TRACE_PATH, `${label}.scope-role 非法：${scopeRole}。`);
+    }
+    if (factId) scopeRolesById.set(factId, scopeRole);
+
+    const owner = requireString(ctx, "VAL-RUNTIME-FACT-009", RUNTIME_TRACE_PATH, row?.["owner-candidate"], `${label}.owner-candidate`);
+    if (owner && OWNER_LIST_RE.test(owner)) {
+      addError(ctx, "VAL-RUNTIME-FACT-010", RUNTIME_TRACE_PATH, `${label}.owner-candidate 必须是单一 advisory owner。`);
+    }
+    requireString(ctx, "VAL-RUNTIME-FACT-011", RUNTIME_TRACE_PATH, row?.["runtime-fact"], `${label}.runtime-fact`);
+    requireString(ctx, "VAL-RUNTIME-FACT-012", RUNTIME_TRACE_PATH, row?.["observable-fact"], `${label}.observable-fact`);
+    requireString(ctx, "VAL-RUNTIME-FACT-013", RUNTIME_TRACE_PATH, row?.["default-path-policy"], `${label}.default-path-policy`);
+    requireString(ctx, "VAL-RUNTIME-FACT-014", RUNTIME_TRACE_PATH, row?.["external-boundary"], `${label}.external-boundary`);
+    requireString(ctx, "VAL-RUNTIME-FACT-015", RUNTIME_TRACE_PATH, row?.["no-scope-expansion-check"], `${label}.no-scope-expansion-check`);
+
+    const sourceBasis = requireObject(ctx, "VAL-RUNTIME-FACT-016", RUNTIME_TRACE_PATH, row?.["source-basis"], `${label}.source-basis`);
+    validateRuntimeSourceBasisKeys(ctx, sourceBasis, label);
+    const specScenarios = requireIdLikeArray(ctx, "VAL-RUNTIME-FACT-017", sourceBasis["spec-scenarios"], `${label}.source-basis.spec-scenarios`);
+    const designDecisions = requireIdArray(ctx, "VAL-RUNTIME-FACT-018", RUNTIME_TRACE_PATH, sourceBasis["design-decisions"], `${label}.source-basis.design-decisions`, IMPLEMENTATION_DESIGN_ID_RE);
+
+    for (const scenarioId of specScenarios) {
+      if (!specs.scenarioIds.has(scenarioId)) {
+        addError(ctx, "VAL-RUNTIME-FACT-020", RUNTIME_TRACE_PATH, `${label}.source-basis.spec-scenarios 引用未知 specs scenario：${scenarioId}。`);
       }
-    } else if (coverageMode === "not-applicable") {
-      requireString(ctx, "VAL-RUNTIME-COVERAGE-008", RUNTIME_TRACE_PATH, row?.["not-applicable-reason"], `${label}.not-applicable-reason`);
-      if (rowIds.length > 0) {
-        addError(ctx, "VAL-RUNTIME-COVERAGE-009", RUNTIME_TRACE_PATH, `${label} not-applicable row 不得声明 runtime-row-ids。`);
+      coveredSpecScenarios.add(scenarioId);
+    }
+    for (const designId of designDecisions) {
+      if (!design.designIds.has(designId)) {
+        addError(ctx, "VAL-RUNTIME-FACT-021", RUNTIME_TRACE_PATH, `${label}.source-basis.design-decisions 引用未知 design decision：${designId}。`);
       }
-    } else {
-      addError(ctx, "VAL-RUNTIME-COVERAGE-010", RUNTIME_TRACE_PATH, `${label}.coverage-mode 必须是 covered-by-runtime-rows 或 not-applicable。`);
+      coveredDesignDecisions.add(designId);
+    }
+
+    if (specScenarios.length === 0 && designDecisions.length === 0) {
+      addError(ctx, "VAL-RUNTIME-FACT-023", RUNTIME_TRACE_PATH, `${label} 必须至少引用一个 spec scenario 或 design decision。`);
     }
   }
 
   return {
-    records,
-    coveredRuntimeRows,
+    factIds,
+    factTypesById,
+    scopeRolesById,
+    coveredSpecScenarios,
+    coveredDesignDecisions,
   };
 }
 
-function validateRuntimeCoverageSourceMap(ctx, trace, canonicalRows) {
-  const rows = requireArray(
-    ctx,
-    "VAL-RUNTIME-SOURCE-MAP-001",
-    RUNTIME_TRACE_PATH,
-    trace["runtime-coverage-source-map"],
-    "runtime-coverage-source-map",
-  );
-  for (const [index, row] of rows.entries()) {
-    const rowIds = requireRuntimeRowIds(ctx, row?.["row-ids"] ?? row?.["runtime-row-ids"], `runtime-coverage-source-map[${index}].row-ids`);
-    for (const rowId of rowIds) {
-      if (!canonicalRows.has(rowId)) {
-        addError(ctx, "VAL-RUNTIME-SOURCE-MAP-002", RUNTIME_TRACE_PATH, `runtime-coverage-source-map[${index}] 引用未定义 runtime row：${rowId}。`);
+function validateRuntimeSourceBasisKeys(ctx, sourceBasis, label) {
+  const allowed = new Set(["spec-scenarios", "design-decisions"]);
+  for (const key of Object.keys(sourceBasis)) {
+    if (!allowed.has(key)) {
+      addError(ctx, "VAL-RUNTIME-FACT-019", RUNTIME_TRACE_PATH, `${label}.source-basis 不得包含 ${key}；runtime source basis 只能来自 specs/design。`);
+    }
+  }
+}
+
+function validateLegacyRuntimeFactFieldsAbsent(ctx, row, label) {
+  for (const field of LEGACY_RUNTIME_FACT_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(row ?? {}, field)) {
+      addError(ctx, "VAL-RUNTIME-LEGACY-003", RUNTIME_TRACE_PATH, `${label} 不得包含旧字段：${field}。`);
+    }
+  }
+}
+
+function validateRuntimeDeliveryProjection(ctx, trace, factModel) {
+  const delivery = requireObject(ctx, "VAL-RUNTIME-DELIVERY-001", RUNTIME_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
+  const sections = requireObject(ctx, "VAL-RUNTIME-DELIVERY-002", RUNTIME_TRACE_PATH, delivery["fact-sections"], "delivery-plane.fact-sections");
+  const allSectionIds = [];
+  const seen = new Set();
+  const sectionConfig = [
+    ["surface-facts", /^RS-\d{3}$/u, "surface"],
+    ["operation-facts", /^OP-\d{3}$/u, "operation"],
+    ["state-facts", /^ST-\d{3}$/u, "state"],
+    ["chain-facts", /^CH-\d{3}$/u, "chain"],
+  ];
+  for (const [field, regex, factType] of sectionConfig) {
+    const ids = requireIdArray(ctx, "VAL-RUNTIME-DELIVERY-003", RUNTIME_TRACE_PATH, sections[field], `delivery-plane.fact-sections.${field}`, regex);
+    for (const id of ids) {
+      allSectionIds.push(id);
+      if (seen.has(id)) {
+        addError(ctx, "VAL-RUNTIME-DELIVERY-004", RUNTIME_TRACE_PATH, `delivery-plane.fact-sections 重复引用 runtime fact：${id}。`);
+      }
+      seen.add(id);
+      if (!factModel.factIds.has(id)) {
+        addError(ctx, "VAL-RUNTIME-DELIVERY-005", RUNTIME_TRACE_PATH, `delivery-plane.fact-sections.${field} 引用未定义 runtime fact：${id}。`);
+      }
+      if (factModel.factTypesById.get(id) && factModel.factTypesById.get(id) !== factType) {
+        addError(ctx, "VAL-RUNTIME-DELIVERY-006", RUNTIME_TRACE_PATH, `${id} fact-type 与 ${field} 不一致。`);
       }
     }
   }
+  expectSameSet(ctx, "VAL-RUNTIME-DELIVERY-007", RUNTIME_TRACE_PATH, allSectionIds, [...factModel.factIds], "delivery-plane.fact-sections runtime facts");
 }
 
-function validateCanonicalRuntimeRowCoverage(ctx, canonicalRows, coveredRuntimeRows) {
+function validateRuntimeCoverage(ctx, specs, design, factModel) {
   expectSameSet(
     ctx,
-    "VAL-RUNTIME-CANONICAL-COVERAGE-001",
+    "VAL-RUNTIME-COVERAGE-SPEC-001",
     RUNTIME_TRACE_PATH,
-    [...coveredRuntimeRows],
-    [...canonicalRows],
-    "canonical runtime rows covered by runtime-upstream-coverage-map",
+    [...factModel.coveredSpecScenarios],
+    [...specs.scenarioIds],
+    "runtime facts covered spec scenarios",
   );
-}
-
-function validateProposalProjectionIfNeeded(ctx, row, expected, expectedRecord, label) {
-  if (!expectedRecord || expectedRecord.type !== expected.proposalUpstreamType) return;
-  const expectedProjection = strip(expectedRecord.proposalRow?.[expected.projectionField]);
-  expectEqual(
+  expectSameSet(
     ctx,
-    "VAL-RUNTIME-PROJECTION-001",
+    "VAL-RUNTIME-COVERAGE-DESIGN-001",
     RUNTIME_TRACE_PATH,
-    row?.[expected.projectionField],
-    expectedProjection,
-    `${label}.${expected.projectionField}`,
+    [...factModel.coveredDesignDecisions].filter((id) => design.runtimeDesignIds.has(id)),
+    [...design.runtimeDesignIds],
+    "runtime facts covered runtime-affecting design decisions",
   );
 }
 
-function parseUpstreamRows(ctx, rows, section, ruleId) {
-  const byKey = new Map();
-  for (const [index, row] of rows.entries()) {
-    const id = requireString(ctx, ruleId, RUNTIME_TRACE_PATH, row?.["upstream-item-id"], `${section}[${index}].upstream-item-id`);
-    const type = requireString(ctx, ruleId, RUNTIME_TRACE_PATH, row?.["upstream-item-type"], `${section}[${index}].upstream-item-type`);
-    if (!id || !type) continue;
-    const key = upstreamKey(type, id);
-    if (byKey.has(key)) {
-      addError(ctx, ruleId, RUNTIME_TRACE_PATH, `${section}[${index}] upstream key 重复：${key}。`);
+function validateRuntimeGate(ctx, trace) {
+  const gate = requireObject(ctx, "VAL-RUNTIME-GATE-001", RUNTIME_TRACE_PATH, trace["runtime-gate"], "runtime-gate");
+  for (const field of Object.keys(gate)) {
+    if (!RUNTIME_GATE_FIELDS.includes(field)) {
+      addError(ctx, "VAL-RUNTIME-GATE-004", RUNTIME_TRACE_PATH, `runtime-gate 不得包含未知字段：${field}。`);
     }
-    byKey.set(key, {
-      index,
-      row,
-      id,
-      type,
-    });
   }
-  return { byKey };
+  for (const field of RUNTIME_GATE_FIELDS) {
+    const rows = requireArray(ctx, "VAL-RUNTIME-GATE-002", RUNTIME_TRACE_PATH, gate[field], `runtime-gate.${field}`);
+    if (rows.length > 0) {
+      addError(ctx, "VAL-RUNTIME-GATE-003", RUNTIME_TRACE_PATH, `runtime-gate.${field} 必须为空才能通过 validator。`);
+    }
+  }
 }
 
-function requireRuntimeRowIds(ctx, value, label) {
-  return requireIdArray(ctx, "VAL-RUNTIME-ROW-ID-001", RUNTIME_TRACE_PATH, value ?? [], label, RUNTIME_ROW_ID_RE);
+function runtimeFactTypeForId(id) {
+  if (id.startsWith("RS-")) return "surface";
+  if (id.startsWith("OP-")) return "operation";
+  if (id.startsWith("ST-")) return "state";
+  if (id.startsWith("CH-")) return "chain";
+  return "";
 }
 
-function idArrayFromValue(value) {
-  return Array.isArray(value) ? value.map(strip).filter(Boolean) : [];
-}
-
-function upstreamKey(type, id) {
-  return `${type}::${id}`;
+function requireIdLikeArray(ctx, ruleId, value, label) {
+  const values = requireArray(ctx, ruleId, RUNTIME_TRACE_PATH, value, label).map(strip).filter(Boolean);
+  const seen = new Set();
+  for (const id of values) {
+    if (!/^trace\/specs\/.+\.trace\.json#\/spec-delta-register\/\d+\/scenarios\/\d+$/u.test(id)) {
+      addError(ctx, ruleId, RUNTIME_TRACE_PATH, `${label} 包含非法 scenario pointer：${id}`);
+    }
+    if (seen.has(id)) {
+      addError(ctx, ruleId, RUNTIME_TRACE_PATH, `${label} 包含重复 ID：${id}`);
+    }
+    seen.add(id);
+  }
+  return values;
 }
 
 function readManifestEntriesLenient(ctx) {
