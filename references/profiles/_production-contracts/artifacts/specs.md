@@ -26,6 +26,9 @@ Trace 必须对齐 proposal 模板风格：固定 `delivery-plane` 作为 render
 - Common contract 只定义通用生成顺序和 Delivery Plane / JSON Trace Plane 边界；具体 source ID 体系、proposal register 字段、spec-relevant predicate 和 schema-specific 禁止项由 schema overlay 约束。
 - Downstream artifact writer/reviewer 只能把 specs trace 作为 specs 语义输入；`specs/**/*.md` 是 renderer 投影后的 Delivery Plane，不得反向作为 source/scope register、coverage oracle、runtime row 或 proof oracle。
 - 如果 requirement/scenario 需要 proposal trace 无法到达的 source/scope detail，writer 必须报告 blocker 或修订上游 proposal trace；不得扩大读取范围后直接写入 specs trace。
+- Specs writer 的核心职责是把 routed source/scope fact 转换为语义等价的 requirement/scenario 模型；`source-ids[]` coverage 只是数学闭合证据，不是语义等价证据。
+- Writer 必须把 proposal trace 中的原始 source/scope fact、对应 specs route 的 use、proposal use 和 downstream expectation 作为转换依据；不得只依据 source id、projection 名称、主题标题或 capability 汇总来生成 requirement/scenario。
+- 语义等价要求保留 source/scope fact 中 production-meaningful 的 material semantic units，包括用户可观察对象、操作、条件、状态变化、API/data 后果、失败/禁用/恢复边界、guard 和 downstream 必须保持的约束。Writer 可以合并表达多个 source items，但合并后的 requirement/scenario 必须仍让 reviewer 能判断这些 material units 没有丢失、变弱或被替换成泛化摘要。
 
 ## Trace Generation Algorithm
 
@@ -38,12 +41,14 @@ Writer 必须按以下顺序生成 specs trace：
    - `parsed`：base spec 可解析，允许按语义差异生成 `added`、`modified`、`removed` 或 `renamed`。
    - `parse-blocked`：base spec 存在但无法可靠解析；若需要非 `added` delta，必须写入 `spec-gate.blockers`。
 4. 构造 `spec-delta-register[]`；该 register 是 specs 的 canonical semantic model。
-5. 每个 spec-relevant source id 必须进入至少一个 `spec-delta-register[].source-ids[]` 或 scenario `source-ids[]`，否则进入 `spec-gate.orphan-source-ids`。
-6. 每个 guard item 必须保持 `must-not`、`preserve-boundary` 或 `non-goal` 语义，不得膨胀成新的正向行为。
-7. 从 `spec-delta-register[]` 投影 `delivery-plane`；Delivery Plane 不得包含 source/scope coverage、alignment gate、projection mix 或 trace rows。
-8. 生成 `spec-gate`；gate 必须从 spec-relevant item set、`existing-spec-state`、`spec-delta-register[]` 和 `delivery-plane` 机械派生。
-9. 在调用 renderer 前做 set-diff 自查：proposal spec-relevant item set、delta register source ids、delivery requirement/scenario anchors 和 spec gate 不得缺失、重复、跨 capability 漂移或出现 orphan。
-10. 写入严格 JSON，再调用 renderer 生成 Markdown、Trace Appendix 和 manifest registry entry。
+5. 对每个 routed spec-relevant item 做语义等价自查：从 source/scope fact 中识别必须保留的 material semantic units，并确认这些 units 已被 requirement body、scenario when/then/body 或 guard handling 表达；该自查结论不得写入 Delivery Plane，也不得退化成 coverage 表。
+6. 每个 spec-relevant source id 必须进入至少一个 `spec-delta-register[].source-ids[]` 或 scenario `source-ids[]`，否则进入 `spec-gate.orphan-source-ids`。该 source-id 闭合是必要条件，但不能替代上一步的语义等价自查。
+7. 如果 source id 已闭合但 material semantic units 在 requirement/scenario 中丢失、变弱、被泛化摘要替代，或 writer 无法判断是否等价，必须写入 `spec-gate.blockers`，不得用空 gate 声称 specs 完成。
+8. 每个 guard item 必须保持 `must-not`、`preserve-boundary` 或 `non-goal` 语义，不得膨胀成新的正向行为。
+9. 从 `spec-delta-register[]` 投影 `delivery-plane`；Delivery Plane 不得包含 source/scope coverage、alignment gate、projection mix 或 trace rows。
+10. 生成 `spec-gate`；gate 必须从 spec-relevant item set、语义等价自查、`existing-spec-state`、`spec-delta-register[]` 和 `delivery-plane` 派生。
+11. 在调用 renderer 前做 set-diff 自查：proposal spec-relevant item set、delta register source ids、delivery requirement/scenario anchors、material semantic units 和 spec gate 不得缺失、重复、跨 capability 漂移、语义压缩或出现 orphan。
+12. 写入严格 JSON，再调用 renderer 生成 Markdown、Trace Appendix 和 manifest registry entry。
 
 ## Delivery Plane
 
@@ -56,7 +61,8 @@ Writer 必须按以下顺序生成 specs trace：
 - Requirement 正文使用 SHALL / MUST / MUST NOT 表达规范行为。
 - Requirement 正文和 freeform Scenario body 可以写字符串或字符串数组；renderer 必须保留数组换行，不得隐式逗号拼接，也不得猜测拆分字符串。
 - 每个 added/modified requirement 至少有一个 `#### Scenario: <name>`。
-- 若 requirement 包含多个用户可见操作，scenario 必须逐项枚举或拆分；每个操作要定义触发、预期 UI/API/data 后果、持久化或 reload 后结果，以及 disabled/failure/recovery 行为。
+- 若 requirement 包含多个用户可见操作或多个 material semantic units，scenario 必须逐项枚举、拆分或以可审查的结构合并表达；每个 material unit 要定义触发、作用对象、预期 UI/API/data 后果、持久化或 reload 后结果，以及 disabled/failure/recovery 行为中 source-backed 的部分。
+- 不得用“支持全部”“覆盖所有”“固定集合”“完整配置”等泛化短语替代 source/scope fact 中已经给出的 material semantic units；如果为可读性进行合并，合并文本仍必须保留足够细节，使 design writer 不需要回读 proposal 才能知道每个 material unit 的规范行为。
 - Guard 必须保持 MUST NOT、preserve、non-goal 或负向边界语义，不得写成 source/scope 外的正向能力。
 - 不得创建只包含 projection notes、只写“无”或没有 requirement 的空 spec；zero-delta completion 的 canonical source 只能使用 `trace/specs/no-spec-delta/README.trace.json`，Markdown marker 只由 renderer 投影生成。
 
@@ -86,8 +92,10 @@ Writer 必须按以下顺序生成 specs trace：
 ## Reviewer Focus
 
 - 是否只创建必要 spec file。
-- Requirement/scenario 是否保留所有 source/scope-backed operation、edge case、failure state、data/API/auth/security rule 和 guard。
+- Requirement/scenario 是否与 proposal trace 中 routed source/scope fact 语义等价；`source-ids[]` 出现只能证明数学 coverage，不能作为语义通过证明。
+- Requirement/scenario 是否保留所有 source/scope-backed material semantic units，包括 operation、对象/资源/配置项、edge case、failure state、disabled/recovery 行为、data/API/auth/security rule 和 guard。
+- 聚合后的 requirement/scenario 是否发生语义压缩：多个 source items 或复合 source fact 可以合并表达，但不得丢失、弱化或用泛化摘要替代任一 production-meaningful unit。
 - Existing spec state 是否足以支持 `added` / `modified` / `removed` / `renamed` 判定。
 - Guard 是否被膨胀为正向行为。
 - Design/proof/context-only item 是否没有伪造成 requirement/guard。
-- Delivery Plane 是否没有 coverage 泄漏，且每个 rendered scenario 都能回到 `spec-delta-register[]`。
+- Delivery Plane 是否没有 coverage 泄漏，且每个 rendered scenario 都能回到 `spec-delta-register[]`；该可追溯性不得替代 source-fact 到 spec-delta 的语义等价审查。

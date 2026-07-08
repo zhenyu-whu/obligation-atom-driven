@@ -18,7 +18,7 @@ test("renderer 从 trace fixture 渲染 proposal/spec/design/runtime/tasks", () 
     { artifact: "specs", capability: "capability", expected: "## ADDED Requirements\n\n### Requirement: Trace spec\n" },
     { artifact: "design", expected: "## Context\n\n- design 来自 trace。\n" },
     { artifact: "runtime-acceptance", expected: "## Runtime Acceptance Intent\n\n- Scope: runtime 来自 trace。\n" },
-    { artifact: "tasks", expected: "## AC-001 Trace task\n\nRuntime Facts:\n\n- RS-001\n" },
+    { artifact: "tasks", expected: "## AC-001 Trace task\n\nWork Stage: behavior\n\n- [ ] AC-001.1 实现 trace task\n      Work Stage: behavior\n      Work: 实现 trace task。\n" },
   ];
 
   for (const item of cases) {
@@ -32,6 +32,9 @@ test("renderer 从 trace fixture 渲染 proposal/spec/design/runtime/tasks", () 
     }
     if (item.artifact === "tasks") {
       assert.match(result.markdown, /      Work: 实现 trace task。/);
+      assert.doesNotMatch(result.markdown, /Spec Scenarios:/);
+      assert.doesNotMatch(result.markdown, /Design Details:/);
+      assert.doesNotMatch(result.markdown, /Runtime Contributions:/);
       assert.doesNotMatch(result.markdown, /Depends On:\n\n- None/);
       assert.doesNotMatch(result.markdown, /Outcome:/);
       assert.doesNotMatch(result.markdown, /Preserve:/);
@@ -106,6 +109,53 @@ test("renderer 拒绝 verification slice 缺少 non-persistent-reason", () => {
   assert.throws(
     () => renderChangeArtifact({ root, change, artifact: "verification" }),
     /VAL-RENDER-002.*PS-001 缺少 non-persistent-reason/u,
+  );
+});
+
+test("renderer 拒绝 tasks 缺少三类 links", () => {
+  const change = "render-tasks-empty-links-change";
+  const root = makeRenderChange(change);
+  const tracePath = path.join(root, "openspec", "changes", change, "trace", "tasks.trace.json");
+  const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
+  trace["implementation-step-register"][0]["spec-scenario-links"] = [];
+  trace["implementation-step-register"][0]["design-detail-links"] = [];
+  trace["implementation-step-register"][0]["runtime-fact-links"] = [];
+  fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
+
+  assert.throws(
+    () => renderChangeArtifact({ root, change, artifact: "tasks" }),
+    /VAL-RENDER-002.*必须至少包含一个 spec\/design\/runtime link/u,
+  );
+});
+
+test("renderer 拒绝 tasks 未知 contribution", () => {
+  const change = "render-tasks-unknown-contribution-change";
+  const root = makeRenderChange(change);
+  const tracePath = path.join(root, "openspec", "changes", change, "trace", "tasks.trace.json");
+  const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
+  trace["implementation-step-register"][0]["runtime-fact-links"][0].contribution = "done";
+  fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
+
+  assert.throws(
+    () => renderChangeArtifact({ root, change, artifact: "tasks" }),
+    /VAL-RENDER-002.*未知 contribution：done/u,
+  );
+});
+
+test("renderer 拒绝 tasks 旧 runtime-fact-ids shape", () => {
+  const change = "render-tasks-old-runtime-fact-ids-change";
+  const root = makeRenderChange(change);
+  const tracePath = path.join(root, "openspec", "changes", change, "trace", "tasks.trace.json");
+  const trace = JSON.parse(fs.readFileSync(tracePath, "utf8"));
+  delete trace["implementation-step-register"][0]["spec-scenario-links"];
+  delete trace["implementation-step-register"][0]["design-detail-links"];
+  delete trace["implementation-step-register"][0]["runtime-fact-links"];
+  trace["implementation-step-register"][0]["runtime-fact-ids"] = ["RS-001"];
+  fs.writeFileSync(tracePath, `${JSON.stringify(trace, null, 2)}\n`);
+
+  assert.throws(
+    () => renderChangeArtifact({ root, change, artifact: "tasks" }),
+    /VAL-RENDER-002.*必须至少包含一个 spec\/design\/runtime link/u,
   );
 });
 
@@ -673,13 +723,49 @@ function tasksTrace() {
     {
       "step-id": "AC-001",
       title: "Trace task",
+      "work-stage": "behavior",
       "depends-on-step-ids": [],
-      "runtime-fact-ids": ["RS-001"],
+      "spec-scenario-links": [
+        {
+          "spec-scenario": "trace/specs/capability.trace.json#/spec-delta-register/0/scenarios/0",
+          contribution: "completes",
+        },
+      ],
+      "design-detail-links": [
+        {
+          "design-detail-id": "IDR-001-D001",
+          contribution: "completes",
+        },
+      ],
+      "runtime-fact-links": [
+        {
+          "runtime-fact-id": "RS-001",
+          contribution: "completes",
+        },
+      ],
       tasks: [
         {
           "task-id": "AC-001.1",
           title: "实现 trace task",
-          "runtime-fact-ids": ["RS-001"],
+          "work-stage": "behavior",
+          "spec-scenario-links": [
+            {
+              "spec-scenario": "trace/specs/capability.trace.json#/spec-delta-register/0/scenarios/0",
+              contribution: "completes",
+            },
+          ],
+          "design-detail-links": [
+            {
+              "design-detail-id": "IDR-001-D001",
+              contribution: "completes",
+            },
+          ],
+          "runtime-fact-links": [
+            {
+              "runtime-fact-id": "RS-001",
+              contribution: "completes",
+            },
+          ],
           work: "实现 trace task。",
         },
       ],
@@ -687,9 +773,14 @@ function tasksTrace() {
   ];
   value["task-gate"] = {
     blockers: [],
-    "uncovered-target-runtime-facts": [],
+    "uncovered-spec-scenarios": [],
+    "incomplete-design-details": [],
+    "incomplete-runtime-facts": [],
+    "invalid-spec-refs": [],
+    "invalid-design-detail-refs": [],
     "invalid-runtime-fact-refs": [],
     "dependency-order-violations": [],
+    "hidden-dependency-violations": [],
     "non-production-task-violations": [],
     "delivery-projection-mismatch": [],
   };

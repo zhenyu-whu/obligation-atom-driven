@@ -38,7 +38,7 @@
 - specs 只为真实 OpenSpec delta 创建文件；每个 generated spec 至少包含一个 `### Requirement:`，且必须以短 `## Trace Appendix` 指针块结束。
 - `runtime-acceptance.md` 主体只渲染 canonical `RS-/OP-/ST-/CH-` runtime facts；事实细化必须写入 `trace/runtime-acceptance.trace.json#/runtime-fact-register`，闭合问题必须写入 `runtime-gate`，不得再生成 source/scope map、coverage closure、`canonical-row-index`、`canonical-rows[]` 或 upstream reconciliation 旧字段。
 - `verification.md` 主体必须包含 `Verification Intent` 和 `Proof Slice Matrix`；canonical Proof Slice register 和目录级 placement 规划必须写入 `trace/verification.trace.json#/verification-slice-register`，coverage 由 validator 从 runtime facts 和 slice refs 派生。
-- `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以短 `## Trace Appendix` 指针块结束；AC 主体只渲染 `Runtime Facts`、非空 `Depends On` 和 checkbox tasks，checkbox 只渲染 `Runtime Facts` 与 `Work`。
+- `tasks.md` 必须以 `## AC-### <name>` Delivery Plane sections 开始，并以短 `## Trace Appendix` 指针块结束；AC 主体只渲染 `Work Stage`、非空 `Depends On` 和 checkbox tasks，checkbox 只渲染 `Work Stage` 与 `Work`。Spec/design/runtime contribution links 只保留在 `trace/tasks.trace.json`。
 
 ## 禁止模式
 

@@ -30,9 +30,17 @@ const ANY_SI_ID_RE = /\bSI-\d{3}\b/u;
 const AC_ID_RE = /^AC-\d{3}$/u;
 const TASK_ID_RE = /^AC-\d{3}\.\d+$/u;
 const RUNTIME_FACT_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
+const IMPLEMENTATION_DETAIL_ID_RE = /^(IDR-\d{3})-D\d{3}$/u;
+const SPEC_SCENARIO_POINTER_RE = /^trace\/specs\/.+\.trace\.json#\/spec-delta-register\/\d+\/scenarios\/\d+$/u;
 const KEBAB_KEY_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 
 const TARGET_SCOPE_ROLES = new Set(["required behavior", "preserve boundary"]);
+const WORK_STAGES = new Set(["foundation", "contract", "behavior", "surface", "integration", "preserve-boundary", "rollout"]);
+const SPEC_CONTRIBUTIONS = new Set(["supports", "completes"]);
+const DESIGN_CONTRIBUTIONS = new Set(["uses", "implements-part", "completes"]);
+const RUNTIME_CONTRIBUTIONS = new Set(["supports", "contributes", "completes", "enforces"]);
+const SPEC_CLOSING_CONTRIBUTIONS = new Set(["completes"]);
+const DESIGN_CLOSING_CONTRIBUTIONS = new Set(["completes"]);
 
 const TOP_LEVEL_KEYS = new Set([
   "trace-schema",
@@ -57,16 +65,32 @@ const SOURCE_INTERFACE_KEYS = new Set([
 const IMPLEMENTATION_STEP_KEYS = new Set([
   "step-id",
   "title",
+  "work-stage",
   "depends-on-step-ids",
-  "runtime-fact-ids",
+  "spec-scenario-links",
+  "design-detail-links",
+  "runtime-fact-links",
   "tasks",
 ]);
-const CHECKBOX_TASK_KEYS = new Set(["task-id", "title", "runtime-fact-ids", "work"]);
+const CHECKBOX_TASK_KEYS = new Set([
+  "task-id",
+  "title",
+  "work-stage",
+  "spec-scenario-links",
+  "design-detail-links",
+  "runtime-fact-links",
+  "work",
+]);
 const TASK_GATE_KEYS = new Set([
   "blockers",
-  "uncovered-target-runtime-facts",
+  "uncovered-spec-scenarios",
+  "incomplete-design-details",
+  "incomplete-runtime-facts",
+  "invalid-spec-refs",
+  "invalid-design-detail-refs",
   "invalid-runtime-fact-refs",
   "dependency-order-violations",
+  "hidden-dependency-violations",
   "non-production-task-violations",
   "delivery-projection-mismatch",
 ]);
@@ -103,6 +127,7 @@ const FORBIDDEN_TRACE_KEYS = new Set([
   "resolved-runtime-contract",
   "mock-default-path-policy",
   "runtime-facts",
+  "runtime-fact-ids",
   "implementation-scope",
   "proof-contract",
   "start-gate",
@@ -166,6 +191,8 @@ function validateTasksIfPresent(ctx) {
   const expected = buildExpectedModel(ctx, proposalTrace);
   if (!expected) return;
   const specs = buildSpecsModel(ctx, expected.schemaName);
+  const designTrace = readJson(ctx, path.join(ctx.changeDir, DESIGN_TRACE_PATH));
+  const design = buildDesignModel(ctx, designTrace);
   const runtime = buildRuntimeModel(ctx, runtimeTrace);
 
   validateKebabCaseKeys(ctx, tasksTrace);
@@ -177,10 +204,12 @@ function validateTasksIfPresent(ctx) {
   validateForbiddenShape(ctx, tasksTrace);
   validateProfileLeaks(ctx, tasksTrace, expected);
 
-  const stepModel = validateImplementationSteps(ctx, tasksTrace, runtime);
+  const stepModel = validateImplementationSteps(ctx, tasksTrace, { specs, design, runtime });
   const deliveryModel = validateDeliveryPlane(ctx, tasksTrace, stepModel);
   validateStepDependencyOrder(ctx, deliveryModel);
-  validateTargetRuntimeCoverage(ctx, runtime, deliveryModel);
+  validateSpecScenarioCoverage(ctx, specs, deliveryModel);
+  validateDesignDetailCoverage(ctx, design, deliveryModel);
+  validateRuntimeClosure(ctx, runtime, deliveryModel);
   validateTaskGate(ctx, tasksTrace);
   validateArtifactForbiddenText(ctx);
 }
@@ -261,7 +290,7 @@ function buildSpecsModel(ctx, schemaName) {
 
   if (tracePaths.length === 0) {
     addError(ctx, "VAL-TASKS-SPECS-001", SPECS_TRACE_DIR, "tasks 已存在，但未发现 specs trace；tasks 必须消费已完成 specs trace。");
-    return { mode: "", tracePaths, scenariosByKey: new Map() };
+    return { mode: "", tracePaths, scenariosByPointer: new Map(), scenarioPointers: [] };
   }
 
   const hasNoDelta = tracePaths.includes(NO_DELTA_TRACE_PATH);
@@ -278,11 +307,12 @@ function buildSpecsModel(ctx, schemaName) {
     return {
       mode: NO_DELTA_SPECS_COMPLETION_MODE,
       tracePaths,
-      scenariosByKey: new Map(),
+      scenariosByPointer: new Map(),
+      scenarioPointers: [],
     };
   }
 
-  const scenariosByKey = new Map();
+  const scenariosByPointer = new Map();
   for (const tracePath of tracePaths) {
     const trace = readJson(ctx, path.join(ctx.changeDir, tracePath));
     if (!trace) continue;
@@ -297,7 +327,9 @@ function buildSpecsModel(ctx, schemaName) {
       for (const [scenarioIndex, scenario] of requireArray(ctx, "VAL-TASKS-SPECS-015", tracePath, row?.scenarios, `spec-delta-register[${deltaIndex}].scenarios`).entries()) {
         const scenarioName = requireString(ctx, "VAL-TASKS-SPECS-016", tracePath, scenario?.name, `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].name`);
         if (requirement && scenarioName) {
-          scenariosByKey.set(specScenarioKey(tracePath, requirement, scenarioName), {
+          const pointer = `${tracePath}#/spec-delta-register/${deltaIndex}/scenarios/${scenarioIndex}`;
+          scenariosByPointer.set(pointer, {
+            pointer,
             tracePath,
             requirement,
             scenario: scenarioName,
@@ -310,8 +342,54 @@ function buildSpecsModel(ctx, schemaName) {
   return {
     mode: "delta",
     tracePaths,
-    scenariosByKey,
+    scenariosByPointer,
+    scenarioPointers: [...scenariosByPointer.keys()],
   };
+}
+
+function buildDesignModel(ctx, trace) {
+  const details = new Map();
+  const targetDetailIds = new Set();
+  if (!trace) return { details, targetDetailIds };
+
+  expectEqual(ctx, "VAL-TASKS-DESIGN-001", DESIGN_TRACE_PATH, trace["artifact-id"], "design", "artifact-id");
+  const rows = requireArray(ctx, "VAL-TASKS-DESIGN-002", DESIGN_TRACE_PATH, trace["implementation-design-register"], "implementation-design-register");
+  for (const [registerIndex, row] of rows.entries()) {
+    const parentId = strip(row?.["implementation-design-id"]);
+    const detailRows = requireArray(
+      ctx,
+      "VAL-TASKS-DESIGN-003",
+      DESIGN_TRACE_PATH,
+      row?.["implementation-details"],
+      `implementation-design-register[${registerIndex}].implementation-details`,
+    );
+    for (const [detailIndex, detail] of detailRows.entries()) {
+      const label = `implementation-design-register[${registerIndex}].implementation-details[${detailIndex}]`;
+      const detailId = strip(detail?.["detail-id"]);
+      if (!detailId) {
+        addError(ctx, "VAL-TASKS-DESIGN-004", DESIGN_TRACE_PATH, `${label}.detail-id 缺失。`);
+        continue;
+      }
+      if (!IMPLEMENTATION_DETAIL_ID_RE.test(detailId)) {
+        addError(ctx, "VAL-TASKS-DESIGN-005", DESIGN_TRACE_PATH, `${label}.detail-id 非法：${detailId}。`);
+        continue;
+      }
+      if (details.has(detailId)) {
+        addError(ctx, "VAL-TASKS-DESIGN-006", DESIGN_TRACE_PATH, `implementation detail 重复：${detailId}。`);
+      }
+      const detailType = strip(detail?.["detail-type"]);
+      details.set(detailId, {
+        id: detailId,
+        parentId,
+        detailType,
+      });
+      if (detailType !== "non-applicable") {
+        targetDetailIds.add(detailId);
+      }
+    }
+  }
+
+  return { details, targetDetailIds };
 }
 
 function buildRuntimeModel(ctx, trace) {
@@ -458,7 +536,7 @@ function validateProfileLeaks(ctx, trace, expected) {
   }
 }
 
-function validateImplementationSteps(ctx, trace, runtime) {
+function validateImplementationSteps(ctx, trace, models) {
   const steps = requireArray(ctx, "VAL-TASKS-STEPS-001", TASKS_TRACE_PATH, trace["implementation-step-register"], "implementation-step-register");
   if (steps.length === 0) {
     addError(ctx, "VAL-TASKS-STEPS-002", TASKS_TRACE_PATH, "implementation-step-register 不能为空。");
@@ -480,19 +558,16 @@ function validateImplementationSteps(ctx, trace, runtime) {
     registerOrder.set(acId, index);
 
     requireString(ctx, "VAL-TASKS-AC-003", TASKS_TRACE_PATH, step?.title, `${label}.title`);
+    validateWorkStage(ctx, step?.["work-stage"], `${label}.work-stage`);
     const dependsOn = requireAcIdArray(ctx, "VAL-TASKS-AC-004", step?.["depends-on-step-ids"] ?? [], `${label}.depends-on-step-ids`);
-    const runtimeRows = requireRuntimeRows(ctx, step?.["runtime-fact-ids"], `${label}.runtime-fact-ids`, runtime);
-    if (runtimeRows.length === 0) {
-      addError(ctx, "VAL-TASKS-AC-005", TASKS_TRACE_PATH, `${acId} 必须至少引用一个 runtime fact。`);
-    }
-    validateRuntimeRowsAreTargets(ctx, runtimeRows, runtime, `${label}.runtime-fact-ids`);
+    const stepLinks = validateTaskLinks(ctx, step, label, models);
 
-    const runtimeRowSet = new Set(runtimeRows);
     const tasks = requireArray(ctx, "VAL-TASKS-TASK-001", TASKS_TRACE_PATH, step?.tasks, `${label}.tasks`);
     if (tasks.length === 0) {
       addError(ctx, "VAL-TASKS-TASK-002", TASKS_TRACE_PATH, `${acId} 必须包含至少一个 checkbox task。`);
     }
 
+    const taskLinkAggregation = emptyLinkBuckets();
     for (const [taskIndex, task] of tasks.entries()) {
       const taskLabel = `${label}.tasks[${taskIndex}]`;
       validateAllowedKeys(ctx, "VAL-TASKS-TASK-000", TASKS_TRACE_PATH, task, taskLabel, CHECKBOX_TASK_KEYS);
@@ -505,30 +580,23 @@ function validateImplementationSteps(ctx, trace, runtime) {
         addError(ctx, "VAL-TASKS-TASK-005", TASKS_TRACE_PATH, `task-id 重复：${taskId}。`);
       }
       requireString(ctx, "VAL-TASKS-TASK-007", TASKS_TRACE_PATH, task?.title, `${taskLabel}.title`);
-      const taskRuntimeRows = requireRuntimeRows(ctx, task?.["runtime-fact-ids"], `${taskLabel}.runtime-fact-ids`, runtime);
-      if (taskRuntimeRows.length === 0) {
-        addError(ctx, "VAL-TASKS-TASK-008", TASKS_TRACE_PATH, `${taskId} 必须至少引用一个 runtime fact。`);
-      }
-      validateRuntimeRowsAreTargets(ctx, taskRuntimeRows, runtime, `${taskLabel}.runtime-fact-ids`);
-      for (const rowId of taskRuntimeRows) {
-        if (!runtimeRowSet.has(rowId)) {
-          addError(ctx, "VAL-TASKS-TASK-006", TASKS_TRACE_PATH, `${taskId} runtime fact 不属于 ${acId} Runtime Facts：${rowId}。`);
-        }
-      }
+      validateWorkStage(ctx, task?.["work-stage"], `${taskLabel}.work-stage`);
+      const taskLinks = validateTaskLinks(ctx, task, taskLabel, models);
       requireString(ctx, "VAL-TASKS-TASK-009", TASKS_TRACE_PATH, task?.work, `${taskLabel}.work`);
+      mergeLinkBuckets(taskLinkAggregation, taskLinks);
       taskById.set(taskId, {
         taskId,
         acId,
-        runtimeRows: taskRuntimeRows,
+        links: taskLinks,
       });
       taskToAc.set(taskId, acId);
     }
 
+    validateStepLinksMatchTaskAggregation(ctx, acId, stepLinks, taskLinkAggregation);
     acById.set(acId, {
       acId,
       dependsOn,
-      runtimeRows,
-      runtimeRowSet,
+      links: stepLinks,
     });
   }
 
@@ -569,15 +637,51 @@ function validateStepDependencyOrder(ctx, deliveryModel) {
   }
 }
 
-function validateTargetRuntimeCoverage(ctx, runtime, deliveryModel) {
-  const covered = new Set();
+function validateSpecScenarioCoverage(ctx, specs, deliveryModel) {
+  const completed = new Set();
   for (const task of deliveryModel.taskById.values()) {
-    for (const rowId of task.runtimeRows) covered.add(rowId);
+    for (const link of task.links.spec) {
+      if (SPEC_CLOSING_CONTRIBUTIONS.has(link.contribution)) completed.add(link.id);
+    }
+  }
+  for (const pointer of specs.scenarioPointers) {
+    if (!completed.has(pointer)) {
+      addError(ctx, "VAL-TASKS-SPEC-COVERAGE-001", TASKS_TRACE_PATH, `${pointer} 是 in-scope spec scenario，但未被 checkbox task completes。`);
+    }
+  }
+}
+
+function validateDesignDetailCoverage(ctx, design, deliveryModel) {
+  const completed = new Set();
+  for (const task of deliveryModel.taskById.values()) {
+    for (const link of task.links.design) {
+      if (DESIGN_CLOSING_CONTRIBUTIONS.has(link.contribution)) completed.add(link.id);
+    }
+  }
+  for (const detailId of design.targetDetailIds) {
+    if (!completed.has(detailId)) {
+      addError(ctx, "VAL-TASKS-DESIGN-COVERAGE-001", TASKS_TRACE_PATH, `${detailId} 是 implementation detail，但未被 checkbox task completes。`);
+    }
+  }
+}
+
+function validateRuntimeClosure(ctx, runtime, deliveryModel) {
+  const closed = new Map();
+  for (const task of deliveryModel.taskById.values()) {
+    for (const link of task.links.runtime) {
+      if (!closed.has(link.id)) closed.set(link.id, new Set());
+      closed.get(link.id).add(link.contribution);
+    }
   }
   for (const [rowId, runtimeRecord] of runtime.rows.entries()) {
     if (!TARGET_SCOPE_ROLES.has(runtimeRecord.scopeRole)) continue;
-    if (!covered.has(rowId)) {
-      addError(ctx, "VAL-TASKS-TARGET-001", TASKS_TRACE_PATH, `${rowId} 是 required/preserve runtime fact，但未被 checkbox task 覆盖。`);
+    const contributions = closed.get(rowId) ?? new Set();
+    const isClosed = runtimeRecord.scopeRole === "preserve boundary"
+      ? contributions.has("enforces")
+      : contributions.has("completes");
+    if (!isClosed) {
+      const expected = runtimeRecord.scopeRole === "preserve boundary" ? "enforces" : "completes";
+      addError(ctx, "VAL-TASKS-RUNTIME-CLOSURE-001", TASKS_TRACE_PATH, `${rowId} 是 ${runtimeRecord.scopeRole} runtime fact，但未被 checkbox task ${expected}。`);
     }
   }
 }
@@ -587,9 +691,14 @@ function validateTaskGate(ctx, trace) {
   validateAllowedKeys(ctx, "VAL-TASKS-GATE-000", TASKS_TRACE_PATH, gate, "task-gate", TASK_GATE_KEYS);
   for (const field of [
     "blockers",
-    "uncovered-target-runtime-facts",
+    "uncovered-spec-scenarios",
+    "incomplete-design-details",
+    "incomplete-runtime-facts",
+    "invalid-spec-refs",
+    "invalid-design-detail-refs",
     "invalid-runtime-fact-refs",
     "dependency-order-violations",
+    "hidden-dependency-violations",
     "non-production-task-violations",
     "delivery-projection-mismatch",
   ]) {
@@ -600,13 +709,115 @@ function validateTaskGate(ctx, trace) {
   }
 }
 
-function validateRuntimeRowsAreTargets(ctx, runtimeRows, runtime, label) {
-  for (const rowId of runtimeRows) {
-    const runtimeRecord = runtime.rows.get(rowId);
+function validateWorkStage(ctx, value, label) {
+  const stage = requireString(ctx, "VAL-TASKS-WORK-STAGE-001", TASKS_TRACE_PATH, value, label);
+  if (stage && !WORK_STAGES.has(stage)) {
+    addError(ctx, "VAL-TASKS-WORK-STAGE-002", TASKS_TRACE_PATH, `${label} 不在允许集合：${stage}。`);
+  }
+  return stage;
+}
+
+function validateTaskLinks(ctx, row, label, models) {
+  const links = emptyLinkBuckets();
+  links.spec = validateSpecScenarioLinks(ctx, row?.["spec-scenario-links"], `${label}.spec-scenario-links`, models.specs);
+  links.design = validateDesignDetailLinks(ctx, row?.["design-detail-links"], `${label}.design-detail-links`, models.design);
+  links.runtime = validateRuntimeFactLinks(ctx, row?.["runtime-fact-links"], `${label}.runtime-fact-links`, models.runtime);
+  if (links.spec.length + links.design.length + links.runtime.length === 0) {
+    addError(ctx, "VAL-TASKS-LINKS-001", TASKS_TRACE_PATH, `${label} 必须至少声明一个 spec/design/runtime link。`);
+  }
+  return links;
+}
+
+function validateSpecScenarioLinks(ctx, value, label, specs) {
+  return requireArray(ctx, "VAL-TASKS-SPEC-LINK-001", TASKS_TRACE_PATH, value, label).map((link, index) => {
+    const linkLabel = `${label}[${index}]`;
+    const row = requireObject(ctx, "VAL-TASKS-SPEC-LINK-002", TASKS_TRACE_PATH, link, linkLabel);
+    validateAllowedKeys(ctx, "VAL-TASKS-SPEC-LINK-003", TASKS_TRACE_PATH, row, linkLabel, new Set(["spec-scenario", "contribution"]));
+    const id = requireString(ctx, "VAL-TASKS-SPEC-LINK-004", TASKS_TRACE_PATH, row["spec-scenario"], `${linkLabel}.spec-scenario`);
+    if (id && !SPEC_SCENARIO_POINTER_RE.test(id)) {
+      addError(ctx, "VAL-TASKS-SPEC-LINK-005", TASKS_TRACE_PATH, `${linkLabel}.spec-scenario 必须是 specs scenario pointer：${id}。`);
+    }
+    if (id && !specs.scenariosByPointer.has(id)) {
+      addError(ctx, "VAL-TASKS-SPEC-LINK-006", TASKS_TRACE_PATH, `${linkLabel}.spec-scenario 引用未定义 spec scenario：${id}。`);
+    }
+    const contribution = validateContribution(ctx, row.contribution, SPEC_CONTRIBUTIONS, `${linkLabel}.contribution`, "VAL-TASKS-SPEC-LINK-007");
+    return { id, contribution };
+  }).filter((link) => link.id && link.contribution);
+}
+
+function validateDesignDetailLinks(ctx, value, label, design) {
+  return requireArray(ctx, "VAL-TASKS-DESIGN-LINK-001", TASKS_TRACE_PATH, value, label).map((link, index) => {
+    const linkLabel = `${label}[${index}]`;
+    const row = requireObject(ctx, "VAL-TASKS-DESIGN-LINK-002", TASKS_TRACE_PATH, link, linkLabel);
+    validateAllowedKeys(ctx, "VAL-TASKS-DESIGN-LINK-003", TASKS_TRACE_PATH, row, linkLabel, new Set(["design-detail-id", "contribution"]));
+    const id = requireId(ctx, "VAL-TASKS-DESIGN-LINK-004", TASKS_TRACE_PATH, row["design-detail-id"], `${linkLabel}.design-detail-id`, IMPLEMENTATION_DETAIL_ID_RE);
+    if (id && !design.details.has(id)) {
+      addError(ctx, "VAL-TASKS-DESIGN-LINK-005", TASKS_TRACE_PATH, `${linkLabel}.design-detail-id 引用未定义 implementation detail：${id}。`);
+    }
+    const contribution = validateContribution(ctx, row.contribution, DESIGN_CONTRIBUTIONS, `${linkLabel}.contribution`, "VAL-TASKS-DESIGN-LINK-006");
+    return { id, contribution };
+  }).filter((link) => link.id && link.contribution);
+}
+
+function validateRuntimeFactLinks(ctx, value, label, runtime) {
+  return requireArray(ctx, "VAL-TASKS-RUNTIME-LINK-001", TASKS_TRACE_PATH, value, label).map((link, index) => {
+    const linkLabel = `${label}[${index}]`;
+    const row = requireObject(ctx, "VAL-TASKS-RUNTIME-LINK-002", TASKS_TRACE_PATH, link, linkLabel);
+    validateAllowedKeys(ctx, "VAL-TASKS-RUNTIME-LINK-003", TASKS_TRACE_PATH, row, linkLabel, new Set(["runtime-fact-id", "contribution"]));
+    const id = requireId(ctx, "VAL-TASKS-RUNTIME-LINK-004", TASKS_TRACE_PATH, row["runtime-fact-id"], `${linkLabel}.runtime-fact-id`, RUNTIME_FACT_ID_RE);
+    const runtimeRecord = runtime.rows.get(id);
+    if (id && !runtimeRecord) {
+      addError(ctx, "VAL-TASKS-RUNTIME-LINK-005", TASKS_TRACE_PATH, `${linkLabel}.runtime-fact-id 引用未定义 runtime fact：${id}。`);
+    }
     if (runtimeRecord && !TARGET_SCOPE_ROLES.has(runtimeRecord.scopeRole)) {
-      addError(ctx, "VAL-TASKS-RUNTIME-FACT-003", TASKS_TRACE_PATH, `${label} 只能引用 required/preserve runtime fact，不得引用 ${runtimeRecord.scopeRole || "(empty)"}：${rowId}。`);
+      addError(ctx, "VAL-TASKS-RUNTIME-LINK-006", TASKS_TRACE_PATH, `${linkLabel}.runtime-fact-id 只能引用 required/preserve runtime fact，不得引用 ${runtimeRecord.scopeRole || "(empty)"}：${id}。`);
+    }
+    const contribution = validateContribution(ctx, row.contribution, RUNTIME_CONTRIBUTIONS, `${linkLabel}.contribution`, "VAL-TASKS-RUNTIME-LINK-007");
+    return { id, contribution };
+  }).filter((link) => link.id && link.contribution);
+}
+
+function validateContribution(ctx, value, allowed, label, ruleId) {
+  const contribution = requireString(ctx, ruleId, TASKS_TRACE_PATH, value, label);
+  if (contribution && !allowed.has(contribution)) {
+    addError(ctx, ruleId, TASKS_TRACE_PATH, `${label} 不在允许集合：${contribution}。`);
+  }
+  return contribution;
+}
+
+function validateStepLinksMatchTaskAggregation(ctx, acId, stepLinks, taskLinks) {
+  for (const [kind, description] of [
+    ["spec", "spec-scenario-links"],
+    ["design", "design-detail-links"],
+    ["runtime", "runtime-fact-links"],
+  ]) {
+    const stepSet = linkSet(stepLinks[kind]);
+    const taskSet = linkSet(taskLinks[kind]);
+    const missing = [...taskSet].filter((item) => !stepSet.has(item));
+    const extra = [...stepSet].filter((item) => !taskSet.has(item));
+    if (missing.length > 0 || extra.length > 0) {
+      addError(
+        ctx,
+        "VAL-TASKS-LINKS-002",
+        TASKS_TRACE_PATH,
+        `${acId} ${description} 必须等于子 checkbox links 聚合；缺少 ${missing.join(", ") || "无"}；多余 ${extra.join(", ") || "无"}。`,
+      );
     }
   }
+}
+
+function emptyLinkBuckets() {
+  return { spec: [], design: [], runtime: [] };
+}
+
+function mergeLinkBuckets(target, source) {
+  target.spec.push(...source.spec);
+  target.design.push(...source.design);
+  target.runtime.push(...source.runtime);
+}
+
+function linkSet(links) {
+  return new Set(links.map((link) => `${link.id}:${link.contribution}`));
 }
 
 function validateArtifactForbiddenText(ctx) {
@@ -624,16 +835,6 @@ function validateKebabCaseKeys(ctx, trace) {
       addError(ctx, "VAL-TASKS-KEY-001", TASKS_TRACE_PATH, `tasks trace key 必须使用 kebab-case：${ref.pointer}。`);
     }
   }
-}
-
-function requireRuntimeRows(ctx, value, label, runtime) {
-  const rowIds = requireIdArray(ctx, "VAL-TASKS-RUNTIME-FACT-001", TASKS_TRACE_PATH, value, label, RUNTIME_FACT_ID_RE);
-  for (const rowId of rowIds) {
-    if (!runtime.rows.has(rowId)) {
-      addError(ctx, "VAL-TASKS-RUNTIME-FACT-002", TASKS_TRACE_PATH, `${label} 引用未定义 runtime fact：${rowId}。`);
-    }
-  }
-  return rowIds;
 }
 
 function requireAcIdArray(ctx, ruleId, value, label) {
@@ -667,10 +868,6 @@ function rowTypeForRuntimeId(id) {
   if (id.startsWith("ST-")) return "state";
   if (id.startsWith("CH-")) return "chain";
   return "";
-}
-
-function specScenarioKey(tracePath, requirement, scenario) {
-  return `${strip(tracePath)}::${strip(requirement)}::${strip(scenario)}`;
 }
 
 function readManifestEntriesLenient(ctx) {

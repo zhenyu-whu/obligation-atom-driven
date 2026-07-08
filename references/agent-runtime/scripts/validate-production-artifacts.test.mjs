@@ -1538,14 +1538,14 @@ test("tasks validator rejects unknown runtime fact references", () => {
   const change = "validator-tasks-unknown-runtime-row-change";
   const root = makeObligationTasksFixture(change);
   updateTasksTrace(root, change, (trace) => {
-    trace["implementation-step-register"][0]["runtime-fact-ids"] = ["RS-999"];
-    trace["implementation-step-register"][0].tasks[0]["runtime-fact-ids"] = ["RS-999"];
+    trace["implementation-step-register"][0]["runtime-fact-links"] = [{ "runtime-fact-id": "RS-999", contribution: "completes" }];
+    trace["implementation-step-register"][0].tasks[0]["runtime-fact-links"] = [{ "runtime-fact-id": "RS-999", contribution: "completes" }];
   }, { render: true });
 
   const result = validateChange({ root, change, artifact: "tasks" });
 
   assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-TASKS-RUNTIME-FACT-002");
+  assertHasRule(result, "VAL-TASKS-RUNTIME-LINK-005");
 });
 
 test("tasks validator rejects task id drift outside owning AC", () => {
@@ -1561,7 +1561,75 @@ test("tasks validator rejects task id drift outside owning AC", () => {
   assertHasRule(result, "VAL-TASKS-TASK-004");
 });
 
-test("tasks validator rejects required runtime fact missing task coverage", () => {
+test("tasks validator rejects spec scenario without completes contribution", () => {
+  const change = "validator-tasks-spec-supports-only-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0]["spec-scenario-links"][0].contribution = "supports";
+    trace["implementation-step-register"][0].tasks[0]["spec-scenario-links"][0].contribution = "supports";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-SPEC-COVERAGE-001");
+});
+
+test("tasks validator rejects design detail without completes contribution", () => {
+  const change = "validator-tasks-design-part-only-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0]["design-detail-links"][0].contribution = "implements-part";
+    trace["implementation-step-register"][0].tasks[0]["design-detail-links"][0].contribution = "implements-part";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-DESIGN-COVERAGE-001");
+});
+
+test("tasks validator rejects required runtime fact with supports-only contribution", () => {
+  const change = "validator-tasks-runtime-supports-only-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0]["runtime-fact-links"][0].contribution = "supports";
+    trace["implementation-step-register"][0].tasks[0]["runtime-fact-links"][0].contribution = "supports";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-RUNTIME-CLOSURE-001");
+});
+
+test("tasks validator rejects preserve runtime fact without enforces contribution", () => {
+  const change = "validator-tasks-preserve-runtime-without-enforces-change";
+  const root = makeObligationTasksFixture(change);
+  updateRuntimeTrace(root, change, (trace) => {
+    trace["runtime-fact-register"][0]["scope-role"] = "preserve boundary";
+  });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-RUNTIME-CLOSURE-001");
+});
+
+test("tasks validator rejects step links that do not match checkbox aggregation", () => {
+  const change = "validator-tasks-step-task-link-drift-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0]["runtime-fact-links"][0].contribution = "supports";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-LINKS-002");
+});
+
+test("tasks validator rejects required runtime fact missing closing task contribution", () => {
   const change = "validator-tasks-missing-runtime-target-coverage-change";
   const root = makeObligationTasksFixture(change);
   updateRuntimeTrace(root, change, (trace) => {
@@ -1576,7 +1644,7 @@ test("tasks validator rejects required runtime fact missing task coverage", () =
   const result = validateChange({ root, change, artifact: "tasks" });
 
   assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-TASKS-TARGET-001");
+  assertHasRule(result, "VAL-TASKS-RUNTIME-CLOSURE-001");
 });
 
 test("tasks validator rejects proof-only runtime fact targets", () => {
@@ -1589,7 +1657,7 @@ test("tasks validator rejects proof-only runtime fact targets", () => {
   const result = validateChange({ root, change, artifact: "tasks" });
 
   assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-TASKS-RUNTIME-FACT-003");
+  assertHasRule(result, "VAL-TASKS-RUNTIME-LINK-006");
 });
 
 test("tasks validator rejects old top-level tasks trace fields", () => {
@@ -1613,8 +1681,10 @@ test("tasks validator rejects old step and task fields", () => {
   updateTasksTrace(root, change, (trace) => {
     trace["implementation-step-register"][0].outcome = ["- 旧 Outcome。"];
     trace["implementation-step-register"][0].preserve = ["- 旧 Preserve。"];
+    trace["implementation-step-register"][0]["runtime-fact-ids"] = ["RS-001"];
     trace["implementation-step-register"][0].tasks[0].acceptance = "旧 Acceptance。";
     trace["implementation-step-register"][0].tasks[0].proof = "旧 Proof。";
+    trace["implementation-step-register"][0].tasks[0]["runtime-fact-ids"] = ["RS-001"];
   }, { render: true });
 
   const result = validateChange({ root, change, artifact: "tasks" });
@@ -2192,6 +2262,7 @@ function makeDefaultTasksFixture(change) {
 }
 
 function tasksTrace(options) {
+  const specScenario = "trace/specs/capability-a.trace.json#/spec-delta-register/0/scenarios/0";
   return {
     "trace-schema": "openspec-trace-v1",
     "artifact-id": "tasks",
@@ -2205,19 +2276,55 @@ function tasksTrace(options) {
       "spec-traces": ["trace/specs/capability-a.trace.json"],
       "design-trace": "trace/design.trace.json",
       "runtime-acceptance-trace": "trace/runtime-acceptance.trace.json",
-      "input-policy": "tasks uses proposal/spec/design as background and runtime-acceptance runtime facts as the implementation target; Markdown, verification, tests, and evidence are not semantic inputs.",
+      "input-policy": "tasks uses specs/design as implementation inputs and runtime-acceptance facts as contribution/closure mapping; Markdown, verification, tests, and evidence are not semantic inputs.",
     },
     "implementation-step-register": [
       {
         "step-id": "AC-001",
         title: "最小闭环生产步骤",
+        "work-stage": "behavior",
         "depends-on-step-ids": [],
-        "runtime-fact-ids": ["RS-001"],
+        "spec-scenario-links": [
+          {
+            "spec-scenario": specScenario,
+            contribution: "completes",
+          },
+        ],
+        "design-detail-links": [
+          {
+            "design-detail-id": "IDR-001-D001",
+            contribution: "completes",
+          },
+        ],
+        "runtime-fact-links": [
+          {
+            "runtime-fact-id": "RS-001",
+            contribution: "completes",
+          },
+        ],
         tasks: [
           {
             "task-id": "AC-001.1",
             title: "实现最小闭环生产行为",
-            "runtime-fact-ids": ["RS-001"],
+            "work-stage": "behavior",
+            "spec-scenario-links": [
+              {
+                "spec-scenario": specScenario,
+                contribution: "completes",
+              },
+            ],
+            "design-detail-links": [
+              {
+                "design-detail-id": "IDR-001-D001",
+                contribution: "completes",
+              },
+            ],
+            "runtime-fact-links": [
+              {
+                "runtime-fact-id": "RS-001",
+                contribution: "completes",
+              },
+            ],
             work: "实现最小生产 API 或 UI 闭环。",
           },
         ],
@@ -2225,9 +2332,14 @@ function tasksTrace(options) {
     ],
     "task-gate": {
       blockers: [],
-      "uncovered-target-runtime-facts": [],
+      "uncovered-spec-scenarios": [],
+      "incomplete-design-details": [],
+      "incomplete-runtime-facts": [],
+      "invalid-spec-refs": [],
+      "invalid-design-detail-refs": [],
       "invalid-runtime-fact-refs": [],
       "dependency-order-violations": [],
+      "hidden-dependency-violations": [],
       "non-production-task-violations": [],
       "delivery-projection-mismatch": [],
     },

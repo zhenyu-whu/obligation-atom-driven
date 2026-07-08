@@ -146,7 +146,7 @@ function validateCompleteChange(ctx) {
     asArray(verificationSlices)
       .flatMap((row) => asArray(row?.["runtime-fact-ids"]).map(strip).filter(Boolean)),
   );
-  const taskRuntimeRowIds = collectTaskRuntimeRowIds(tasksTrace);
+  const taskRuntimeRowIds = collectTaskRuntimeClosureIds(tasksTrace);
 
   validateSameIdSet(ctx, {
     rulePrefix: "VAL-COMPLETE-VERIFICATION-ROWS",
@@ -160,7 +160,7 @@ function validateCompleteChange(ctx) {
     file: "trace/tasks.trace.json",
     expectedIds: targetRuntimeRowIds,
     actualIds: taskRuntimeRowIds,
-    description: "tasks checkbox runtime-fact coverage",
+    description: "tasks checkbox runtime-fact closure",
   });
 }
 
@@ -175,14 +175,19 @@ function collectRuntimeRowIds(runtimeTrace, options = {}) {
     .filter(Boolean);
 }
 
-function collectTaskRuntimeRowIds(tasksTrace) {
+function collectTaskRuntimeClosureIds(tasksTrace) {
   const ids = [];
   for (const step of asArray(tasksTrace["implementation-step-register"])) {
     for (const task of asArray(step?.tasks)) {
-      ids.push(...asArray(task?.["runtime-fact-ids"]).map(strip).filter(Boolean));
+      for (const link of asArray(task?.["runtime-fact-links"])) {
+        const contribution = strip(link?.contribution);
+        if (contribution === "completes" || contribution === "enforces") {
+          ids.push(strip(link?.["runtime-fact-id"]));
+        }
+      }
     }
   }
-  return new Set(ids);
+  return new Set(ids.filter(Boolean));
 }
 
 function validateSameIdSet(ctx, config) {

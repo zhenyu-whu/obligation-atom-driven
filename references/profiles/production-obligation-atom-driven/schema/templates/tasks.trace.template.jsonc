@@ -18,34 +18,79 @@
     ],
     "design-trace": "trace/design.trace.json",
     "runtime-acceptance-trace": "trace/runtime-acceptance.trace.json",
-    "input-policy": "tasks uses proposal/spec/design as background and runtime-acceptance runtime facts as the implementation target; Markdown, verification, tests, and evidence are not semantic inputs."
+    "input-policy": "tasks uses draft-first/link-second authoring: first create a clear production implementation AC/checkbox draft from specs/design, then objectively write specs/design/runtime contribution links; Markdown, verification, tests, and evidence are not semantic inputs."
   },
 
   // The single semantic authority for tasks. Each step is ordered production
-  // implementation work against required/preserve runtime facts from
-  // trace/runtime-acceptance.trace.json#/runtime-fact-register.
+  // implementation work. Author AC/checkbox as a clear production implementation
+  // draft first, then fill spec/design/runtime links as objective projections.
+  // Closure is enforced by validator/reviewer-repair, not by creating
+  // coverage-only tasks.
   "implementation-step-register": [
     {
       "step-id": "AC-001",
       "title": "<中文生产实现步骤名称>",
+      "work-stage": "<foundation|contract|behavior|surface|integration|preserve-boundary|rollout>",
       "depends-on-step-ids": [],
-      "runtime-fact-ids": ["RS-001", "OP-001"],
+      "spec-scenario-links": [
+        {
+          "spec-scenario": "trace/specs/<capability>.trace.json#/spec-delta-register/0/scenarios/0",
+          "contribution": "<supports|completes>"
+        }
+      ],
+      "design-detail-links": [
+        {
+          "design-detail-id": "IDR-001-D001",
+          "contribution": "<uses|implements-part|completes>"
+        }
+      ],
+      "runtime-fact-links": [
+        {
+          "runtime-fact-id": "RS-001",
+          "contribution": "<supports|contributes|completes|enforces>"
+        }
+      ],
       "tasks": [
         {
           "task-id": "AC-001.1",
           "title": "<具体 production implementation work>",
-          "runtime-fact-ids": ["RS-001"],
-          "work": "<要改变或保留的生产行为；不是 file-edit summary>"
+          "work-stage": "<foundation|contract|behavior|surface|integration|preserve-boundary|rollout>",
+          "spec-scenario-links": [
+            {
+              "spec-scenario": "trace/specs/<capability>.trace.json#/spec-delta-register/0/scenarios/0",
+              "contribution": "<supports|completes>"
+            }
+          ],
+          "design-detail-links": [
+            {
+              "design-detail-id": "IDR-001-D001",
+              "contribution": "<uses|implements-part|completes>"
+            }
+          ],
+          "runtime-fact-links": [
+            {
+              "runtime-fact-id": "RS-001",
+              "contribution": "<supports|contributes|completes|enforces>"
+            }
+          ],
+          "work": "<清晰说明要改变或保留的生产行为：模块/API/状态/交互边界、关键数据或运行态结果、主要失败/边界处理，以及不进入当前 scope 的行为；不是 file-edit summary>"
         }
       ]
     }
   ],
 
+  // Final invariant placeholder. Do not use task-gate as a coverage-driven
+  // authoring checklist for inventing AC/checkbox tasks.
   "task-gate": {
     "blockers": [],
-    "uncovered-target-runtime-facts": [],
+    "uncovered-spec-scenarios": [],
+    "incomplete-design-details": [],
+    "incomplete-runtime-facts": [],
+    "invalid-spec-refs": [],
+    "invalid-design-detail-refs": [],
     "invalid-runtime-fact-refs": [],
     "dependency-order-violations": [],
+    "hidden-dependency-violations": [],
     "non-production-task-violations": [],
     "delivery-projection-mismatch": []
   },

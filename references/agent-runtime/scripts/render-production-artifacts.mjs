@@ -570,6 +570,7 @@ function renderImplementationStep(stepId, step) {
     throw new RenderContractError("VAL-RENDER-002", "tasks delivery-plane", `step-sections 引用未知 step：${stepId}。`);
   }
   const title = requireScalar(row.title, `tasks.implementation-step-register[${stepId}].title`);
+  requireAnyTaskLink(row, `tasks.implementation-step-register[${stepId}]`);
   const tasks = asArray(row.tasks);
   if (tasks.length === 0) {
     throw new RenderContractError("VAL-RENDER-002", "tasks implementation-step-register", `${stepId} 缺少 checkbox tasks。`);
@@ -583,9 +584,7 @@ function renderImplementationStep(stepId, step) {
     blocks.push("Depends On:", "", `- ${dependsOn.join(", ")}`, "");
   }
   blocks.push(
-    "Runtime Facts:",
-    "",
-    renderRuntimeRowsList(row["runtime-fact-ids"]),
+    `Work Stage: ${requireScalar(row["work-stage"], `tasks.implementation-step-register[${stepId}].work-stage`)}`,
     "",
     tasks.map((task) => renderTaskBlock(stepId, task)).join("\n"),
     "",
@@ -596,9 +595,10 @@ function renderImplementationStep(stepId, step) {
 function renderTaskBlock(acId, task) {
   const row = asObject(task);
   const taskId = requireScalar(row["task-id"], `tasks.implementation-step-register[${acId}].tasks[].task-id`);
+  requireAnyTaskLink(row, `tasks.implementation-step-register[${acId}].tasks[${taskId}]`);
   return [
     `- [ ] ${taskId} ${requireScalar(row.title, `tasks.implementation-step-register[${acId}].tasks[${taskId}].title`)}`,
-    `      Runtime Facts: ${renderInlineList(row["runtime-fact-ids"])}`,
+    `      Work Stage: ${requireScalar(row["work-stage"], `tasks.implementation-step-register[${acId}].tasks[${taskId}].work-stage`)}`,
     `      Work: ${requireScalar(row.work, `tasks.implementation-step-register[${acId}].tasks[${taskId}].work`)}`,
   ].join("\n");
 }
@@ -661,17 +661,43 @@ function renderIntentList(value, fields) {
   return fields.map(([label, key]) => `- ${label}: ${requireScalar(row[key], `delivery-plane.${key}`)}`).join("\n");
 }
 
-function renderRuntimeRowsList(value) {
-  const rows = asArray(value).map(strip).filter(Boolean);
-  if (rows.length === 0) {
-    throw new RenderContractError("VAL-RENDER-002", "tasks delivery-plane", "Runtime Facts 不能为空。");
-  }
-  return `- ${rows.join(", ")}`;
-}
-
 function renderInlineList(value) {
   const rows = asArray(value).map(strip).filter(Boolean);
   return rows.length > 0 ? rows.join(", ") : requireScalar(value, "inline-list");
+}
+
+function renderTaskLinks(value, idField) {
+  const allowedContributions = taskLinkContributionsFor(idField);
+  return asArray(value)
+    .map((item) => {
+      const row = asObject(item);
+      const id = requireScalar(row[idField], `tasks link.${idField}`);
+      const contribution = requireScalar(row.contribution, `tasks link.${idField}.contribution`);
+      if (!allowedContributions.has(contribution)) {
+        throw new RenderContractError("VAL-RENDER-002", `tasks link.${idField}.contribution`, `未知 contribution：${contribution}。`);
+      }
+      return `${id}(${contribution})`;
+    });
+}
+
+function taskLinkContributionsFor(idField) {
+  if (idField === "spec-scenario") return new Set(["supports", "completes"]);
+  if (idField === "design-detail-id") return new Set(["uses", "implements-part", "completes"]);
+  if (idField === "runtime-fact-id") return new Set(["supports", "contributes", "completes", "enforces"]);
+  return new Set();
+}
+
+function requireAnyTaskLink(row, ref) {
+  const specLinks = renderTaskLinks(row["spec-scenario-links"], "spec-scenario");
+  const designLinks = renderTaskLinks(row["design-detail-links"], "design-detail-id");
+  const runtimeLinks = renderTaskLinks(row["runtime-fact-links"], "runtime-fact-id");
+  const count =
+    specLinks.length +
+    designLinks.length +
+    runtimeLinks.length;
+  if (count === 0) {
+    throw new RenderContractError("VAL-RENDER-002", ref, `${ref} 必须至少包含一个 spec/design/runtime link。`);
+  }
 }
 
 function renderMarkdownTable(heading, columns, rows) {

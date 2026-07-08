@@ -1,5 +1,5 @@
 name: production-obligation-atom-driven
-version: 21
+version: 22
 description: 面向生产实现的 obligation atom 工作流；artifact graph 由本 schema 定义，artifact 内容合同由 _production-contracts 定义，trace-first 编排由 agent-runtime 定义
 artifacts:
   - id: proposal
@@ -54,7 +54,7 @@ artifacts:
 
   - id: tasks
     generates: tasks.md
-    description: 生产实现计划与运行时验收覆盖模型
+    description: 生产实现计划与 specs/design/runtime contribution closure 模型
     template: tasks.trace.template.jsonc
     instruction: |
       本 artifact 只作为 OpenSpec CLI entrypoint；schema template 是 trace/tasks.trace.json 的 JSONC authoring guide，不是 tasks.md Markdown 模板。不得仅按 schema template 直接写 Markdown。实际 propose 编排必须先读取并遵守 `openspec/agent-runtime/openspec-propose-artifacts.md`；artifact 内容契约由该 runtime 按当前 `schemaName` 和 artifact id 解析 `openspec/schemas/_production-contracts/**`。
@@ -79,12 +79,15 @@ apply:
     - `tasks.md` 和 `verification.md` 只能引用其中已定义的 runtime facts，不得各自发明新的 canonical runtime fact。
 
     `tasks.md` 是 production implementation Delivery Plane；最小实现任务模型位于 `trace/tasks.trace.json`：
-    - 使用 `GA-####` 作为 proposal Global Atom ID；`GA-####` 不得出现在 tasks trace 中，source/scope 覆盖只能通过 runtime fact 的 `source-basis` 反查。
-    - Delivery Plane 的 AC section 是 implementation step 和 worker 默认入口；implementation worker 默认消费 AC 的 `Runtime Facts` 和 checkbox task `Work`。
+    - `specs` 是需求真相，`design` 是实现方案，`runtime-acceptance` 是运行态验收真相；tasks 先按 specs + design 的工程施工顺序生成能独立说明如何实现的 AC / checkbox 草案，再把 runtime facts 和上游 scenario/detail 作为客观贡献/闭合 links。writer 不得以 closure matrix 方式拆分或发明任务。
+    - 使用 `GA-####` 作为 proposal Global Atom ID；`GA-####` 不得出现在 tasks trace 中。tasks 不重复 GA source coverage；spec 只能通过 `spec-scenario-links[].spec-scenario` scenario pointer 引用，design 只能通过 `design-detail-links[].design-detail-id` 引用，runtime 只能通过 `runtime-fact-links[].runtime-fact-id` 引用。
+    - Delivery Plane 的 AC section 是 implementation step 和 worker 默认入口；implementation worker 默认消费当前 AC 的 `Work Stage` 和 checkbox task `Work`。`Spec Scenarios`、`Design Details` 和 `Runtime Contributions` 不渲染到 `tasks.md`，只保留在 `trace/tasks.trace.json` 的三类 link arrays 中供 validation、closure 和 reviewer 审计。
     - Delivery Plane checkbox 只能代表 production implementation work；`Proof:`、`Acceptance:`、`Acceptance Proof`、coverage closure、fixture execution、截图、测试执行或 evidence collection 不得成为 checkbox 字段或独立 checkbox。
-    - `trace/tasks.trace.json` 的 `implementation-step-register[]` 负责把 required / preserve runtime facts 映射到有序 AC、checkbox task 和 task-level runtime fact ownership。
+    - `trace/tasks.trace.json` 的 `implementation-step-register[]` 必须声明 `work-stage`；AC / checkbox 的 `title` 和 `work` 是生产实现说明，三类 links 只能在实现草案完成后把有序 AC、checkbox task 与 specs/design/runtime 贡献关系绑定。
+    - contribution closure 只能由关闭型贡献产生：spec scenario 只有 `completes` 关闭；design detail 只有 `completes` 关闭；required runtime fact 只有 `completes` 关闭；preserve runtime fact 只有 `enforces` 关闭。`supports`、`contributes`、`implements-part`、`uses` 只表示前置贡献，不得计入 coverage closure。
     - `trace/tasks.trace.json` 的 `delivery-plane.step-sections[]` 只提供渲染顺序；不得重复定义 step、task、coverage、runtime index 或 projection。
     - `trace/tasks.trace.json` 不再维护 `acceptance-driven-coverage`、`runtime-acceptance-index` 或 `runtime-acceptance-projection`。
+    - `runtime-fact-ids[]` 是 tasks 旧字段，必须视为 invalid legacy field；verification 继续使用自己的 `runtime-fact-ids[]`。
     - `tasks.md` 只允许更新 implementation checkbox；不得写入测试计划、测试编号、测试文件、固定命令、evidence path、执行状态或 deposit 状态。
 
     `verification.md` 是 independent test intent and oracle artifact：
@@ -109,12 +112,12 @@ apply:
     Artifact integrity blockers：
     - 静态 artifact validator 返回 hard error，必须报告 `Artifact Consistency Blocker`。
     - `runtime-acceptance.md` 缺失、runtime fact ID 重复、runtime fact 缺少 source basis/default path/no-scope boundary、或包含测试/任务/evidence/deposit 字段，必须报告 `Artifact Consistency Blocker`。
-    - `tasks.md` 或 `verification.md` 引用了 runtime-acceptance.md 中不存在的 runtime fact，必须报告 `Artifact Consistency Blocker`。
-    - `tasks.md` 缺少 `implementation-step-register[]`、`delivery-plane.step-sections[]`，或任一 step/task runtime fact ID 不存在、不属于 required / preserve scope role、或与 step runtime facts 不一致，必须报告 `Artifact Consistency Blocker`。
-    - runtime-acceptance.md 中 required / preserve runtime fact 缺少 checkbox task coverage 或 verification Proof Slice projection，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` 或 `verification.md` 引用了 runtime-acceptance.md 中不存在的 runtime fact，或 `tasks.md` 引用了不存在的 spec scenario / design detail，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` 缺少 `implementation-step-register[]`、`delivery-plane.step-sections[]`，任一 step/task 缺少合法 `work-stage` 或三类 link 数组，贡献枚举非法，step links 与 child task links 聚合不一致，或 AC dependency graph 指向非前置 step，必须报告 `Artifact Consistency Blocker`。
+    - tasks final closure 不闭合：in-scope spec scenario 没有 task `completes`、非 `non-applicable` design detail 没有 task `completes`、required runtime fact 没有 task `completes`、preserve runtime fact 没有 task `enforces`，或 runtime-acceptance.md 中 required / preserve runtime fact 缺少 verification Proof Slice projection，必须报告 `Artifact Consistency Blocker`。该门禁不允许 writer 用 coverage-only checkbox 或不真实 contribution 规避。
     - `tasks.md` 包含只执行 proof、verification、test、fixture、screenshot、evidence、coverage closure 或 acceptance closure、且不实现 production runtime behavior 的 checkbox，必须报告 `Artifact Consistency Blocker`。
-    - `tasks.md` 或 `trace/tasks.trace.json` 包含旧 AC-local proof/preserve 字段、`Resolved Runtime Contract`、`Acceptance:`、`Proof:`、`Mock / Default Path Policy:`、coverage table、runtime index 或 runtime projection，必须报告 `Artifact Consistency Blocker`。
-    - task-level `Runtime Facts` 包含仅由 proof/readback 观察、但该 task 不实现或实质保留的 supporting rows，必须报告 `Artifact Consistency Blocker`。
+    - `tasks.md` 或 `trace/tasks.trace.json` 包含旧 AC-local proof/preserve 字段、`runtime-fact-ids[]`、`Resolved Runtime Contract`、`Acceptance:`、`Proof:`、`Mock / Default Path Policy:`、coverage table、runtime index 或 runtime projection，必须报告 `Artifact Consistency Blocker`。
+    - task-level `runtime-fact-links[]` 使用 `supports` / `contributes` 表示完整验收关闭，或用 runtime supporting rows 替代 spec/design 工程实现拆分，必须报告 `Artifact Consistency Blocker`。
     - `tasks.md` 不得包含 `Test Evidence Matrix`、`Regression Test Deposit`、`Test Layer Plan`、`Fixed Command`、`Test File / Name`、`Evidence Directory`、`Evidence Status`、`Deposit Status` 或 `Test IDs` 字段。
     - `verification.md` 不得包含具体测试文件路径、固定测试命令、runner selector、evidence directory 或 deposit status；目录级 planned test glob 只能出现在 `Proof Slice Matrix` 的 `Planned Test Directory` 列。
     - `verification.md` 若缺少 `Proof Slice Matrix`、required / preserve runtime fact 未被 `verification-slice-register[]` 覆盖、slice 缺少 `Primary runtime fact ID`、`proof-type`、`branch`、`failure-signal`、`proof-evidence-mode`、`planned-test-directory` 或 `non-persistent-reason`，primary row 不在该 slice 的 `runtime fact IDs` 中、slice 的 `oracle`、`branch` 或 `assertion-shape` 合并多个独立可失败分支、slice 混合多个 test layer、slice 缺少 production owner、slice 的 production owner 是复合 owner / owner list、durable slice 的 planned-test-directory 不是合法目录 glob 或不匹配 test layer、non-durable slice 未使用 `N/A` 或缺少 non-persistent reason、slice 引用不存在的 runtime fact、或 slice 把 `tests/runtime`/repo-wide env/ops/workspace/forbidden-drift 当成默认新测试目标，必须报告 `Artifact Consistency Blocker`。
