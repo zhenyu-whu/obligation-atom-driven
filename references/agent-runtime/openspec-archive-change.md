@@ -29,4 +29,16 @@
 - 如果 delta specs 存在且同步评估显示主 specs 需要新增或修改，默认执行“同步并归档”：优先使用 `openspec archive "<name>" -y` 完成 spec 更新与归档；如果 CLI 不可用或自动同步失败，再按 `openspec-sync-specs` 技能手动同步后归档。
 - 如果存在 `specs/no-spec-delta/README.md`，spec 同步结果为 `not-applicable`：归档不得把 `specs/no-spec-delta/README.md` 当作 `specs/<capability>/spec.md` 同步到主 specs，也不得为它调用 specs sync。可使用 `openspec archive "<name>" --skip-specs`，或在默认 archive dry-run/实际归档中确认 CLI 不会把 `no-spec-delta` 当作 capability delta spec。
 - 只有遇到冲突或高风险状态时才向用户确认，包括但不限于：多个候选 change、归档目标目录已存在、delta spec 与主 spec 无法明确合并、存在未完成 checkbox、coverage 表存在 orphan `GA-####` / `SI-###`、runtime trace 缺失、runtime fact 重复或缺少 source/scope/default-path/no-scope 字段、tasks/verification trace 引用未定义 runtime fact、tasks trace 引用未定义 spec scenario 或 design detail、tasks trace 旧字段残留、spec/design/runtime closure 不闭合、required / preserve runtime fact 缺少 verification Proof Slice、required Proof Slice 缺少最终 proof result、durable slice 缺测试或测试文件未落在 planned directory 下、non-durable slice 缺 evidence 或误入 proof-test-results、存在未解决 blocker、命令失败、校验失败，或归档会覆盖/删除非目标文件。
-- 归档完成后必须运行 `openspec validate --specs --strict --json`，并汇总 change 名称、schema、归档路径、spec 同步结果、任务完成情况、schema-aware coverage audit、runtime acceptance audit、verification Proof Slice 结果、遗留警告和校验结果。
+- 归档完成后必须运行 `openspec validate --specs --strict --json`，并汇总 change 名称、schema、归档路径、spec 同步结果、任务完成情况、schema-aware coverage audit、runtime acceptance audit、verification Proof Slice 结果、遗留警告、校验结果和 archive completion commit 摘要。
+
+## Archive Completion Commit Policy
+
+- Archive completion commit 是 archive runtime 的最终审计轨迹，只表示归档移动、spec 同步和归档后 strict specs validation 已完成；不得把该 commit 或 commit SHA 当作 Proof Slice pass、runtime fact covered、manual/not-applicable reason、test-proof-reviewer pass、repo-reviewer pass、final-reviewer pass 或 apply-ready 的替代条件。
+- 执行实际归档命令前，主 agent 必须记录当前 `git status --porcelain` 的路径级基线；归档命令、必要的手动 spec sync 和 `openspec validate --specs --strict --json` 全部完成后，必须基于路径级 diff 执行 archive completion commit 处理。
+- 如果归档产生允许范围内的文件变更，默认必须自动创建 archive completion commit；无 diff 时不 commit，但最终汇报必须记录 `skipped: no diff`。
+- Archive completion commit 必须覆盖本轮归档实际修改的允许路径，包括 `openspec/specs/**` 主 specs 同步结果、`openspec/changes/archive/**` 新归档目录、`openspec/changes/<change-slug>/**` 的删除/迁移，以及归档流程明确写入的 `openspec-results/<change-slug>/**` 结果文件。不得纳入实现文件、测试文件、其它 change、schema/runtime source-of-truth 文档或任何未报告路径。
+- Archive completion staging 禁止使用 `git add -A`、`git add .` 或任何会隐式纳入未报告路径的命令。主 agent 只能 stage 已确认属于本轮归档结果的路径，并必须在最终汇报中列出 changed files。
+- 如果某个待 stage 路径在归档开始前已有未提交改动，主 agent 必须说明如何适配既有改动；无法确认安全归属、存在重叠冲突或归档会覆盖/删除非目标文件时，必须停止为 `Archive Completion Commit Blocker`，不得声称归档完成。
+- Archive completion commit 必须使用 `git commit --no-verify`。Commit message 格式固定为 `openspec(<change-slug>): archive complete [<status>]`。Commit body 必须记录 phase=`archive`、change 名称、schema、归档路径、spec 同步结果、strict specs validation 命令与结果、changed files、遗留 warning 和 blocker 摘要。
+- 如果 archive completion commit 创建失败，必须输出 `Archive Completion Commit Blocker` 并停止；除非用户明确允许跳过该 commit，否则不得声称归档完成。
+- 最终汇报必须包含 archive completion commit 的 SHA、message、changed files、spec 同步结果、strict specs validation 结果，以及 skipped / blocker reason。
