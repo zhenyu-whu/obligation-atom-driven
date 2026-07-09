@@ -140,18 +140,22 @@
 3. Writer、repair-writer、reviewer 和 integration reviewer 都必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建对应 subagent，必须停止并报告 blocker，不得降级为主 Agent 自检或低配模型。
 4. Writer 输入必须包含：change 名称、schema 名称、完整 `openspec instructions ... --json` 输出、已完成 dependency trace/sidecar JSON 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set、renderer CLI 命令、propose checkpoint commit policy 和本文档路径。
 5. 任一 writer、repair-writer、reviewer 或 integration reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录；不得读取当前 artifact 中间状态、运行 validator、接手修复/复核，或向正在运行的 subagent 注入中途发现。
-6. Writer 或 repair-writer 自然返回最终完成或明确 blocker，且 required checkpoint commit 处理闭合前，主 Agent 不得运行 partial validator、启动 reviewer 或继续生成依赖该 artifact 的下游 artifact。
-7. Writer 或 repair-writer 完成且 checkpoint commit 处理闭合后，partial validator hard error 必须由当前 artifact 的 repair-writer 修复；warning 必须传给 artifact reviewer。
-8. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace JSON、必要 upstream dependency trace JSON、contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。
-9. Reviewer 不得读取当前实现、测试文件、Markdown Delivery Plane、`openspec-results/**` apply evidence、`apply-result.md`、`proof-test-map.json`、evidence 或 apply 阶段产物来推导 oracle。Reviewer 只能输出 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、trace anchor、contract source path + section heading、问题描述和修复方向。
-10. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 repair-writer，等待其自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续下游 artifact。
-11. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、trace section/row、contract section、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。
+6. Stale-run 兜底是第 5 条的窄例外：若任一 propose-stage subagent 运行超过 60 分钟仍未自然返回，主 Agent 只能执行一次路径级 `git status --porcelain -- <allowed-output-paths>` 检查，并记录 elapsed time、agent id、agent role 和 artifact id；不得读取 artifact 内容、读取中间 trace、运行 validator、审查 diff、修改文件或向 subagent 注入消息。
+7. 若第 6 条检查确认该 subagent 启动以来允许输出范围内没有任何 tracked 或 untracked diff，主 Agent 可以关闭该 stale subagent，并将该 run 记录为 `abandoned: stale no-diff timeout`。该 run 不产生 checkpoint、不关闭任何 gate、不得作为 validator/reviewer 输入，也不得视为自然返回的完成或 blocker。
+8. 同一 agent role 与 artifact id 的 stale no-diff 自动重启最多一次；重启必须使用同等模型与 reasoning 配置、同等输入边界，并在 propose result 中关联被 abandoned 的 agent id 和新 agent id。若重启后再次 stale no-diff，必须停止为 `Subagent Stale Run Blocker`。
+9. 若第 6 条检查发现任何 diff，或无法确认 stale subagent 已真正终止，主 Agent 不得自动重启并行 agent，不得 checkpoint 该未自然返回 run；必须继续等待、报告流程级 blocker，或等待用户明确终止当前 propose 流程。
+10. Writer 或 repair-writer 自然返回最终完成或明确 blocker，且 required checkpoint commit 处理闭合前，主 Agent 不得运行 partial validator、启动 reviewer 或继续生成依赖该 artifact 的下游 artifact。
+11. Writer 或 repair-writer 完成且 checkpoint commit 处理闭合后，partial validator hard error 必须由当前 artifact 的 repair-writer 修复；warning 必须传给 artifact reviewer。
+12. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace JSON、必要 upstream dependency trace JSON、contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。
+13. Reviewer 不得读取当前实现、测试文件、Markdown Delivery Plane、`openspec-results/**` apply evidence、`apply-result.md`、`proof-test-map.json`、evidence 或 apply 阶段产物来推导 oracle。Reviewer 只能输出 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、trace anchor、contract source path + section heading、问题描述和修复方向。
+14. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 repair-writer，等待其自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续下游 artifact。
+15. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、trace section/row、contract section、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。
 
 ## Propose Result Record
 
 1. Propose runtime 必须写入或更新 `openspec-results/<change-slug>/propose-result.md`。该文件是过程审计记录，不得替代 artifact、JSON trace、validator、reviewer、apply evidence 或 archive proof。
 2. 主 Agent 创建 change 后必须初始化 propose result，并至少记录 change 名称、schema 名称、创建日期、选择来源、active/archive 盘点摘要、source handoff / baseline 输入摘要、source/scope ID 集合、schema dependency graph 摘要和结果文件路径。
-3. 每次 writer、repair-writer、partial validator、artifact reviewer、full validator 和 integration reviewer 自然返回后，主 Agent 必须在 propose result 中追加或更新记录。记录只能使用自然返回报告、validator 输出、reviewer 输出、最终落盘 trace 路径和 renderer 状态。
+3. 每次 writer、repair-writer、partial validator、artifact reviewer、full validator 和 integration reviewer 自然返回后，主 Agent 必须在 propose result 中追加或更新记录。stale no-diff abandoned run 也必须追加记录，但只能记录编排元数据、路径级 no-diff 结论、关闭/重启结果和 blocker 状态。记录只能使用自然返回报告、validator 输出、reviewer 输出、最终落盘 trace 路径、renderer 状态或 stale-run 编排记录。
 4. Propose result 至少包含 `Artifact Runs` 表，字段为 `sequence`、`artifact-id`、`agent-role`、`agent-id`、`status`、`checkpoint`、`validator`、`reviewer`、`trace-paths`、`notes`。同一 artifact 多轮 repair/review 必须保留轮次。
 5. Propose result 必须包含 `Checkpoint Commits` 表，字段为 `sequence`、`artifact-id`、`agent-role`、`agent-id`、`status`、`commit-sha`、`changed-files`、`notes`；无 diff、跳过或失败的 checkpoint 也必须记录 sequence 和 reason。
 6. Propose result 必须包含 `Blocker / Repair Log` 表，记录所有 writer blocker、checkpoint blocker、validator hard error、reviewer blocker、integration blocker、修复 agent、最小修复摘要、复跑 validator 结果和复审结论。无 blocker 时也必须显式写 `None`。
