@@ -6,10 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   NO_DELTA_SPECS_COMPLETION_MODE,
-  RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
-  renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const OBLIGATION_SCHEMA = "production-obligation-atom-driven";
@@ -164,7 +162,6 @@ function validateDesignIfPresent(ctx) {
   validateCommonDesignTrace(ctx, designTrace, expected, specs);
   validateLegacyFieldsAbsent(ctx, designTrace);
   validateDesignManifest(ctx);
-  validateDesignRender(ctx);
 
   const designModel = validateImplementationDesignRegister(ctx, designTrace, expected, specs);
   validateDesignGate(ctx, designTrace);
@@ -414,7 +411,6 @@ function validateDesignManifest(ctx) {
   if (!manifest) return;
 
   expectEqual(ctx, "VAL-DESIGN-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-DESIGN-MANIFEST-002", manifestRelPath, manifest["render-contract-version"], RENDER_CONTRACT_VERSION, "render-contract-version");
   expectEqual(ctx, "VAL-DESIGN-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const entries = requireArray(ctx, "VAL-DESIGN-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts").filter(isDesignManifestEntry);
@@ -426,31 +422,6 @@ function validateDesignManifest(ctx) {
   expectEqual(ctx, "VAL-DESIGN-MANIFEST-007", manifestRelPath, entries[0]["artifact-path"], DESIGN_ARTIFACT_PATH, "design entry artifact-path");
   expectEqual(ctx, "VAL-DESIGN-MANIFEST-008", manifestRelPath, entries[0]["trace-path"], DESIGN_TRACE_PATH, "design entry trace-path");
   expectEqual(ctx, "VAL-DESIGN-MANIFEST-009", manifestRelPath, entries[0]["trace-schema"], TRACE_SCHEMA, "design entry trace-schema");
-}
-
-function validateDesignRender(ctx) {
-  const artifactFullPath = path.join(ctx.changeDir, DESIGN_ARTIFACT_PATH);
-  if (!fs.existsSync(artifactFullPath)) {
-    addError(ctx, "VAL-DESIGN-RENDER-001", DESIGN_ARTIFACT_PATH, "design.md 缺失；writer 必须通过 renderer 生成 Markdown。");
-    return;
-  }
-
-  let rendered;
-  try {
-    rendered = renderChangeArtifact({
-      root: ctx.root,
-      change: ctx.change,
-      artifact: "design",
-    }).markdown;
-  } catch (error) {
-    addError(ctx, "VAL-DESIGN-RENDER-002", DESIGN_TRACE_PATH, error.message);
-    return;
-  }
-
-  const actual = fs.readFileSync(artifactFullPath, "utf8");
-  if (actual !== rendered) {
-    addError(ctx, "VAL-DESIGN-RENDER-003", DESIGN_ARTIFACT_PATH, "design.md 与 renderer 从 trace/design.trace.json 生成的结果不一致。");
-  }
 }
 
 function validateImplementationDesignRegister(ctx, trace, expected, specs) {

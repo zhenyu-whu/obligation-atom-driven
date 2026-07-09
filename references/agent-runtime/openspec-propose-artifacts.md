@@ -129,8 +129,8 @@
 
 1. Partial static validator 指不带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>"`。它只验证当前 change 目录中已经存在的 artifacts 及其已声明 trace，不得要求尚未生成的下游 artifact、sidecar trace 或 apply-required artifact 提前存在。
 2. 每次 writer 或 repair-writer 自然返回后，主 Agent 必须运行 partial validator。
-3. Partial validator 必须检查已存在 artifact 的 `## Trace Appendix` 指针、trace 文件、manifest registry entry、`render-contract-version`、renderer exact output、JSON key 格式、当前 artifact 必需 trace sections，以及已存在 traces 之间可解析的交叉引用；不得要求或校验 production artifact 内容摘要。
-4. `trace-contract-version: "verification-slice-register-v2"` 可从 proposal 阶段写入 manifest；它不表示 proposal/specs/design/runtime partial 阶段必须预先创建 verification trace。只有 `verification.md` 已存在或运行 complete validator 时，`trace/verification.trace.json#/verification-slice-register` 才是必需 register。
+3. Partial validator 必须检查已存在 artifact 的 trace 文件、JSON key 格式、当前 artifact 必需 trace sections，以及已存在 traces 之间可解析的交叉引用；不得要求或校验 production artifact Markdown 内容摘要、`render-contract-version` 或 renderer exact output。
+4. `trace-contract-version: "verification-slice-register-v2"` 可从 proposal 阶段写入 manifest；它不表示 proposal/specs/design/runtime partial 阶段必须预先创建 verification trace。只有 `trace/verification.trace.json` 已存在或运行 complete validator 时，`trace/verification.trace.json#/verification-slice-register` 才是必需 register。
 5. Complete validator 指带 `--complete` 的命令：`node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "<change-slug>" --complete`。它必须要求 selected schema 的 apply-required artifacts 全部存在，并校验完整 trace plane、verification slice register、runtime/verification/tasks reconciliation 和跨 artifact 闭环。
 
 ## Artifact Writer / Reviewer Loop

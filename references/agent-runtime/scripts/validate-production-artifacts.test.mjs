@@ -261,7 +261,7 @@ test("proposal validator rejects default proposal obligation authority leaks", (
   assertHasRule(result, "VAL-DEFAULT-DELIVERY-001");
 });
 
-test("proposal validator rejects handwritten markdown drift", () => {
+test("proposal validator ignores handwritten markdown drift", () => {
   const change = "validator-render-drift-change";
   const root = makeDefaultFixture(change);
   fs.appendFileSync(
@@ -271,8 +271,20 @@ test("proposal validator rejects handwritten markdown drift", () => {
 
   const result = validateChange({ root, change });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-RENDER-003");
+  assert.equal(result.ok, true, formatErrors(result));
+});
+
+test("proposal validator ignores manifest render contract version", () => {
+  const change = "validator-render-contract-version-change";
+  const root = makeDefaultFixture(change);
+  const manifestPath = path.join(root, "openspec", "changes", change, "trace", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest["render-contract-version"] = "custom-render-version";
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = validateChange({ root, change });
+
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("specs validator passes minimal obligation specs contract", () => {
@@ -410,7 +422,7 @@ test("specs validator rejects delivery-only scenario", () => {
   assertHasRule(result, "VAL-SPECS-DELIVERY-001");
 });
 
-test("specs validator rejects handwritten specs markdown drift", () => {
+test("specs validator ignores handwritten specs markdown drift", () => {
   const change = "validator-specs-render-drift-change";
   const root = makeObligationSpecsFixture(change);
   fs.appendFileSync(
@@ -420,8 +432,7 @@ test("specs validator rejects handwritten specs markdown drift", () => {
 
   const result = validateChange({ root, change, artifact: "specs" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-SPECS-RENDER-003");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("design validator passes minimal obligation design contract", () => {
@@ -671,7 +682,7 @@ test("design validator rejects legacy delivery decision summary fields", () => {
   assertHasRule(result, "VAL-DESIGN-DELIVERY-022");
 });
 
-test("design validator rejects handwritten design markdown drift", () => {
+test("design validator ignores handwritten design markdown drift", () => {
   const change = "validator-design-render-drift-change";
   const root = makeObligationDesignFixture(change);
   fs.appendFileSync(
@@ -681,8 +692,7 @@ test("design validator rejects handwritten design markdown drift", () => {
 
   const result = validateChange({ root, change, artifact: "design" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-DESIGN-RENDER-003");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("design validator rejects missing implementation details", () => {
@@ -985,7 +995,7 @@ test("runtime validator passes minimal default runtime contract", () => {
   assert.equal(result.ok, true, formatErrors(result));
 });
 
-test("runtime validator rejects handwritten runtime markdown drift", () => {
+test("runtime validator ignores handwritten runtime markdown drift", () => {
   const change = "validator-runtime-render-drift-change";
   const root = makeObligationRuntimeFixture(change);
   fs.appendFileSync(
@@ -995,8 +1005,7 @@ test("runtime validator rejects handwritten runtime markdown drift", () => {
 
   const result = validateChange({ root, change, artifact: "runtime-acceptance" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-RUNTIME-RENDER-003");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("runtime validator rejects runtime fact required field missing", () => {
@@ -1288,7 +1297,7 @@ test("verification validator passes minimal default verification contract", () =
   assert.equal(result.ok, true, formatErrors(result));
 });
 
-test("verification validator rejects handwritten verification markdown drift", () => {
+test("verification validator ignores handwritten verification markdown drift", () => {
   const change = "validator-verification-render-drift-change";
   const root = makeObligationVerificationFixture(change);
   fs.appendFileSync(
@@ -1298,8 +1307,7 @@ test("verification validator rejects handwritten verification markdown drift", (
 
   const result = validateChange({ root, change, artifact: "verification" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-VERIFICATION-RENDER-003");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("verification validator rejects missing verification slice register", () => {
@@ -1505,7 +1513,7 @@ test("tasks validator passes minimal default tasks contract", () => {
   assert.equal(result.ok, true, formatErrors(result));
 });
 
-test("tasks validator rejects handwritten tasks markdown drift", () => {
+test("tasks validator ignores handwritten tasks markdown drift", () => {
   const change = "validator-tasks-render-drift-change";
   const root = makeObligationTasksFixture(change);
   fs.appendFileSync(
@@ -1515,8 +1523,20 @@ test("tasks validator rejects handwritten tasks markdown drift", () => {
 
   const result = validateChange({ root, change, artifact: "tasks" });
 
+  assert.equal(result.ok, true, formatErrors(result));
+});
+
+test("tasks validator rejects missing writeback checkbox row", () => {
+  const change = "validator-tasks-missing-checkbox-change";
+  const root = makeObligationTasksFixture(change);
+  const tasksPath = path.join(root, "openspec", "changes", change, "tasks.md");
+  const current = fs.readFileSync(tasksPath, "utf8");
+  fs.writeFileSync(tasksPath, current.replace("- [ ] AC-001.1", "- AC-001.1"));
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
   assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-TASKS-RENDER-003");
+  assertHasRule(result, "VAL-TASKS-CHECKBOX-002");
 });
 
 test("tasks validator rejects source-interface markdown and verification trace inputs", () => {
@@ -1749,16 +1769,14 @@ test("complete validator passes apply-required runtime verification and tasks re
   assert.equal(result.ok, true, formatErrors(result));
 });
 
-test("complete validator rejects missing apply-required tasks artifact", () => {
+test("complete validator rejects missing apply-required tasks trace", () => {
   const change = "validator-complete-missing-tasks-change";
   const root = makeObligationVerificationFixture(change);
 
   const result = validateChange({ root, change, complete: true });
 
   assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-COMPLETE-ARTIFACT-001");
   assertHasRule(result, "VAL-COMPLETE-TRACE-001");
-  assertHasRule(result, "VAL-COMPLETE-MANIFEST-001");
 });
 
 function makeSimplifiedObligationProposalFixture(change) {

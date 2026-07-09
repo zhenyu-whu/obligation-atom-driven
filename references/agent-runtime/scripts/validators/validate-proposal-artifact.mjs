@@ -5,10 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
-  renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const SOURCE_ALIGNED_TRACE_VERSION = "source-aligned-trace-v1";
@@ -117,33 +115,7 @@ function validateCommonProposal(ctx, trace) {
   expectEqual(ctx, "VAL-PROPOSAL-013", PROPOSAL_TRACE_PATH, trace["change-name"], ctx.change, "change-name");
   requireObject(ctx, "VAL-PROPOSAL-014", PROPOSAL_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
 
-  validateProposalRender(ctx);
   validateManifest(ctx);
-}
-
-function validateProposalRender(ctx) {
-  const artifactFullPath = path.join(ctx.changeDir, PROPOSAL_ARTIFACT_PATH);
-  if (!fs.existsSync(artifactFullPath)) {
-    addError(ctx, "VAL-RENDER-001", PROPOSAL_ARTIFACT_PATH, "proposal.md 缺失；writer 必须通过 renderer 生成 Markdown。");
-    return;
-  }
-
-  let rendered;
-  try {
-    rendered = renderChangeArtifact({
-      root: ctx.root,
-      change: ctx.change,
-      artifact: "proposal",
-    }).markdown;
-  } catch (error) {
-    addError(ctx, "VAL-RENDER-002", PROPOSAL_TRACE_PATH, error.message);
-    return;
-  }
-
-  const actual = fs.readFileSync(artifactFullPath, "utf8");
-  if (actual !== rendered) {
-    addError(ctx, "VAL-RENDER-003", PROPOSAL_ARTIFACT_PATH, "proposal.md 与 renderer 从 trace/proposal.trace.json 生成的结果不一致。");
-  }
 }
 
 function validateManifest(ctx) {
@@ -153,7 +125,6 @@ function validateManifest(ctx) {
   if (!manifest) return;
 
   expectEqual(ctx, "VAL-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-MANIFEST-002", manifestRelPath, manifest["render-contract-version"], RENDER_CONTRACT_VERSION, "render-contract-version");
   expectEqual(ctx, "VAL-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const artifacts = requireArray(ctx, "VAL-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts");

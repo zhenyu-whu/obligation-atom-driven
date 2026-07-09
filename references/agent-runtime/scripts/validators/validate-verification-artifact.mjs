@@ -6,12 +6,10 @@ import { fileURLToPath } from "node:url";
 
 import {
   PROOF_SLICES_TRACE_PATH,
-  RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
   VERIFICATION_SLICE_REGISTER_PATH,
   VERIFICATION_TRACE_PATH,
-  renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const VERIFICATION_ARTIFACT_PATH = "verification.md";
@@ -199,7 +197,6 @@ function validateVerificationIfPresent(ctx) {
   const sliceModel = validateSliceRegister(ctx, verificationTrace, runtimeModel);
   validateVerificationGate(ctx, verificationTrace, runtimeModel, sliceModel);
   validateDeliveryPlane(ctx, verificationTrace, sliceModel);
-  validateRender(ctx);
 }
 
 function collectVerificationInventory(ctx) {
@@ -270,7 +267,6 @@ function validateManifest(ctx) {
   if (!manifest) return;
 
   expectEqual(ctx, "VAL-VERIFICATION-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-VERIFICATION-MANIFEST-002", manifestRelPath, manifest["render-contract-version"], RENDER_CONTRACT_VERSION, "render-contract-version");
   expectEqual(ctx, "VAL-VERIFICATION-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const artifacts = requireArray(ctx, "VAL-VERIFICATION-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts");
@@ -291,31 +287,6 @@ function validateManifest(ctx) {
     return;
   }
   expectEqual(ctx, "VAL-VERIFICATION-MANIFEST-006", manifestRelPath, mainEntries[0]["trace-schema"], TRACE_SCHEMA, "verification entry trace-schema");
-}
-
-function validateRender(ctx) {
-  const artifactFullPath = path.join(ctx.changeDir, VERIFICATION_ARTIFACT_PATH);
-  if (!fs.existsSync(artifactFullPath)) {
-    addError(ctx, "VAL-VERIFICATION-RENDER-001", VERIFICATION_ARTIFACT_PATH, "verification.md 缺失；writer 必须通过 renderer 生成 Markdown。");
-    return;
-  }
-
-  let rendered;
-  try {
-    rendered = renderChangeArtifact({
-      root: ctx.root,
-      change: ctx.change,
-      artifact: "verification",
-    }).markdown;
-  } catch (error) {
-    addError(ctx, "VAL-VERIFICATION-RENDER-002", VERIFICATION_TRACE_PATH, error.message);
-    return;
-  }
-
-  const actual = fs.readFileSync(artifactFullPath, "utf8");
-  if (actual !== rendered) {
-    addError(ctx, "VAL-VERIFICATION-RENDER-003", VERIFICATION_ARTIFACT_PATH, "verification.md 与 renderer 从 trace/verification.trace.json 生成的结果不一致。");
-  }
 }
 
 function buildRuntimeModel(ctx, runtimeTrace) {

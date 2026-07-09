@@ -6,10 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   NO_DELTA_SPECS_COMPLETION_MODE,
-  RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
-  renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const OBLIGATION_SCHEMA = "production-obligation-atom-driven";
@@ -199,7 +197,7 @@ function validateTasksIfPresent(ctx) {
   validateAllowedKeys(ctx, "VAL-TASKS-SHAPE-001", TASKS_TRACE_PATH, tasksTrace, "trace/tasks.trace.json", TOP_LEVEL_KEYS);
   validateCommonTrace(ctx, tasksTrace, expected, specs);
   validateManifest(ctx);
-  validateRender(ctx);
+  validateTaskCheckboxWriteback(ctx, tasksTrace);
   validateSourceInterfaceBoundaries(ctx, tasksTrace["source-interface"]);
   validateForbiddenShape(ctx, tasksTrace);
   validateProfileLeaks(ctx, tasksTrace, expected);
@@ -211,7 +209,6 @@ function validateTasksIfPresent(ctx) {
   validateDesignDetailCoverage(ctx, design, deliveryModel);
   validateRuntimeClosure(ctx, runtime, deliveryModel);
   validateTaskGate(ctx, tasksTrace);
-  validateArtifactForbiddenText(ctx);
 }
 
 function collectTasksInventory(ctx) {
@@ -453,7 +450,6 @@ function validateManifest(ctx) {
   if (!manifest) return;
 
   expectEqual(ctx, "VAL-TASKS-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-TASKS-MANIFEST-002", manifestRelPath, manifest["render-contract-version"], RENDER_CONTRACT_VERSION, "render-contract-version");
   expectEqual(ctx, "VAL-TASKS-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const entries = requireArray(ctx, "VAL-TASKS-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts").filter(isTasksManifestEntry);
@@ -467,28 +463,23 @@ function validateManifest(ctx) {
   expectEqual(ctx, "VAL-TASKS-MANIFEST-009", manifestRelPath, entries[0]["trace-schema"], TRACE_SCHEMA, "tasks entry trace-schema");
 }
 
-function validateRender(ctx) {
+function validateTaskCheckboxWriteback(ctx, tasksTrace) {
   const artifactFullPath = path.join(ctx.changeDir, TASKS_ARTIFACT_PATH);
   if (!fs.existsSync(artifactFullPath)) {
-    addError(ctx, "VAL-TASKS-RENDER-001", TASKS_ARTIFACT_PATH, "tasks.md 缺失；writer 必须通过 renderer 生成 Markdown。");
-    return;
-  }
-
-  let rendered;
-  try {
-    rendered = renderChangeArtifact({
-      root: ctx.root,
-      change: ctx.change,
-      artifact: "tasks",
-    }).markdown;
-  } catch (error) {
-    addError(ctx, "VAL-TASKS-RENDER-002", TASKS_TRACE_PATH, error.message);
+    addError(ctx, "VAL-TASKS-CHECKBOX-001", TASKS_ARTIFACT_PATH, "tasks.md 缺失；apply 需要可回写的 implementation checkbox。");
     return;
   }
 
   const actual = fs.readFileSync(artifactFullPath, "utf8");
-  if (actual !== rendered) {
-    addError(ctx, "VAL-TASKS-RENDER-003", TASKS_ARTIFACT_PATH, "tasks.md 与 renderer 从 trace/tasks.trace.json 生成的结果不一致。");
+  for (const step of asArray(tasksTrace["implementation-step-register"])) {
+    for (const task of asArray(step?.tasks)) {
+      const taskId = strip(task?.["task-id"]);
+      if (!taskId) continue;
+      const checkboxRe = new RegExp(`^\\s*[-*]\\s+\\[[ xX]\\]\\s+${escapeRegExp(taskId)}(?:\\s|$)`, "mu");
+      if (!checkboxRe.test(actual)) {
+        addError(ctx, "VAL-TASKS-CHECKBOX-002", TASKS_ARTIFACT_PATH, `tasks.md 缺少可回写 checkbox 行：${taskId}。`);
+      }
+    }
   }
 }
 
@@ -620,14 +611,8 @@ function validateDeliveryPlane(ctx, trace, stepModel) {
   }
   expectSameSet(ctx, "VAL-TASKS-DELIVERY-005", TASKS_TRACE_PATH, sectionIds, [...stepModel.acById.keys()], "delivery-plane.step-sections vs implementation-step-register");
 
-  const acOrder = new Map();
-  for (const [index, stepId] of sectionIds.entries()) {
-    acOrder.set(stepId, index);
-  }
-
   return {
     ...stepModel,
-    acOrder,
   };
 }
 
@@ -818,15 +803,6 @@ function mergeLinkBuckets(target, source) {
 
 function linkSet(links) {
   return new Set(links.map((link) => `${link.id}:${link.contribution}`));
-}
-
-function validateArtifactForbiddenText(ctx) {
-  const artifactPath = path.join(ctx.changeDir, TASKS_ARTIFACT_PATH);
-  if (!fs.existsSync(artifactPath)) return;
-  const markdown = fs.readFileSync(artifactPath, "utf8");
-  if (FORBIDDEN_TEXT_RE.test(markdown) || TEST_FILE_RE.test(markdown) || EVIDENCE_PATH_RE.test(markdown) || APPLY_EVIDENCE_RE.test(markdown) || COMMAND_RE.test(markdown)) {
-    addError(ctx, "VAL-TASKS-FORBIDDEN-003", TASKS_ARTIFACT_PATH, "tasks.md 不得包含测试矩阵、固定命令、具体测试文件或 evidence/apply path。");
-  }
 }
 
 function validateKebabCaseKeys(ctx, trace) {
@@ -1047,6 +1023,14 @@ function collectIds(value, regex, pointer = "") {
 
 function escapePointer(value) {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function addError(ctx, ruleId, file, message) {

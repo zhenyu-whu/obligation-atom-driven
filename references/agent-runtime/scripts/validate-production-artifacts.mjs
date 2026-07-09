@@ -41,17 +41,14 @@ const ARTIFACT_VALIDATORS = [
 const COMPLETE_REQUIRED_ARTIFACTS = [
   {
     artifactId: "runtime-acceptance",
-    artifactPath: "runtime-acceptance.md",
     tracePath: "trace/runtime-acceptance.trace.json",
   },
   {
     artifactId: "verification",
-    artifactPath: "verification.md",
     tracePath: "trace/verification.trace.json",
   },
   {
     artifactId: "tasks",
-    artifactPath: "tasks.md",
     tracePath: "trace/tasks.trace.json",
   },
 ];
@@ -100,28 +97,11 @@ export function validateChange(options = {}) {
 }
 
 function validateCompleteChange(ctx) {
-  const manifest = readJson(ctx, path.join(ctx.changeDir, "trace", "manifest.json"));
-  const manifestEntries = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
-
   for (const artifact of COMPLETE_REQUIRED_ARTIFACTS) {
-    const artifactFullPath = path.join(ctx.changeDir, artifact.artifactPath);
     const traceFullPath = path.join(ctx.changeDir, artifact.tracePath);
 
-    if (!fs.existsSync(artifactFullPath)) {
-      addError(ctx, "VAL-COMPLETE-ARTIFACT-001", artifact.artifactPath, `complete validation 要求 apply-required artifact 存在：${artifact.artifactId}`);
-    }
     if (!fs.existsSync(traceFullPath)) {
       addError(ctx, "VAL-COMPLETE-TRACE-001", artifact.tracePath, `complete validation 要求 apply-required trace 存在：${artifact.artifactId}`);
-    }
-
-    const manifestEntry = manifestEntries.find(
-      (entry) =>
-        strip(entry?.["artifact-id"]) === artifact.artifactId &&
-        strip(entry?.["artifact-path"]) === artifact.artifactPath &&
-        strip(entry?.["trace-path"]) === artifact.tracePath,
-    );
-    if (!manifestEntry) {
-      addError(ctx, "VAL-COMPLETE-MANIFEST-001", "trace/manifest.json", `manifest 缺少 apply-required registry entry：${artifact.artifactId} -> ${artifact.tracePath}`);
     }
   }
 

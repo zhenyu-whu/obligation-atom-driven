@@ -7,10 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   NO_DELTA_SPECS_ARTIFACT_PATH,
   NO_DELTA_SPECS_COMPLETION_MODE,
-  RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
-  renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const OBLIGATION_SCHEMA = "production-obligation-atom-driven";
@@ -85,7 +83,6 @@ function validateSpecsIfPresent(ctx) {
 
   if (expected.noDeltaExpected) {
     validateNoDeltaSpecsTrace(ctx, expected);
-    validateSpecsRender(ctx, { noDelta: true, artifactPath: NO_DELTA_SPECS_ARTIFACT_PATH, tracePath: NO_DELTA_TRACE_PATH });
     return;
   }
 
@@ -95,7 +92,6 @@ function validateSpecsIfPresent(ctx) {
     const trace = readJson(ctx, path.join(ctx.changeDir, tracePath));
     if (!trace) continue;
     validateNormalSpecsTrace(ctx, trace, group, expected, tracePath, artifactPath);
-    validateSpecsRender(ctx, { capability: group.capability, artifactPath, tracePath });
   }
 }
 
@@ -291,7 +287,6 @@ function validateSpecsManifest(ctx, expectedEntries) {
   if (!manifest) return;
 
   expectEqual(ctx, "VAL-SPECS-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-SPECS-MANIFEST-002", manifestRelPath, manifest["render-contract-version"], RENDER_CONTRACT_VERSION, "render-contract-version");
   expectEqual(ctx, "VAL-SPECS-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const specsEntries = requireArray(ctx, "VAL-SPECS-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts")
@@ -602,33 +597,6 @@ function validateDeliveryPlaneNoLeaks(ctx, delivery, tracePath) {
 function validateDefaultTraceHasNoGa(ctx, trace, tracePath) {
   if (ANY_GA_ID_RE.test(JSON.stringify(trace))) {
     addError(ctx, "VAL-SPECS-DEFAULT-001", tracePath, "production-default-acceptance-driven specs trace 不得包含 GA-####。");
-  }
-}
-
-function validateSpecsRender(ctx, options) {
-  const artifactFullPath = path.join(ctx.changeDir, options.artifactPath);
-  if (!fs.existsSync(artifactFullPath)) {
-    addError(ctx, "VAL-SPECS-RENDER-001", options.artifactPath, "specs Markdown 缺失；writer 必须通过 renderer 生成 Markdown。");
-    return;
-  }
-
-  let rendered;
-  try {
-    rendered = renderChangeArtifact({
-      root: ctx.root,
-      change: ctx.change,
-      artifact: "specs",
-      capability: options.capability,
-      noDeltaSpecs: Boolean(options.noDelta),
-    }).markdown;
-  } catch (error) {
-    addError(ctx, "VAL-SPECS-RENDER-002", options.tracePath, error.message);
-    return;
-  }
-
-  const actual = fs.readFileSync(artifactFullPath, "utf8");
-  if (actual !== rendered) {
-    addError(ctx, "VAL-SPECS-RENDER-003", options.artifactPath, "specs Markdown 与 renderer 从 specs trace 生成的结果不一致。");
   }
 }
 

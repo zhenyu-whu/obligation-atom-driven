@@ -6,10 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   NO_DELTA_SPECS_COMPLETION_MODE,
-  RENDER_CONTRACT_VERSION,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
-  renderChangeArtifact,
 } from "../render-production-artifacts.mjs";
 
 const OBLIGATION_SCHEMA = "production-obligation-atom-driven";
@@ -128,7 +126,6 @@ function validateRuntimeIfPresent(ctx) {
   validateCommonRuntimeTrace(ctx, runtimeTrace, expected, specs);
   validateLegacyRuntimeFieldsAbsent(ctx, runtimeTrace);
   validateRuntimeManifest(ctx);
-  validateRuntimeRender(ctx);
   validateProfileLeaks(ctx, runtimeTrace, expected);
   validateForbiddenTraceShape(ctx, runtimeTrace);
 
@@ -293,7 +290,6 @@ function validateRuntimeManifest(ctx) {
   if (!manifest) return;
 
   expectEqual(ctx, "VAL-RUNTIME-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-RUNTIME-MANIFEST-002", manifestRelPath, manifest["render-contract-version"], RENDER_CONTRACT_VERSION, "render-contract-version");
   expectEqual(ctx, "VAL-RUNTIME-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const entries = requireArray(ctx, "VAL-RUNTIME-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts").filter(isRuntimeManifestEntry);
@@ -305,31 +301,6 @@ function validateRuntimeManifest(ctx) {
   expectEqual(ctx, "VAL-RUNTIME-MANIFEST-007", manifestRelPath, entries[0]["artifact-path"], RUNTIME_ARTIFACT_PATH, "runtime entry artifact-path");
   expectEqual(ctx, "VAL-RUNTIME-MANIFEST-008", manifestRelPath, entries[0]["trace-path"], RUNTIME_TRACE_PATH, "runtime entry trace-path");
   expectEqual(ctx, "VAL-RUNTIME-MANIFEST-009", manifestRelPath, entries[0]["trace-schema"], TRACE_SCHEMA, "runtime entry trace-schema");
-}
-
-function validateRuntimeRender(ctx) {
-  const artifactFullPath = path.join(ctx.changeDir, RUNTIME_ARTIFACT_PATH);
-  if (!fs.existsSync(artifactFullPath)) {
-    addError(ctx, "VAL-RUNTIME-RENDER-001", RUNTIME_ARTIFACT_PATH, "runtime-acceptance.md 缺失；writer 必须通过 renderer 生成 Markdown。");
-    return;
-  }
-
-  let rendered;
-  try {
-    rendered = renderChangeArtifact({
-      root: ctx.root,
-      change: ctx.change,
-      artifact: "runtime-acceptance",
-    }).markdown;
-  } catch (error) {
-    addError(ctx, "VAL-RUNTIME-RENDER-002", RUNTIME_TRACE_PATH, error.message);
-    return;
-  }
-
-  const actual = fs.readFileSync(artifactFullPath, "utf8");
-  if (actual !== rendered) {
-    addError(ctx, "VAL-RUNTIME-RENDER-003", RUNTIME_ARTIFACT_PATH, "runtime-acceptance.md 与 renderer 从 trace/runtime-acceptance.trace.json 生成的结果不一致。");
-  }
 }
 
 function validateProfileLeaks(ctx, trace, expected) {
