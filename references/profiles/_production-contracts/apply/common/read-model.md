@@ -31,7 +31,7 @@
 - Apply 从 `trace/tasks.trace.json#/implementation-step-register[]` 读取 step IDs、titles、`work-stage`、`depends-on-step-ids[]`、checkbox task IDs/titles/work、step/task `spec-scenario-links[]`、`design-detail-links[]` 和 `runtime-fact-links[]`。
 - `delivery-plane.step-sections[]` 只提供 renderer payload，不参与 apply 语义闭合、worker 分派顺序或 dependency 判断；dependency graph 只能来自 `implementation-step-register[].depends-on-step-ids[]`。
 - Implementation-worker 输入必须由主 agent 摘录为 `implementationTracePacket`，只包含当前 step register row 和 linked upstream trace row 的关键字段。
-- `tasks.md` 只允许 apply 阶段更新 implementation checkbox；不得写入测试计划、测试编号、测试文件、固定命令、evidence path、执行状态或 deposit 状态。
+- `tasks.md` 只允许 apply 阶段更新 implementation checkbox；不得写入测试计划、测试编号、evidence path、执行状态或 deposit 状态。若 tasks 文本中出现具体测试文件或测试 runner 命令，必须在 preflight/reviewer 中确认它不是 proof/test/evidence-only task。
 
 ## Verification Consumption
 
@@ -52,6 +52,6 @@
 
 以下内容在新 production schema apply 中均为 invalid legacy trace signal，发现即作为 `Artifact Consistency Blocker` 或要求重新生成 artifacts：
 
-- `trace/tasks.trace.json` 包含旧 AC-local proof/preserve 字段、`runtime-fact-ids[]`、`Resolved Runtime Contract`、`Acceptance`、`Proof`、`Mock / Default Path Policy`、coverage table、runtime index 或 runtime projection。
+- `trace/tasks.trace.json` 包含旧 AC-local proof/preserve 字段、`runtime-fact-ids[]`、`Resolved Runtime Contract`、`Acceptance`、`Proof`、`Mock / Default Path Policy`、coverage table、schema source coverage 身份、runtime index、runtime projection 或 evidence/apply path。
 - `trace/verification.trace.json` 包含具体测试路径、固定测试命令、runner selector、evidence directory、deposit status、执行状态、旧 Behavior Oracle 分组、旧分组 ID、分组 ID 列或分组 ID 汇总要求。
 - Markdown 中的旧测试矩阵文本不作为 apply 语义来源；只有当对应旧字段进入 trace JSON 时才构成 artifact consistency blocker。

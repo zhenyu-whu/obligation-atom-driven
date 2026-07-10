@@ -301,7 +301,7 @@ function validateObligationDeliveryPlane(ctx, deliveryPlane) {
     "proposal-gate",
   ]) {
     if (text.includes(phrase)) {
-      addError(ctx, "VAL-OBLIGATION-DELIVERY-002", PROPOSAL_TRACE_PATH, `delivery-plane 不得包含 coverage 泄漏短语：${phrase}`);
+      addWarning(ctx, "VAL-OBLIGATION-DELIVERY-002", PROPOSAL_TRACE_PATH, `delivery-plane 疑似包含 coverage 泄漏短语，需 reviewer 判断：${phrase}`);
     }
   }
 }
@@ -380,7 +380,7 @@ function validateArtifactRoutes(ctx, row, id) {
     addError(ctx, "VAL-OBLIGATION-ROUTING-004", PROPOSAL_TRACE_PATH, `${id}.routing-disposition=${disposition} 时 artifact-routes 必须为空。`);
   }
   if (usesProjectionAsRoutingBasis(row["routing-rationale"])) {
-    addError(ctx, "VAL-OBLIGATION-ROUTING-011", PROPOSAL_TRACE_PATH, `${id}.routing-rationale 不得以 final projection 作为 routing 依据；必须说明 source-fact 的 artifact-local 消费语义。`);
+    addWarning(ctx, "VAL-OBLIGATION-ROUTING-011", PROPOSAL_TRACE_PATH, `${id}.routing-rationale 疑似以 final projection 作为 routing 依据；需 reviewer 判断是否说明了 source-fact 的 artifact-local 消费语义。`);
   }
 
   const seenRouteKeys = new Set();
@@ -536,7 +536,7 @@ function validateDefaultDeliveryPlane(ctx, deliveryPlane) {
   }
   for (const phrase of ["Scope Items:", "scope coverage", "alignment gate"]) {
     if (text.includes(phrase)) {
-      addError(ctx, "VAL-DEFAULT-DELIVERY-003", PROPOSAL_TRACE_PATH, `delivery-plane 不得包含 trace/gate 泄漏短语：${phrase}`);
+      addWarning(ctx, "VAL-DEFAULT-DELIVERY-003", PROPOSAL_TRACE_PATH, `delivery-plane 疑似包含 trace/gate 泄漏短语，需 reviewer 判断：${phrase}`);
     }
   }
 }

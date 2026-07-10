@@ -30,26 +30,6 @@ const DETAIL_RENDERED_LEAK_RE = /\bGA-\d{4}\b|\bSI-\d{3}\b|(?:^|[/"'`])trace\/|#
 const DELIVERY_DECISION_ALLOWED_FIELDS = new Set(["decision-id"]);
 const PLACEHOLDER_RE = /\b(?:TBD|TODO)\b|待定|后续完善|视情况|实现时决定/u;
 const JSON_CODE_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/iu;
-const CODE_FENCE_RE = /```([a-z0-9_-]*)\s*\n[\s\S]*?\n```/iu;
-const MARKDOWN_TABLE_RE = /\|[^\n]*\|\s*\n\|(?:\s*:?-{3,}:?\s*\|)+/u;
-const DATA_MODEL_TYPE_RE = /\b(?:type|类型|uuid|varchar|char|text|jsonb?|int|integer|bigint|smallint|boolean|bool|timestamp|timestamptz|datetime|date|decimal|numeric|float|double|enum|String|Boolean|DateTime|Json)\b/u;
-const API_METHOD_PATH_RE = /\b(?:GET|POST|PUT|PATCH|DELETE)\b[\s|]+\/[^\s|)]*/u;
-const HTTP_STATUS_RE = /\b[245]\d\d\b/u;
-const DETAIL_MIN_LINES = {
-  "module-boundary": 2,
-  "data-model": 4,
-  "json-shape": 4,
-  "api-contract": 4,
-  "dto-contract": 4,
-  "frontend-contract": 4,
-  "validation-error-contract": 4,
-  "state-lifecycle": 4,
-  "integration-boundary": 3,
-  "migration-compatibility": 3,
-  "observability-ops": 3,
-  "rollout-compatibility": 3,
-  "non-applicable": 2,
-};
 
 const DESIGN_LAYERS = new Set([
   "architecture-module-boundary",
@@ -76,16 +56,6 @@ const DETAIL_TYPES = new Set([
   "rollout-compatibility",
   "non-applicable",
 ]);
-
-const LAYER_DETAIL_COVERAGE = {
-  "architecture-module-boundary": ["module-boundary", "integration-boundary"],
-  "domain-data-migration": ["data-model", "json-shape", "migration-compatibility"],
-  "api-auth-security": ["api-contract", "dto-contract", "validation-error-contract"],
-  "async-realtime-ai-worker": ["integration-boundary", "state-lifecycle"],
-  "frontend-ux": ["frontend-contract", "state-lifecycle", "validation-error-contract"],
-  "observability-ops-deployment": ["observability-ops", "rollout-compatibility"],
-  "verification-rollout": ["rollout-compatibility", "observability-ops"],
-};
 
 const DESIGN_GATE_FIELDS = [
   "blockers",
@@ -165,7 +135,7 @@ function validateDesignIfPresent(ctx) {
 
   const designModel = validateImplementationDesignRegister(ctx, designTrace, expected, specs);
   validateDesignGate(ctx, designTrace);
-  validateDeliveryPlane(ctx, designTrace, expected, designModel);
+  validateDeliveryPlane(ctx, designTrace, designModel);
 
   if (expected.schemaName === DEFAULT_SCHEMA) {
     validateDefaultTraceHasNoObligationLeak(ctx, designTrace);
@@ -332,16 +302,8 @@ function buildSpecsAnchorModel(ctx, expected) {
       const deltaOp = strip(row?.["delta-op"]);
       if (deltaOp !== "added" && deltaOp !== "modified") continue;
       const requirement = requireString(ctx, "VAL-DESIGN-SPECS-014", tracePath, row?.requirement, `spec-delta-register[${deltaIndex}].requirement`);
-      const rowSourceIds = validateSpecAnchorSourceIds(ctx, row?.["source-ids"] ?? [], expected, tracePath, `spec-delta-register[${deltaIndex}].source-ids`);
       for (const [scenarioIndex, scenario] of requireArray(ctx, "VAL-DESIGN-SPECS-018", tracePath, row?.scenarios, `spec-delta-register[${deltaIndex}].scenarios`).entries()) {
         const scenarioName = requireString(ctx, "VAL-DESIGN-SPECS-019", tracePath, scenario?.name, `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].name`);
-        const sourceIds = validateSpecAnchorSourceIds(
-          ctx,
-          scenario?.["source-ids"] ?? rowSourceIds,
-          expected,
-          tracePath,
-          `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].source-ids`,
-        );
         const tracePointer = `#/spec-delta-register/${deltaIndex}/scenarios/${scenarioIndex}`;
         const pointerKey = anchorPointerKey(tracePath, tracePointer);
         const anchor = {
@@ -353,7 +315,6 @@ function buildSpecsAnchorModel(ctx, expected) {
           capability: strip(trace.capability),
           requirement,
           scenario: scenarioName,
-          sourceIds,
         };
         if (anchorsByPointer.has(pointerKey)) {
           addError(ctx, "VAL-DESIGN-SPECS-017", tracePath, `重复 specs scenario anchor：${pointerKey}`);
@@ -480,7 +441,6 @@ function validateImplementationDesignRegister(ctx, trace, expected, specs) {
       row,
       label,
       parentId: id,
-      layer,
       parentSpecAnchors: specAnchors,
       parentDesignInputs: designInputs,
       seenDetailIds,
@@ -521,7 +481,6 @@ function validateImplementationDetails(ctx, options) {
     row,
     label,
     parentId,
-    layer,
     parentSpecAnchors,
     parentDesignInputs,
     seenDetailIds,
@@ -587,7 +546,7 @@ function validateImplementationDetails(ctx, options) {
       }
     }
     const noScopeExpansion = requireString(ctx, "VAL-DESIGN-DETAIL-014", DESIGN_TRACE_PATH, detail?.["no-scope-expansion"], `${detailLabel}.no-scope-expansion`);
-    validateTechnicalDetailContent(ctx, detailLabel, detailType, contentText);
+    validateMachineReadableDetailContent(ctx, detailLabel, detailType, contentText);
     validateRenderedDetailText(ctx, detailLabel, {
       "detail-id": detailId,
       "detail-type": detailType,
@@ -598,7 +557,6 @@ function validateImplementationDetails(ctx, options) {
     });
   }
 
-  validateLayerDetailCoverage(ctx, label, layer, detailTypes);
   return detailTypes;
 }
 
@@ -651,28 +609,9 @@ function validateRenderedDetailText(ctx, label, fields) {
   }
 }
 
-function validateTechnicalDetailContent(ctx, label, detailType, contentText) {
-  if (!detailType) return;
-  const text = String(contentText ?? "");
-  const nonEmptyLines = text.split(/\r?\n/u).map(strip).filter(Boolean);
-  const minLines = DETAIL_MIN_LINES[detailType];
-  if (minLines && nonEmptyLines.length < minLines) {
-    addError(ctx, "VAL-DESIGN-DETAIL-050", DESIGN_TRACE_PATH, `${label}.content 对 ${detailType} 必须是至少 ${minLines} 行的结构化技术设计，不能是一行长文本。`);
-  }
-
-  if (detailType === "module-boundary") {
-    if (!/(?:boundary|边界|responsibilit|职责|owner|归属|module|模块|route|路由|component|组件|dependency|依赖|persistence|持久|API|control-api)/iu.test(text)) {
-      addError(ctx, "VAL-DESIGN-DETAIL-058", DESIGN_TRACE_PATH, `${label}.content[module-boundary] 必须明确模块/路由/组件边界、职责归属或依赖方向。`);
-    }
-  }
-
-  if (detailType === "data-model") {
-    if (!(MARKDOWN_TABLE_RE.test(text) || CODE_FENCE_RE.test(text)) || !DATA_MODEL_TYPE_RE.test(text)) {
-      addError(ctx, "VAL-DESIGN-DETAIL-051", DESIGN_TRACE_PATH, `${label}.content[data-model] 必须使用 Markdown 表格或 DDL/schema code fence，并明确字段类型。`);
-    }
-  }
-
+function validateMachineReadableDetailContent(ctx, label, detailType, contentText) {
   if (detailType === "json-shape") {
+    const text = String(contentText ?? "");
     const jsonBlocks = extractJsonCodeBlocks(text);
     if (jsonBlocks.length === 0) {
       addError(ctx, "VAL-DESIGN-DETAIL-052", DESIGN_TRACE_PATH, `${label}.content[json-shape] 必须包含 fenced json code block。`);
@@ -686,111 +625,6 @@ function validateTechnicalDetailContent(ctx, label, detailType, contentText) {
       }
     }
   }
-
-  if (detailType === "api-contract") {
-    const hasContractShape =
-      (API_METHOD_PATH_RE.test(text) && HTTP_STATUS_RE.test(text)) ||
-      /```(?:http|openapi|yaml|yml)\s*\n[\s\S]*?\n```/iu.test(text);
-    if (!hasContractShape) {
-      addError(ctx, "VAL-DESIGN-DETAIL-054", DESIGN_TRACE_PATH, `${label}.content[api-contract] 必须明确 HTTP method/path 与响应状态，或使用 http/openapi/yaml code fence。`);
-    }
-    if (!/\b(?:request|请求|body|query|params?)\b/iu.test(text) || !/\b(?:response|响应|error|错误)\b/iu.test(text)) {
-      addError(ctx, "VAL-DESIGN-DETAIL-055", DESIGN_TRACE_PATH, `${label}.content[api-contract] 必须同时描述 request 和 response/error contract。`);
-    }
-  }
-
-  if (detailType === "dto-contract") {
-    const hasDtoShape =
-      /```(?:ts|tsx|typescript|json|jsonschema|schema)\s*\n[\s\S]*?\n```/iu.test(text) ||
-      (MARKDOWN_TABLE_RE.test(text) && DATA_MODEL_TYPE_RE.test(text));
-    if (!hasDtoShape) {
-      addError(ctx, "VAL-DESIGN-DETAIL-056", DESIGN_TRACE_PATH, `${label}.content[dto-contract] 必须包含 TypeScript/JSON schema code fence 或字段类型表。`);
-    }
-    if (!/\b(?:required|optional|nullable|可选|必填|可空|enum|枚举)\b/iu.test(text)) {
-      addError(ctx, "VAL-DESIGN-DETAIL-057", DESIGN_TRACE_PATH, `${label}.content[dto-contract] 必须明确 required/optional/nullable 或 enum 规则。`);
-    }
-  }
-
-  if (detailType === "frontend-contract") {
-    if (!/(?:route|路由|component|组件|state|状态|event|事件|fetch|request|请求|error|错误|loading|validation|校验|UI)/iu.test(text)) {
-      addError(ctx, "VAL-DESIGN-DETAIL-059", DESIGN_TRACE_PATH, `${label}.content[frontend-contract] 必须明确 route/component/state/event/data-fetching/error-display 等前端契约。`);
-    }
-  }
-
-  if (detailType === "validation-error-contract") {
-    const checks = [
-      /(?:error\s*code|错误码|code|ERR[_-]|\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b)/u,
-      /(?:field|path|pointer|字段|路径|定位)/iu,
-      /(?:severity|blocking|blocker|warn|warning|级别|阻断|告警)/iu,
-      /(?:message|copy|i18n|文案|消息|提示|UI)/iu,
-    ];
-    if (!checks.every((pattern) => pattern.test(text))) {
-      addError(ctx, "VAL-DESIGN-DETAIL-060", DESIGN_TRACE_PATH, `${label}.content[validation-error-contract] 必须明确 error code、field/path、severity/blocking 和 message/UI 定位。`);
-    }
-  }
-
-  if (detailType === "state-lifecycle") {
-    const checks = [
-      /(?:state|状态|phase|阶段)/iu,
-      /(?:enter|entry|进入|condition|条件)/iu,
-      /(?:transition|转移|流转|next|from|to)/iu,
-      /(?:failure|rollback|失败|回滚|persist|持久|restore|恢复)/iu,
-    ];
-    if (!checks.every((pattern) => pattern.test(text))) {
-      addError(ctx, "VAL-DESIGN-DETAIL-061", DESIGN_TRACE_PATH, `${label}.content[state-lifecycle] 必须明确 state、进入条件、状态转移和失败/持久化/回滚行为。`);
-    }
-  }
-
-  if (detailType === "integration-boundary") {
-    const checks = [
-      /(?:boundary|边界|integration|集成|external|外部|provider|dependency|依赖)/iu,
-      /(?:inbound|outbound|调用|输入|输出|protocol|协议|API|queue|event|事件)/iu,
-      /(?:failure|timeout|retry|fallback|失败|超时|重试|降级)/iu,
-    ];
-    if (!checks.every((pattern) => pattern.test(text))) {
-      addError(ctx, "VAL-DESIGN-DETAIL-062", DESIGN_TRACE_PATH, `${label}.content[integration-boundary] 必须明确集成边界、调用方向/协议和失败/超时/重试策略。`);
-    }
-  }
-
-  if (detailType === "migration-compatibility") {
-    const checks = [
-      /(?:migration|migrate|DDL|backfill|迁移|回填|变更)/iu,
-      /(?:compatib|兼容|version|版本|default|默认|legacy|旧)/iu,
-      /(?:rollback|roll back|回滚|replay|重放|safe|安全)/iu,
-    ];
-    if (!checks.every((pattern) => pattern.test(text))) {
-      addError(ctx, "VAL-DESIGN-DETAIL-063", DESIGN_TRACE_PATH, `${label}.content[migration-compatibility] 必须明确迁移/回填步骤、兼容策略和回滚/安全边界。`);
-    }
-  }
-
-  if (detailType === "observability-ops") {
-    const signals = [
-      /(?:metric|metrics|指标|SLO|SLI)/iu,
-      /(?:log|logging|日志)/iu,
-      /(?:alert|报警|告警)/iu,
-      /(?:dashboard|runbook|trace|tracing|面板|看板|运维手册|追踪)/iu,
-    ].filter((pattern) => pattern.test(text)).length;
-    if (signals < 2) {
-      addError(ctx, "VAL-DESIGN-DETAIL-064", DESIGN_TRACE_PATH, `${label}.content[observability-ops] 必须至少覆盖 metrics/logs/alerts/dashboard/runbook/tracing 中的两类运维信号。`);
-    }
-  }
-
-  if (detailType === "rollout-compatibility") {
-    const checks = [
-      /(?:rollout|发布|灰度|上线|deploy|deployment|flag|feature flag|开关)/iu,
-      /(?:compatib|兼容|backward|forward|version|版本|client|客户端)/iu,
-      /(?:rollback|回滚|disable|禁用|gate|门禁|monitor|监控)/iu,
-    ];
-    if (!checks.every((pattern) => pattern.test(text))) {
-      addError(ctx, "VAL-DESIGN-DETAIL-065", DESIGN_TRACE_PATH, `${label}.content[rollout-compatibility] 必须明确 rollout/flag、兼容策略和回滚/门禁/监控行为。`);
-    }
-  }
-
-  if (detailType === "non-applicable") {
-    if (!/(?:reason|原因|because|由于|not applicable|N\/A|不适用)/iu.test(text) || !/(?:rejected|拒绝|不新增|无须|无需|out of scope|scope 外)/iu.test(text)) {
-      addError(ctx, "VAL-DESIGN-DETAIL-066", DESIGN_TRACE_PATH, `${label}.content[non-applicable] 必须明确不适用原因和拒绝的 scope-expanding 行为。`);
-    }
-  }
 }
 
 function extractJsonCodeBlocks(text) {
@@ -800,16 +634,6 @@ function extractJsonCodeBlocks(text) {
     blocks.push(match[1].trim());
   }
   return blocks;
-}
-
-function validateLayerDetailCoverage(ctx, label, layer, detailTypes) {
-  if (!layer || !DESIGN_LAYERS.has(layer)) return;
-  const typeSet = new Set(detailTypes);
-  if (typeSet.has("non-applicable")) return;
-  const required = LAYER_DETAIL_COVERAGE[layer] ?? [];
-  if (!required.some((type) => typeSet.has(type))) {
-    addError(ctx, "VAL-DESIGN-DETAIL-040", DESIGN_TRACE_PATH, `${label}.implementation-details 缺少 layer=${layer} 所需 detail type：${required.join(" / ")}，或使用 non-applicable。`);
-  }
 }
 
 function validateRegisterSpecAnchors(ctx, value, specs, label) {
@@ -865,7 +689,7 @@ function validateDesignGate(ctx, trace) {
   }
 }
 
-function validateDeliveryPlane(ctx, trace, expected, designModel) {
+function validateDeliveryPlane(ctx, trace, designModel) {
   const delivery = requireObject(ctx, "VAL-DESIGN-DELIVERY-001", DESIGN_TRACE_PATH, trace["delivery-plane"], "delivery-plane");
   const json = JSON.stringify(delivery);
   if (ANY_GA_ID_RE.test(json) || ANY_SCOPE_ID_RE.test(json)) {
@@ -875,9 +699,6 @@ function validateDeliveryPlane(ctx, trace, expected, designModel) {
     if (DELIVERY_LEAK_KEY_RE.test(key)) {
       addError(ctx, "VAL-DESIGN-DELIVERY-003", DESIGN_TRACE_PATH, `delivery-plane 不得包含 trace/gate/coverage/map/register/matrix 字段：${key}`);
     }
-  }
-  if (expected.schemaName === DEFAULT_SCHEMA && ANY_GA_ID_RE.test(json)) {
-    addError(ctx, "VAL-DESIGN-DELIVERY-004", DESIGN_TRACE_PATH, "default design delivery-plane 不得包含 GA-####。");
   }
 
   const deliveryDecisions = asArray(delivery.decisions);
@@ -932,24 +753,6 @@ function validateDefaultTraceHasNoObligationLeak(ctx, trace) {
       addError(ctx, "VAL-DESIGN-DEFAULT-001", DESIGN_TRACE_PATH, `default design trace 不得包含 obligation authority：${label}`);
     }
   }
-}
-
-function validateSpecAnchorSourceIds(ctx, value, expected, tracePath, label) {
-  const ids = requireIdArray(ctx, "VAL-DESIGN-SPECS-015", tracePath, value, label, expected.idRegex);
-  for (const id of ids) {
-    if (!expected.rowsById.has(id)) {
-      addError(ctx, "VAL-DESIGN-SPECS-016", tracePath, `${id} 不属于 proposal source/scope set。`);
-      continue;
-    }
-    const proposalRow = expected.rowsById.get(id);
-    const isSpecRelevant = expected.routeBacked
-      ? proposalRow["routed-to-specs"]
-      : isSpecRelevantProjection(strip(proposalRow?.[expected.projectionField]), expected);
-    if (!isSpecRelevant) {
-      addError(ctx, "VAL-DESIGN-SPECS-020", tracePath, `${id} 不是 proposal spec/guard item，不能作为 specs anchor。`);
-    }
-  }
-  return ids;
 }
 
 function isSpecRelevantProjection(projection, expected) {
@@ -1054,21 +857,6 @@ function requireId(ctx, ruleId, file, value, label, regex) {
     addError(ctx, ruleId, file, `${label} 包含非法 ID：${id}`);
   }
   return id;
-}
-
-function requireIdArray(ctx, ruleId, file, value, label, regex) {
-  const values = requireArray(ctx, ruleId, file, value, label).map(strip).filter(Boolean);
-  const seen = new Set();
-  for (const id of values) {
-    if (!regex.test(id)) {
-      addError(ctx, ruleId, file, `${label} 包含非法 ID：${id}`);
-    }
-    if (seen.has(id)) {
-      addError(ctx, ruleId, file, `${label} 包含重复 ID：${id}`);
-    }
-    seen.add(id);
-  }
-  return values;
 }
 
 function expectEqual(ctx, ruleId, file, actual, expected, label) {

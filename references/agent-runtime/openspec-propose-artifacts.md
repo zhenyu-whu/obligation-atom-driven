@@ -11,7 +11,7 @@
 1. `AGENTS.md` 强制本 runtime overlay 优先生效；官方 `openspec-propose` / `openspec-ff-change` / `openspec-continue-change` 技能只提供通用执行骨架。
 2. schema 选择、无输入目标推断、subagent 编排、partial/full validator、artifact reviewer、integration reviewer、propose-result 和 apply-ready 声明归本文档。
 3. artifact dependency graph、artifact id、template、output path、`requires` 和 `apply.requires` 归选定 schema 的 `schema.yaml`，并以 `openspec status --change "<name>" --json` 与 `openspec instructions ... --json` 的实际返回为准。
-4. Artifact 内容语义归 contract bundle：`openspec/schemas/_production-contracts/common/*`、`artifacts/<artifact-id>.md` 和存在时的 `overlays/<schema-name>/<artifact-id>.md`。
+4. Artifact 内容语义归 contract bundle：`openspec/schemas/_production-contracts/common/*`、`artifacts/<artifact-id>.md` 或 artifact-specific 子目录，以及存在时的 `overlays/<schema-name>/<artifact-id>.md` 或 overlay-specific 子目录。
 5. JSON Trace Plane 是下游 artifact 的唯一机器语义输入；writer、repair-writer、artifact reviewer 和 integration reviewer 不得从上游 Markdown Delivery Plane 推导 scope、coverage、runtime row、Proof Slice、AC 或 oracle。
 6. Markdown Delivery Plane 和短 `## Trace Appendix` 归 `render-production-artifacts.mjs`；writer/repair-writer 不得手写 Markdown artifact。`trace/manifest.json` 如存在，只作为非权威 trace registry/version metadata；不得通过 manifest 中的任何摘要字段建立下游语义。
 7. 机械结构校验归 `validate-production-artifacts.mjs`；validator hard error 必须修复，warning 必须进入 reviewer 判断。
@@ -89,17 +89,81 @@
 
 生成、修复或复核任一 production artifact 前，主 Agent 必须解析并读取该 artifact 的 contract bundle。
 
-1. Bundle 顺序固定为：
+1. 所有 artifact 的 base common bundle 顺序固定为：
    - `openspec/schemas/_production-contracts/common/chinese.md`
    - `openspec/schemas/_production-contracts/common/delivery-plane-trace-appendix.md`
    - `openspec/schemas/_production-contracts/common/no-evidence-or-test-plan.md`
    - `openspec/schemas/_production-contracts/common/source-scope-boundary.md`
    - `openspec/schemas/_production-contracts/common/reviewer-output-protocol.md`
+2. 非 `proposal` / `specs` / `design` / `runtime-acceptance` / `verification` / `tasks` artifact 的 artifact-specific bundle 顺序固定为：
    - `openspec/schemas/_production-contracts/artifacts/<artifact-id>.md`
    - `openspec/schemas/_production-contracts/overlays/<schema-name>/<artifact-id>.md`，仅在文件存在时读取。
-2. Artifact-specific contract 文件名按 `<artifact-id>.md` 解析；当前 production artifact ids 均使用同名 contract basename。
-3. 如果任一 required contract 文件缺失，必须停止并报告 `Artifact Consistency Blocker`；不得降级为只读 schema instruction 或主 Agent 自检。
-4. Contract bundle 是 writer/reviewer 的共同 artifact 内容权威；不得把 contract 文本复制进 artifact 正文。
+3. `proposal` artifact 必须使用角色化 artifact-specific bundle：
+   - 所有 proposal roles 必须读取：
+     - `openspec/schemas/_production-contracts/artifacts/proposal/index.md`
+     - `openspec/schemas/_production-contracts/artifacts/proposal/trace-schema.md`
+   - `proposal-writer` 和 `proposal-repair-writer` 必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/proposal/writer.md`
+   - `proposal-reviewer` 和 integration reviewer 针对 proposal artifact 审查时必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/proposal/reviewer.md`
+   - schema overlay 必须按存在性和当前 role 读取：
+     - 所有 proposal roles 读取 `openspec/schemas/_production-contracts/overlays/<schema-name>/proposal/index.md` 和 `openspec/schemas/_production-contracts/overlays/<schema-name>/proposal/trace-schema.md`
+     - `proposal-writer` 和 `proposal-repair-writer` 读取 `openspec/schemas/_production-contracts/overlays/<schema-name>/proposal/writer.md`
+     - `proposal-reviewer` 和 integration reviewer 针对 proposal artifact 审查时读取 `openspec/schemas/_production-contracts/overlays/<schema-name>/proposal/reviewer.md`
+4. `specs` artifact 必须使用角色化 artifact-specific bundle：
+   - 所有 specs roles 必须读取：
+     - `openspec/schemas/_production-contracts/artifacts/specs/index.md`
+     - `openspec/schemas/_production-contracts/artifacts/specs/trace-schema.md`
+   - `specs-writer` 和 `specs-repair-writer` 必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/specs/writer.md`
+   - `specs-reviewer` 和 integration reviewer 针对 specs artifact 审查时必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/specs/reviewer.md`
+   - schema overlay 必须按存在性和当前 role 读取：
+     - 所有 specs roles 读取 `openspec/schemas/_production-contracts/overlays/<schema-name>/specs/index.md` 和 `openspec/schemas/_production-contracts/overlays/<schema-name>/specs/trace-schema.md`
+     - `specs-writer` 和 `specs-repair-writer` 读取 `openspec/schemas/_production-contracts/overlays/<schema-name>/specs/writer.md`
+     - `specs-reviewer` 和 integration reviewer 针对 specs artifact 审查时读取 `openspec/schemas/_production-contracts/overlays/<schema-name>/specs/reviewer.md`
+5. `design` artifact 必须使用角色化 artifact-specific bundle：
+   - 所有 design roles 必须读取：
+     - `openspec/schemas/_production-contracts/artifacts/design/index.md`
+     - `openspec/schemas/_production-contracts/artifacts/design/trace-schema.md`
+   - `design-writer` 和 `design-repair-writer` 必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/design/writer.md`
+   - `design-reviewer` 和 integration reviewer 针对 design artifact 审查时必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/design/reviewer.md`
+   - schema overlay 仍按存在性读取：
+     - `openspec/schemas/_production-contracts/overlays/<schema-name>/design.md`
+6. `runtime-acceptance` artifact 必须使用角色化 artifact-specific bundle：
+   - 所有 runtime-acceptance roles 必须读取：
+     - `openspec/schemas/_production-contracts/artifacts/runtime-acceptance/index.md`
+     - `openspec/schemas/_production-contracts/artifacts/runtime-acceptance/trace-schema.md`
+   - `runtime-acceptance-writer` 和 `runtime-acceptance-repair-writer` 必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/runtime-acceptance/writer.md`
+   - `runtime-acceptance-reviewer` 和 integration reviewer 针对 runtime-acceptance artifact 审查时必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/runtime-acceptance/reviewer.md`
+   - schema overlay 仍按存在性读取：
+     - `openspec/schemas/_production-contracts/overlays/<schema-name>/runtime-acceptance.md`
+7. `verification` artifact 必须使用角色化 artifact-specific bundle：
+   - 所有 verification roles 必须读取：
+     - `openspec/schemas/_production-contracts/artifacts/verification/index.md`
+     - `openspec/schemas/_production-contracts/artifacts/verification/trace-schema.md`
+   - `verification-writer` 和 `verification-repair-writer` 必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/verification/writer.md`
+   - `verification-reviewer` 和 integration reviewer 针对 verification artifact 审查时必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/verification/reviewer.md`
+   - verification 当前无 schema overlay；不得回退读取旧 `openspec/schemas/_production-contracts/artifacts/verification.md`。
+8. `tasks` artifact 必须使用角色化 artifact-specific bundle：
+   - 所有 tasks roles 必须读取：
+     - `openspec/schemas/_production-contracts/artifacts/tasks/index.md`
+     - `openspec/schemas/_production-contracts/artifacts/tasks/trace-schema.md`
+   - `tasks-writer` 和 `tasks-repair-writer` 必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/tasks/writer.md`
+   - `tasks-reviewer` 和 integration reviewer 针对 tasks artifact 审查时必须继续读取：
+     - `openspec/schemas/_production-contracts/artifacts/tasks/reviewer.md`
+   - schema overlay 仍按存在性读取：
+     - `openspec/schemas/_production-contracts/overlays/<schema-name>/tasks.md`
+9. Artifact-specific contract 文件名默认按 `<artifact-id>.md` 解析；`proposal`、`specs`、`design`、`runtime-acceptance`、`verification` 和 `tasks` 使用 artifact-specific 子目录并拆分 writer/reviewer/shared trace-schema。
+10. 如果任一 required contract 文件缺失，必须停止并报告 `Artifact Consistency Blocker`；不得降级为只读 schema instruction 或主 Agent 自检。
+11. Contract bundle 是当前 agent role 的 artifact 内容权威；不得把 contract 文本复制进 artifact 正文。Writer 不得把 reviewer-only contract 当作 authoring checklist；reviewer 不得用 writer-only contract 替代语义审查规则。
 
 ## Trace-First Writer Gate
 
@@ -138,7 +202,7 @@
 1. Artifact 必须按 `openspec status --change "<name>" --json` 返回的 schema dependency graph 处理；不得按本文档中的示例、记忆或固定顺序处理。
 2. 每个 artifact 必须使用对应 writer 和 reviewer subagent。默认命名为 `<artifact-id>-writer`、`<artifact-id>-reviewer` 和 `<artifact-id>-repair-writer`；`verification` reviewer 必须聚焦 Proof Slice 粒度、runtime row 分支枚举和 reconciliation 真实性。
 3. Writer、repair-writer、reviewer 和 integration reviewer 都必须使用 `model=GPT-5.5` 且 `reasoningEffort=xhigh`；若当前环境无法创建对应 subagent，必须停止并报告 blocker，不得降级为主 Agent 自检或低配模型。
-4. Writer 输入必须包含：change 名称、schema 名称、完整 `openspec instructions ... --json` 输出、已完成 dependency trace/sidecar JSON 路径和内容、contract bundle 路径和内容、必要 source/scope/baseline read set、renderer CLI 命令、propose checkpoint commit policy 和本文档路径。
+4. Writer 输入必须包含：change 名称、schema 名称、完整 `openspec instructions ... --json` 输出、已完成 dependency trace/sidecar JSON 路径和内容、当前 writer role 对应的 contract bundle 路径和内容、必要 source/scope/baseline read set、renderer CLI 命令、propose checkpoint commit policy 和本文档路径。`proposal-writer` 和 `proposal-repair-writer` 输入必须包含 `artifacts/proposal/writer.md` 以及当前 schema overlay 的 `proposal/writer.md`，不得包含任何 proposal reviewer contract 作为生成策略。`specs-writer` 和 `specs-repair-writer` 输入必须包含 `artifacts/specs/writer.md` 以及当前 schema overlay 的 `specs/writer.md`，不得包含 `artifacts/specs/reviewer.md` 作为生成策略。`design-writer` 和 `design-repair-writer` 输入必须包含 `artifacts/design/writer.md`，不得包含 `artifacts/design/reviewer.md` 作为生成策略。`runtime-acceptance-writer` 和 `runtime-acceptance-repair-writer` 输入必须包含 `artifacts/runtime-acceptance/writer.md`，不得包含 `artifacts/runtime-acceptance/reviewer.md` 作为生成策略。`verification-writer` 和 `verification-repair-writer` 输入必须包含 `artifacts/verification/writer.md`，不得包含 `artifacts/verification/reviewer.md` 作为生成策略。`tasks-writer` 和 `tasks-repair-writer` 输入必须包含 `artifacts/tasks/writer.md`，不得包含 `artifacts/tasks/reviewer.md` 作为生成策略。
 5. 任一 writer、repair-writer、reviewer 或 integration reviewer 运行期间，主 Agent 只能执行必要的编排等待和状态记录；不得读取当前 artifact 中间状态、运行 validator、接手修复/复核，或向正在运行的 subagent 注入中途发现。
 6. Stale-run 兜底是第 5 条的窄例外：若任一 propose-stage subagent 运行超过 60 分钟仍未自然返回，主 Agent 只能执行一次路径级 `git status --porcelain -- <allowed-output-paths>` 检查，并记录 elapsed time、agent id、agent role 和 artifact id；不得读取 artifact 内容、读取中间 trace、运行 validator、审查 diff、修改文件或向 subagent 注入消息。
 7. 若第 6 条检查确认该 subagent 启动以来允许输出范围内没有任何 tracked 或 untracked diff，主 Agent 可以关闭该 stale subagent，并将该 run 记录为 `abandoned: stale no-diff timeout`。该 run 不产生 checkpoint、不关闭任何 gate、不得作为 validator/reviewer 输入，也不得视为自然返回的完成或 blocker。
@@ -146,7 +210,7 @@
 9. 若第 6 条检查发现任何 diff，或无法确认 stale subagent 已真正终止，主 Agent 不得自动重启并行 agent，不得 checkpoint 该未自然返回 run；必须继续等待、报告流程级 blocker，或等待用户明确终止当前 propose 流程。
 10. Writer 或 repair-writer 自然返回最终完成或明确 blocker，且 required checkpoint commit 处理闭合前，主 Agent 不得运行 partial validator、启动 reviewer 或继续生成依赖该 artifact 的下游 artifact。
 11. Writer 或 repair-writer 完成且 checkpoint commit 处理闭合后，partial validator hard error 必须由当前 artifact 的 repair-writer 修复；warning 必须传给 artifact reviewer。
-12. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace JSON、必要 upstream dependency trace JSON、contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。
+12. Partial validator hard pass 后，主 Agent 才能启动 artifact reviewer。Reviewer 输入必须包含当前 artifact trace JSON、必要 upstream dependency trace JSON、当前 reviewer role 对应的 contract bundle、partial validator 报告和 propose result 未关闭 blocker 摘要；不得把当前或上游 Markdown artifact 作为 reviewer 语义输入。`proposal-reviewer` 输入必须包含 `artifacts/proposal/reviewer.md` 以及当前 schema overlay 的 `proposal/reviewer.md`，不得把 proposal writer contract 当作 reviewer 语义通过标准。`specs-reviewer` 输入必须包含 `artifacts/specs/reviewer.md` 以及当前 schema overlay 的 `specs/reviewer.md`，不得把 `artifacts/specs/writer.md` 当作 reviewer 语义通过标准。`design-reviewer` 输入必须包含 `artifacts/design/reviewer.md`，不得把 `artifacts/design/writer.md` 当作 reviewer 语义通过标准。`runtime-acceptance-reviewer` 输入必须包含 `artifacts/runtime-acceptance/reviewer.md`，不得把 `artifacts/runtime-acceptance/writer.md` 当作 reviewer 语义通过标准。`verification-reviewer` 输入必须包含 `artifacts/verification/reviewer.md`，不得把 `artifacts/verification/writer.md` 当作 reviewer 语义通过标准；verification reviewer 的语义 oracle 只来自当前 verification trace 与 `trace/runtime-acceptance.trace.json`，spec/design trace 路径只用于 source-interface 元数据一致性。`tasks-reviewer` 输入必须包含 `artifacts/tasks/reviewer.md`，不得把 `artifacts/tasks/writer.md` 当作 reviewer 语义通过标准。
 13. Reviewer 不得读取当前实现、测试文件、Markdown Delivery Plane、`openspec-results/**` apply evidence、`apply-result.md`、`proof-test-map.json`、evidence 或 apply 阶段产物来推导 oracle。Reviewer 只能输出 `Pass` 或 `Blocker`；Blocker 必须包含 artifact path、trace anchor、contract source path + section heading、问题描述和修复方向。
 14. 主 Agent 收到 reviewer blocker 后必须分派当前 artifact 的 repair-writer，等待其自然返回，重新运行 partial validator，并重新启动同一 artifact reviewer。Reviewer pass 且 validator hard pass 前，不得继续下游 artifact。
 15. Reviewer finding 不使用人为稳定编号；必须使用 artifact path、trace section/row、contract section、`GA-####`、`SI-###`、`RS-/OP-/ST-/CH-`、`PS-###`、`AC-###` 等自然锚点定位。

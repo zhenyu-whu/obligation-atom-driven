@@ -21,10 +21,6 @@ const RUNTIME_TRACE_PATH = "trace/runtime-acceptance.trace.json";
 const TASKS_TRACE_PATH = "trace/tasks.trace.json";
 const TASKS_ARTIFACT_PATH = "tasks.md";
 
-const GA_ID_RE = /^GA-\d{4}$/u;
-const SI_ID_RE = /^SI-\d{3}$/u;
-const ANY_GA_ID_RE = /\bGA-\d{4}\b/u;
-const ANY_SI_ID_RE = /\bSI-\d{3}\b/u;
 const AC_ID_RE = /^AC-\d{3}$/u;
 const TASK_ID_RE = /^AC-\d{3}\.\d+$/u;
 const RUNTIME_FACT_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
@@ -119,6 +115,8 @@ const FORBIDDEN_TRACE_KEYS = new Set([
   "owner-capability",
   "requirement-source-trace",
   "acceptance-driven-coverage",
+  "obligation-atom-coverage",
+  "scope-item-coverage",
   "runtime-acceptance-index",
   "runtime-acceptance-projection",
   "acceptance-slices",
@@ -136,12 +134,16 @@ const FORBIDDEN_TRACE_KEYS = new Set([
 ]);
 
 const FORBIDDEN_TEXT_RE = /\b(?:Test Evidence Matrix|Regression Test Deposit|Test Layer Plan|Fixed Command|Test File \/ Name|Evidence Directory|Evidence Status|Deposit Status|Test IDs)\b/iu;
+const LEGACY_PROOF_TEXT_RE = /\b(?:Proof|Acceptance|Evidence|Deposit|Fixed Command)\s*:/iu;
 const MARKDOWN_INPUT_RE = /(?:^|\/)(?:proposal|design|runtime-acceptance|verification|tasks)\.md$|(?:^|\/)specs\/.+\.md$/iu;
 const VERIFICATION_TRACE_RE = /(?:^|\/)trace\/verification(?:\.trace|\.proof-slices)\.json\b/iu;
 const TEST_FILE_RE = /(?:^|\/)[^/\s]+\.(?:test|spec)\.[cm]?[jt]sx?\b/u;
-const EVIDENCE_PATH_RE = /(?:^|\/)(?:openspec-results|test-results)\//u;
-const APPLY_EVIDENCE_RE = /(?:^|\/)(?:apply-result\.md|proof-test-map\.json)\b/u;
-const COMMAND_RE = /\b(?:pnpm|npm|yarn|npx|vitest|jest|playwright test|go test|pytest|cargo test|bun test|node\s+(?:--[a-z-]+|[-\w./]+\.m?js))\b/u;
+const EVIDENCE_PATH_RE = /(?:^|[\s`"'(（])(?:openspec-results|test-results)\//u;
+const APPLY_EVIDENCE_RE = /(?:^|[\s`"'(（])(?:apply-result\.md|proof-test-map\.json)\b/u;
+const DEPOSIT_RESULT_PATH_RE = /(?:^|[\s`"'(（])(?:proof-test-results|regression-test-deposit)\//u;
+const TEST_COMMAND_RE = /\b(?:vitest|jest|playwright test|go test|pytest|cargo test|bun test)\b/u;
+const OBLIGATION_SOURCE_LEAK_RE = /\bGA-\d{4}\b|\bobligation-atom-coverage\b/u;
+const DEFAULT_SOURCE_LEAK_RE = /\bSI-\d{3}\b|\bscope-item-coverage\b/u;
 
 export function validateTasksArtifact(options = {}) {
   const root = path.resolve(options.root ?? process.cwd());
@@ -182,25 +184,23 @@ function validateTasksIfPresent(ctx) {
   }
 
   const tasksTrace = readJson(ctx, path.join(ctx.changeDir, TASKS_TRACE_PATH));
-  const proposalTrace = readJson(ctx, path.join(ctx.changeDir, PROPOSAL_TRACE_PATH));
   const runtimeTrace = readJson(ctx, path.join(ctx.changeDir, RUNTIME_TRACE_PATH));
-  if (!tasksTrace || !proposalTrace || !runtimeTrace) return;
+  if (!tasksTrace || !runtimeTrace) return;
 
-  const expected = buildExpectedModel(ctx, proposalTrace);
+  const expected = buildExpectedModel(ctx, tasksTrace);
   if (!expected) return;
   const specs = buildSpecsModel(ctx, expected.schemaName);
   const designTrace = readJson(ctx, path.join(ctx.changeDir, DESIGN_TRACE_PATH));
-  const design = buildDesignModel(ctx, designTrace);
-  const runtime = buildRuntimeModel(ctx, runtimeTrace);
+  const design = buildDesignModel(ctx, designTrace, expected.schemaName);
+  const runtime = buildRuntimeModel(ctx, runtimeTrace, expected.schemaName);
 
-  validateKebabCaseKeys(ctx, tasksTrace);
   validateAllowedKeys(ctx, "VAL-TASKS-SHAPE-001", TASKS_TRACE_PATH, tasksTrace, "trace/tasks.trace.json", TOP_LEVEL_KEYS);
   validateCommonTrace(ctx, tasksTrace, expected, specs);
   validateManifest(ctx);
   validateTaskCheckboxWriteback(ctx, tasksTrace);
   validateSourceInterfaceBoundaries(ctx, tasksTrace["source-interface"]);
-  validateForbiddenShape(ctx, tasksTrace);
-  validateProfileLeaks(ctx, tasksTrace, expected);
+  validateForbiddenShape(ctx, tasksTrace, expected.schemaName);
+  validateTaskTextRisk(ctx, tasksTrace);
 
   const stepModel = validateImplementationSteps(ctx, tasksTrace, { specs, design, runtime });
   const deliveryModel = validateDeliveryPlane(ctx, tasksTrace, stepModel);
@@ -223,60 +223,18 @@ function collectTasksInventory(ctx) {
   };
 }
 
-function buildExpectedModel(ctx, proposalTrace) {
-  const schemaName = strip(proposalTrace["schema-name"]);
+function buildExpectedModel(ctx, tasksTrace) {
+  const schemaName = strip(tasksTrace["schema-name"]);
   if (schemaName === OBLIGATION_SCHEMA) {
-    const rows = requireArray(
-      ctx,
-      "VAL-TASKS-PROPOSAL-001",
-      PROPOSAL_TRACE_PATH,
-      proposalTrace["change-ga-register"],
-      "change-ga-register",
-    );
-    return buildExpectedRows({
-      schemaName,
-      rows,
-      idField: "ga-id",
-      idRegex: GA_ID_RE,
-      projectionField: "projection",
-    });
+    return { schemaName };
   }
 
   if (schemaName === DEFAULT_SCHEMA) {
-    const rows = requireArray(
-      ctx,
-      "VAL-TASKS-PROPOSAL-010",
-      PROPOSAL_TRACE_PATH,
-      proposalTrace["change-scope-coverage"],
-      "change-scope-coverage",
-    );
-    return buildExpectedRows({
-      schemaName,
-      rows,
-      idField: "scope-item-id",
-      idRegex: SI_ID_RE,
-      projectionField: "artifact-handling",
-    });
+    return { schemaName };
   }
 
-  addError(ctx, "VAL-TASKS-PROPOSAL-020", PROPOSAL_TRACE_PATH, `不支持的 proposal schema-name：${schemaName || "(empty)"}`);
+  addError(ctx, "VAL-TASKS-TRACE-011", TASKS_TRACE_PATH, `不支持的 tasks schema-name：${schemaName || "(empty)"}`);
   return null;
-}
-
-function buildExpectedRows(config) {
-  const rowsById = new Map();
-  const ids = [];
-  for (const row of config.rows) {
-    const id = strip(row?.[config.idField]);
-    if (!id) continue;
-    ids.push(id);
-    if (!rowsById.has(id)) rowsById.set(id, row);
-  }
-  return {
-    ...config,
-    ids,
-    rowsById,
-  };
 }
 
 function buildSpecsModel(ctx, schemaName) {
@@ -320,16 +278,12 @@ function buildSpecsModel(ctx, schemaName) {
     for (const [deltaIndex, row] of rows.entries()) {
       const deltaOp = strip(row?.["delta-op"]);
       if (deltaOp !== "added" && deltaOp !== "modified") continue;
-      const requirement = requireString(ctx, "VAL-TASKS-SPECS-014", tracePath, row?.requirement, `spec-delta-register[${deltaIndex}].requirement`);
       for (const [scenarioIndex, scenario] of requireArray(ctx, "VAL-TASKS-SPECS-015", tracePath, row?.scenarios, `spec-delta-register[${deltaIndex}].scenarios`).entries()) {
-        const scenarioName = requireString(ctx, "VAL-TASKS-SPECS-016", tracePath, scenario?.name, `spec-delta-register[${deltaIndex}].scenarios[${scenarioIndex}].name`);
-        if (requirement && scenarioName) {
+        if (scenario && typeof scenario === "object" && !Array.isArray(scenario)) {
           const pointer = `${tracePath}#/spec-delta-register/${deltaIndex}/scenarios/${scenarioIndex}`;
           scenariosByPointer.set(pointer, {
             pointer,
             tracePath,
-            requirement,
-            scenario: scenarioName,
           });
         }
       }
@@ -344,12 +298,13 @@ function buildSpecsModel(ctx, schemaName) {
   };
 }
 
-function buildDesignModel(ctx, trace) {
+function buildDesignModel(ctx, trace, schemaName) {
   const details = new Map();
   const targetDetailIds = new Set();
   if (!trace) return { details, targetDetailIds };
 
   expectEqual(ctx, "VAL-TASKS-DESIGN-001", DESIGN_TRACE_PATH, trace["artifact-id"], "design", "artifact-id");
+  expectEqual(ctx, "VAL-TASKS-DESIGN-007", DESIGN_TRACE_PATH, trace["schema-name"], schemaName, "schema-name");
   const rows = requireArray(ctx, "VAL-TASKS-DESIGN-002", DESIGN_TRACE_PATH, trace["implementation-design-register"], "implementation-design-register");
   for (const [registerIndex, row] of rows.entries()) {
     const parentId = strip(row?.["implementation-design-id"]);
@@ -389,8 +344,10 @@ function buildDesignModel(ctx, trace) {
   return { details, targetDetailIds };
 }
 
-function buildRuntimeModel(ctx, trace) {
+function buildRuntimeModel(ctx, trace, schemaName) {
   const rows = new Map();
+  expectEqual(ctx, "VAL-TASKS-RUNTIME-006", RUNTIME_TRACE_PATH, trace["artifact-id"], "runtime-acceptance", "artifact-id");
+  expectEqual(ctx, "VAL-TASKS-RUNTIME-007", RUNTIME_TRACE_PATH, trace["schema-name"], schemaName, "schema-name");
   const values = requireArray(ctx, "VAL-TASKS-RUNTIME-001", RUNTIME_TRACE_PATH, trace["runtime-fact-register"], "runtime-fact-register");
 
   for (const [index, row] of values.entries()) {
@@ -406,11 +363,15 @@ function buildRuntimeModel(ctx, trace) {
     if (rows.has(id)) {
       addError(ctx, "VAL-TASKS-RUNTIME-005", RUNTIME_TRACE_PATH, `runtime fact 重复：${id}。`);
     }
+    const scopeRole = requireString(ctx, "VAL-TASKS-RUNTIME-008", RUNTIME_TRACE_PATH, row?.["scope-role"], `runtime-fact-register[${index}].scope-role`);
+    if (scopeRole && !TARGET_SCOPE_ROLES.has(scopeRole)) {
+      addError(ctx, "VAL-TASKS-RUNTIME-009", RUNTIME_TRACE_PATH, `runtime-fact-register[${index}].scope-role 非法：${scopeRole}。`);
+    }
     rows.set(id, {
       id,
       row,
       rowType: strip(row?.["fact-type"]) || rowTypeForRuntimeId(id),
-      scopeRole: strip(row?.["scope-role"]),
+      scopeRole,
     });
   }
 
@@ -446,11 +407,13 @@ function validateCommonTrace(ctx, trace, expected, specs) {
 
 function validateManifest(ctx) {
   const manifestRelPath = "trace/manifest.json";
-  const manifest = readJson(ctx, path.join(ctx.changeDir, manifestRelPath));
+  const manifestFullPath = path.join(ctx.changeDir, manifestRelPath);
+  if (!fs.existsSync(manifestFullPath)) return;
+  const manifest = readJson(ctx, manifestFullPath);
   if (!manifest) return;
 
-  expectEqual(ctx, "VAL-TASKS-MANIFEST-001", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
-  expectEqual(ctx, "VAL-TASKS-MANIFEST-003", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
+  warnIfNotEqual(ctx, "VAL-TASKS-MANIFEST-010", manifestRelPath, manifest["trace-schema"], TRACE_SCHEMA, "trace-schema");
+  warnIfNotEqual(ctx, "VAL-TASKS-MANIFEST-010", manifestRelPath, manifest["trace-contract-version"], TRACE_CONTRACT_VERSION, "trace-contract-version");
 
   const entries = requireArray(ctx, "VAL-TASKS-MANIFEST-004", manifestRelPath, manifest.artifacts, "artifacts").filter(isTasksManifestEntry);
   if (entries.length !== 1) {
@@ -485,20 +448,21 @@ function validateTaskCheckboxWriteback(ctx, tasksTrace) {
 
 function validateSourceInterfaceBoundaries(ctx, sourceInterface) {
   for (const item of collectStringLeaves(sourceInterface)) {
-    const value = strip(item.value);
+    if (isInputPolicyPointer(item.pointer)) continue;
+    const value = normalizePathText(strip(item.value));
     if (MARKDOWN_INPUT_RE.test(value)) {
       addError(ctx, "VAL-TASKS-SOURCE-010", TASKS_TRACE_PATH, `source-interface${item.pointer} 不得把 Markdown artifact 作为 semantic input：${value}。`);
     }
     if (VERIFICATION_TRACE_RE.test(value)) {
       addError(ctx, "VAL-TASKS-SOURCE-011", TASKS_TRACE_PATH, `source-interface${item.pointer} 不得声明 verification trace 或 proof-slices sidecar 输入：${value}。`);
     }
-    if (TEST_FILE_RE.test(value) || EVIDENCE_PATH_RE.test(value) || APPLY_EVIDENCE_RE.test(value)) {
+    if (TEST_FILE_RE.test(value) || EVIDENCE_PATH_RE.test(value) || APPLY_EVIDENCE_RE.test(value) || DEPOSIT_RESULT_PATH_RE.test(value)) {
       addError(ctx, "VAL-TASKS-SOURCE-012", TASKS_TRACE_PATH, `source-interface${item.pointer} 不得声明测试文件、apply evidence 或 openspec-results 输入：${value}。`);
     }
   }
 }
 
-function validateForbiddenShape(ctx, trace) {
+function validateForbiddenShape(ctx, trace, schemaName) {
   for (const ref of collectObjectKeyRefs(trace)) {
     if (FORBIDDEN_TRACE_KEYS.has(ref.key)) {
       addError(ctx, "VAL-TASKS-FORBIDDEN-001", TASKS_TRACE_PATH, `tasks trace 不得包含旧测试矩阵、verification、evidence/deposit 或旧字段：${ref.pointer}。`);
@@ -508,22 +472,25 @@ function validateForbiddenShape(ctx, trace) {
     }
   }
 
+  const sourceLeakRe = sourceLeakRegexForSchema(schemaName);
   for (const item of collectStringLeaves(trace)) {
-    const value = strip(item.value);
-    if (FORBIDDEN_TEXT_RE.test(value) || TEST_FILE_RE.test(value) || EVIDENCE_PATH_RE.test(value) || APPLY_EVIDENCE_RE.test(value) || COMMAND_RE.test(value)) {
-      addError(ctx, "VAL-TASKS-FORBIDDEN-002", TASKS_TRACE_PATH, `tasks trace 不得包含测试矩阵、固定命令、具体测试文件或 evidence/apply path：${item.pointer}。`);
+    if (isSourceInputPolicyPointer(item.pointer)) continue;
+    const value = normalizePathText(strip(item.value));
+    if (FORBIDDEN_TEXT_RE.test(value) || LEGACY_PROOF_TEXT_RE.test(value) || EVIDENCE_PATH_RE.test(value) || APPLY_EVIDENCE_RE.test(value) || DEPOSIT_RESULT_PATH_RE.test(value)) {
+      addError(ctx, "VAL-TASKS-FORBIDDEN-002", TASKS_TRACE_PATH, `tasks trace 不得包含旧测试矩阵、legacy proof/evidence 文本或 evidence/apply path：${item.pointer}。`);
+    }
+    if (sourceLeakRe?.test(value)) {
+      addError(ctx, "VAL-TASKS-SOURCE-013", TASKS_TRACE_PATH, `tasks trace 不得泄漏 schema source coverage 身份：${item.pointer}。`);
     }
   }
 }
 
-function validateProfileLeaks(ctx, trace, expected) {
-  const refs =
-    expected.schemaName === DEFAULT_SCHEMA
-      ? collectIds(trace, ANY_GA_ID_RE)
-      : collectIds(trace, ANY_SI_ID_RE);
-  for (const ref of refs) {
-    const label = expected.schemaName === DEFAULT_SCHEMA ? "GA-####" : "SI-###";
-    addError(ctx, "VAL-TASKS-PROFILE-001", TASKS_TRACE_PATH, `${expected.schemaName} tasks trace 不得出现 ${label}：${ref.id}。`);
+function validateTaskTextRisk(ctx, trace) {
+  for (const item of collectTaskTextLeaves(trace)) {
+    const value = normalizePathText(strip(item.value));
+    if (TEST_FILE_RE.test(value) || TEST_COMMAND_RE.test(value)) {
+      addWarning(ctx, "VAL-TASKS-TEXT-001", TASKS_TRACE_PATH, `AC/task 文本疑似包含测试文件或测试 runner 命令，reviewer/preflight 必须判断是否为 proof/test/evidence-only task：${item.pointer}。`);
+    }
   }
 }
 
@@ -536,7 +503,6 @@ function validateImplementationSteps(ctx, trace, models) {
   const acById = new Map();
   const registerOrder = new Map();
   const taskById = new Map();
-  const taskToAc = new Map();
 
   for (const [index, step] of steps.entries()) {
     const label = `implementation-step-register[${index}]`;
@@ -580,7 +546,6 @@ function validateImplementationSteps(ctx, trace, models) {
         acId,
         links: taskLinks,
       });
-      taskToAc.set(taskId, acId);
     }
 
     validateStepLinksMatchTaskAggregation(ctx, acId, stepLinks, taskLinkAggregation);
@@ -595,7 +560,6 @@ function validateImplementationSteps(ctx, trace, models) {
     acById,
     acOrder: registerOrder,
     taskById,
-    taskToAc,
   };
 }
 
@@ -805,12 +769,40 @@ function linkSet(links) {
   return new Set(links.map((link) => `${link.id}:${link.contribution}`));
 }
 
-function validateKebabCaseKeys(ctx, trace) {
-  for (const ref of collectObjectKeyRefs(trace)) {
-    if (!KEBAB_KEY_RE.test(ref.key)) {
-      addError(ctx, "VAL-TASKS-KEY-001", TASKS_TRACE_PATH, `tasks trace key 必须使用 kebab-case：${ref.pointer}。`);
+function sourceLeakRegexForSchema(schemaName) {
+  if (schemaName === OBLIGATION_SCHEMA) return OBLIGATION_SOURCE_LEAK_RE;
+  if (schemaName === DEFAULT_SCHEMA) return DEFAULT_SOURCE_LEAK_RE;
+  return null;
+}
+
+function isInputPolicyPointer(pointer) {
+  return pointer === "/input-policy" || pointer.startsWith("/input-policy/");
+}
+
+function isSourceInputPolicyPointer(pointer) {
+  return pointer === "/source-interface/input-policy" || pointer.startsWith("/source-interface/input-policy/");
+}
+
+function normalizePathText(value) {
+  return strip(value).replace(/\\/gu, "/");
+}
+
+function collectTaskTextLeaves(trace) {
+  const leaves = [];
+  for (const [stepIndex, step] of asArray(trace?.["implementation-step-register"]).entries()) {
+    if (typeof step?.title === "string") {
+      leaves.push({ value: step.title, pointer: `/implementation-step-register/${stepIndex}/title` });
+    }
+    for (const [taskIndex, task] of asArray(step?.tasks).entries()) {
+      if (typeof task?.title === "string") {
+        leaves.push({ value: task.title, pointer: `/implementation-step-register/${stepIndex}/tasks/${taskIndex}/title` });
+      }
+      if (typeof task?.work === "string") {
+        leaves.push({ value: task.work, pointer: `/implementation-step-register/${stepIndex}/tasks/${taskIndex}/work` });
+      }
     }
   }
+  return leaves;
 }
 
 function requireAcIdArray(ctx, ruleId, value, label) {
@@ -950,6 +942,12 @@ function expectEqual(ctx, ruleId, file, actual, expected, label) {
   }
 }
 
+function warnIfNotEqual(ctx, ruleId, file, actual, expected, label) {
+  if (actual !== expected) {
+    addWarning(ctx, ruleId, file, `${label} 不一致：实际 ${formatValue(actual)}，期望 ${formatValue(expected)}。`);
+  }
+}
+
 function expectSameSet(ctx, ruleId, file, actualValues, expectedValues, label) {
   const actual = unique(actualValues.map(strip).filter(Boolean));
   const expected = unique(expectedValues.map(strip).filter(Boolean));
@@ -998,27 +996,6 @@ function collectObjectKeyRefs(value, pointer = "") {
     refs.push(...collectObjectKeyRefs(child, childPointer));
   }
   return refs;
-}
-
-function collectIds(value, regex, pointer = "") {
-  if (typeof value === "string") {
-    return [...value.matchAll(new RegExp(regex.source, "gu"))].map((match) => ({
-      id: match[0],
-      pointer,
-    }));
-  }
-  if (!value || typeof value !== "object") return [];
-  const rows = [];
-  if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      rows.push(...collectIds(item, regex, `${pointer}/${index}`));
-    }
-    return rows;
-  }
-  for (const [key, child] of Object.entries(value)) {
-    rows.push(...collectIds(child, regex, `${pointer}/${escapePointer(key)}`));
-  }
-  return rows;
 }
 
 function escapePointer(value) {

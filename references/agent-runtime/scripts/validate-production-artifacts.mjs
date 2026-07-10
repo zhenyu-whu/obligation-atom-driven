@@ -126,7 +126,7 @@ function validateCompleteChange(ctx) {
     asArray(verificationSlices)
       .flatMap((row) => asArray(row?.["runtime-fact-ids"]).map(strip).filter(Boolean)),
   );
-  const taskRuntimeRowIds = collectTaskRuntimeClosureIds(tasksTrace);
+  const taskRuntimeRowIds = collectTaskRuntimeClosureIds(tasksTrace, runtimeTrace);
 
   validateSameIdSet(ctx, {
     rulePrefix: "VAL-COMPLETE-VERIFICATION-ROWS",
@@ -155,19 +155,39 @@ function collectRuntimeRowIds(runtimeTrace, options = {}) {
     .filter(Boolean);
 }
 
-function collectTaskRuntimeClosureIds(tasksTrace) {
+function collectTaskRuntimeClosureIds(tasksTrace, runtimeTrace) {
+  const targetRows = collectTargetRuntimeRowsById(runtimeTrace);
   const ids = [];
   for (const step of asArray(tasksTrace["implementation-step-register"])) {
     for (const task of asArray(step?.tasks)) {
       for (const link of asArray(task?.["runtime-fact-links"])) {
         const contribution = strip(link?.contribution);
-        if (contribution === "completes" || contribution === "enforces") {
-          ids.push(strip(link?.["runtime-fact-id"]));
+        const id = strip(link?.["runtime-fact-id"]);
+        if (!id || (contribution !== "completes" && contribution !== "enforces")) continue;
+        const scopeRole = targetRows.get(id);
+        if (!scopeRole) {
+          ids.push(id);
+        } else if (scopeRole === "required behavior" && contribution === "completes") {
+          ids.push(id);
+        } else if (scopeRole === "preserve boundary" && contribution === "enforces") {
+          ids.push(id);
         }
       }
     }
   }
   return new Set(ids.filter(Boolean));
+}
+
+function collectTargetRuntimeRowsById(runtimeTrace) {
+  const rows = new Map();
+  for (const row of asArray(runtimeTrace["runtime-fact-register"])) {
+    const id = strip(row?.["runtime-fact-id"]);
+    const scopeRole = strip(row?.["scope-role"]);
+    if (id && (scopeRole === "required behavior" || scopeRole === "preserve boundary")) {
+      rows.set(id, scopeRole);
+    }
+  }
+  return rows;
 }
 
 function validateSameIdSet(ctx, config) {

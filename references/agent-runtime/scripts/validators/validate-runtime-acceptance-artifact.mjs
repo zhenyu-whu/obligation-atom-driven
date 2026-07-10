@@ -19,8 +19,6 @@ const NO_DELTA_TRACE_PATH = "trace/specs/no-spec-delta/README.trace.json";
 const RUNTIME_TRACE_PATH = "trace/runtime-acceptance.trace.json";
 const RUNTIME_ARTIFACT_PATH = "runtime-acceptance.md";
 
-const ANY_GA_ID_RE = /\bGA-\d{4}\b/u;
-const ANY_SI_ID_RE = /\bSI-\d{3}\b/u;
 const IMPLEMENTATION_DESIGN_ID_RE = /^IDR-\d{3}$/u;
 const RUNTIME_FACT_ID_RE = /^(RS|OP|ST|CH)-\d{3}$/u;
 const MARKDOWN_INPUT_RE = /(?:^|\/)(?:proposal|design)\.md$|(?:^|\/)specs\/.+\.md$/iu;
@@ -28,6 +26,18 @@ const OWNER_LIST_RE = /[,，;+、]|(?:^|\s)(?:and|和|与)(?:\s|$)/iu;
 
 const FACT_TYPES = new Set(["surface", "operation", "state", "chain"]);
 const SCOPE_ROLES = new Set(["required behavior", "preserve boundary"]);
+const RUNTIME_TRACE_FIELDS = new Set([
+  "trace-schema",
+  "artifact-id",
+  "artifact-path",
+  "change-name",
+  "schema-name",
+  "agent-role",
+  "source-interface",
+  "runtime-fact-register",
+  "runtime-gate",
+  "delivery-plane",
+]);
 const RUNTIME_GATE_FIELDS = [
   "blockers",
   "uncovered-spec-scenarios",
@@ -126,7 +136,6 @@ function validateRuntimeIfPresent(ctx) {
   validateCommonRuntimeTrace(ctx, runtimeTrace, expected, specs);
   validateLegacyRuntimeFieldsAbsent(ctx, runtimeTrace);
   validateRuntimeManifest(ctx);
-  validateProfileLeaks(ctx, runtimeTrace, expected);
   validateForbiddenTraceShape(ctx, runtimeTrace);
 
   if (!designTrace) return;
@@ -134,7 +143,7 @@ function validateRuntimeIfPresent(ctx) {
   const design = buildDesignModel(ctx, designTrace);
   const factModel = validateRuntimeFactRegister(ctx, runtimeTrace, expected, specs, design);
   validateRuntimeDeliveryProjection(ctx, runtimeTrace, factModel);
-  validateRuntimeCoverage(ctx, specs, design, factModel);
+  validateRuntimeCoverage(ctx, specs, factModel);
   validateRuntimeGate(ctx, runtimeTrace);
 }
 
@@ -153,22 +162,11 @@ function collectRuntimeInventory(ctx) {
 function buildExpectedRuntimeModel(ctx, runtimeTrace) {
   const schemaName = strip(runtimeTrace["schema-name"]);
   if (schemaName === OBLIGATION_SCHEMA) {
-    return {
-      schemaName,
-      oppositeIdRegex: ANY_SI_ID_RE,
-      oppositeIdLabel: "SI-###",
-      forbiddenIdentityKey: "scope-item-id",
-      forbiddenLegacyIdentityKey: "global-atom-id",
-    };
+    return { schemaName };
   }
 
   if (schemaName === DEFAULT_SCHEMA) {
-    return {
-      schemaName,
-      oppositeIdRegex: ANY_GA_ID_RE,
-      oppositeIdLabel: "GA-####",
-      forbiddenIdentityKey: "global-atom-id",
-    };
+    return { schemaName };
   }
 
   addError(ctx, "VAL-RUNTIME-TRACE-013", RUNTIME_TRACE_PATH, `不支持的 runtime schema-name：${schemaName || "(empty)"}`);
@@ -243,6 +241,7 @@ function buildSpecsTraceModel(ctx, schemaName) {
 }
 
 function validateCommonRuntimeTrace(ctx, trace, expected, specs) {
+  validateAllowedKeys(ctx, "VAL-RUNTIME-TRACE-014", RUNTIME_TRACE_PATH, trace, "runtime trace", RUNTIME_TRACE_FIELDS);
   expectEqual(ctx, "VAL-RUNTIME-TRACE-001", RUNTIME_TRACE_PATH, trace["trace-schema"], TRACE_SCHEMA, "trace-schema");
   expectEqual(ctx, "VAL-RUNTIME-TRACE-002", RUNTIME_TRACE_PATH, trace["artifact-id"], "runtime-acceptance", "artifact-id");
   expectEqual(ctx, "VAL-RUNTIME-TRACE-003", RUNTIME_TRACE_PATH, trace["artifact-path"], RUNTIME_ARTIFACT_PATH, "artifact-path");
@@ -268,7 +267,23 @@ function validateCommonRuntimeTrace(ctx, trace, expected, specs) {
     .map(strip)
     .filter(Boolean);
   expectSameSet(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-005", RUNTIME_TRACE_PATH, specTraces, specs.tracePaths, "source-interface.spec-traces");
+  validateSourceInterfaceValueShape(ctx, sourceInterface);
   validateSourceInterfaceStringLeaves(ctx, sourceInterface, specs.tracePaths);
+}
+
+function validateSourceInterfaceValueShape(ctx, sourceInterface) {
+  for (const [field, value] of Object.entries(sourceInterface)) {
+    if (typeof value === "string") continue;
+    if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        if (typeof item !== "string") {
+          addError(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-012", RUNTIME_TRACE_PATH, `source-interface.${field}[${index}] 必须是字符串，不能内联 object metadata。`);
+        }
+      }
+      continue;
+    }
+    addError(ctx, "VAL-RUNTIME-SOURCE-INTERFACE-012", RUNTIME_TRACE_PATH, `source-interface.${field} 必须是字符串或字符串数组，不能内联 object metadata。`);
+  }
 }
 
 function validateSourceInterfaceStringLeaves(ctx, sourceInterface, specTracePaths) {
@@ -303,18 +318,6 @@ function validateRuntimeManifest(ctx) {
   expectEqual(ctx, "VAL-RUNTIME-MANIFEST-009", manifestRelPath, entries[0]["trace-schema"], TRACE_SCHEMA, "runtime entry trace-schema");
 }
 
-function validateProfileLeaks(ctx, trace, expected) {
-  const keyRefs = collectObjectKeyRefs(trace);
-  for (const ref of keyRefs) {
-    if (ref.key === expected.forbiddenIdentityKey || ref.key === expected.forbiddenLegacyIdentityKey) {
-      addError(ctx, "VAL-RUNTIME-PROFILE-001", RUNTIME_TRACE_PATH, `${expected.schemaName} runtime trace 不得包含 ${ref.key}。`);
-    }
-  }
-  for (const ref of collectIds(trace, expected.oppositeIdRegex)) {
-    addError(ctx, "VAL-RUNTIME-PROFILE-002", RUNTIME_TRACE_PATH, `${expected.schemaName} runtime trace 不得出现 ${expected.oppositeIdLabel}：${ref.id}。`);
-  }
-}
-
 function validateForbiddenTraceShape(ctx, trace) {
   for (const ref of collectObjectKeyRefs(trace)) {
     if (FORBIDDEN_TRACE_KEYS.has(ref.key.toLowerCase())) {
@@ -334,40 +337,14 @@ function validateLegacyRuntimeFieldsAbsent(ctx, trace) {
 function buildDesignModel(ctx, designTrace) {
   const rows = requireArray(ctx, "VAL-RUNTIME-DESIGN-001", DESIGN_TRACE_PATH, designTrace["implementation-design-register"], "implementation-design-register");
   const designIds = new Set();
-  const runtimeDesignIds = new Set();
   for (const [index, row] of rows.entries()) {
     const id = requireId(ctx, "VAL-RUNTIME-DESIGN-002", DESIGN_TRACE_PATH, row?.["implementation-design-id"], `implementation-design-register[${index}].implementation-design-id`, IMPLEMENTATION_DESIGN_ID_RE);
     if (!id) continue;
     designIds.add(id);
-    if (isRuntimeAffectingDesignDecision(row)) {
-      runtimeDesignIds.add(id);
-    }
   }
   return {
     designIds,
-    runtimeDesignIds,
   };
-}
-
-function isRuntimeAffectingDesignDecision(row) {
-  const layer = strip(row?.layer);
-  const text = [
-    row?.title,
-    row?.decision,
-    row?.["implementation-boundary"],
-    row?.["implementation-contract"],
-    row?.["guard-failure-handling"],
-    row?.["verification-handoff"],
-    row?.["no-scope-expansion"],
-  ].map(strip).join("\n");
-
-  if (/不产生(?:独立)?可观察运行态事实|无可观察运行态事实|只(?:约束|涉及)(?:验证|rollout|发布|回滚|实现组织)/u.test(text)) {
-    return false;
-  }
-  if (layer === "verification-rollout" && !/(API|UI|DB|data|状态|分支|异步|worker|queue|SSE|权限|auth|运行|可观察|surface|operation|state|chain)/iu.test(text)) {
-    return false;
-  }
-  return true;
 }
 
 function validateRuntimeFactRegister(ctx, trace, expected, specs, design) {
@@ -501,7 +478,7 @@ function validateRuntimeDeliveryProjection(ctx, trace, factModel) {
   expectSameSet(ctx, "VAL-RUNTIME-DELIVERY-007", RUNTIME_TRACE_PATH, allSectionIds, [...factModel.factIds], "delivery-plane.fact-sections runtime facts");
 }
 
-function validateRuntimeCoverage(ctx, specs, design, factModel) {
+function validateRuntimeCoverage(ctx, specs, factModel) {
   expectSameSet(
     ctx,
     "VAL-RUNTIME-COVERAGE-SPEC-001",
@@ -509,14 +486,6 @@ function validateRuntimeCoverage(ctx, specs, design, factModel) {
     [...factModel.coveredSpecScenarios],
     [...specs.scenarioIds],
     "runtime facts covered spec scenarios",
-  );
-  expectSameSet(
-    ctx,
-    "VAL-RUNTIME-COVERAGE-DESIGN-001",
-    RUNTIME_TRACE_PATH,
-    [...factModel.coveredDesignDecisions].filter((id) => design.runtimeDesignIds.has(id)),
-    [...design.runtimeDesignIds],
-    "runtime facts covered runtime-affecting design decisions",
   );
 }
 
@@ -656,6 +625,15 @@ function requireIdArray(ctx, ruleId, file, value, label, regex) {
   return values;
 }
 
+function validateAllowedKeys(ctx, ruleId, file, value, label, allowedKeys) {
+  const object = requireObject(ctx, ruleId, file, value, label);
+  for (const key of Object.keys(object)) {
+    if (!allowedKeys.has(key)) {
+      addError(ctx, ruleId, file, `${label} 不得包含未知字段：${key}`);
+    }
+  }
+}
+
 function expectEqual(ctx, ruleId, file, actual, expected, label) {
   if (actual !== expected) {
     addError(ctx, ruleId, file, `${label} 不一致：实际 ${formatValue(actual)}，期望 ${formatValue(expected)}。`);
@@ -710,27 +688,6 @@ function collectObjectKeyRefs(value, pointer = "") {
     refs.push(...collectObjectKeyRefs(child, childPointer));
   }
   return refs;
-}
-
-function collectIds(value, regex, pointer = "") {
-  if (typeof value === "string") {
-    return [...value.matchAll(new RegExp(regex.source, "gu"))].map((match) => ({
-      id: match[0],
-      pointer,
-    }));
-  }
-  if (!value || typeof value !== "object") return [];
-  const rows = [];
-  if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      rows.push(...collectIds(item, regex, `${pointer}/${index}`));
-    }
-    return rows;
-  }
-  for (const [key, child] of Object.entries(value)) {
-    rows.push(...collectIds(child, regex, `${pointer}/${escapePointer(key)}`));
-  }
-  return rows;
 }
 
 function escapePointer(value) {

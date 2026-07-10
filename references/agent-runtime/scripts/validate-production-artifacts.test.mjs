@@ -197,7 +197,7 @@ test("proposal validator rejects disposition and route shape mismatch", () => {
   assertHasRule(result, "VAL-OBLIGATION-ROUTING-004");
 });
 
-test("proposal validator rejects routing rationale that uses final projection as route basis", () => {
+test("proposal validator warns when routing rationale uses final projection as route basis", () => {
   const change = "validator-obligation-routing-projection-echo-change";
   const root = makeSimplifiedObligationProposalFixture(change);
   updateProposalTrace(root, change, (trace) => {
@@ -206,8 +206,8 @@ test("proposal validator rejects routing rationale that uses final projection as
 
   const result = validateProposalArtifact({ root, change });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-OBLIGATION-ROUTING-011");
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-OBLIGATION-ROUTING-011");
 });
 
 test("proposal validator accepts dual specs and design artifact routes", () => {
@@ -226,7 +226,7 @@ test("proposal validator accepts dual specs and design artifact routes", () => {
   assert.equal(result.ok, true, formatErrors(result));
 });
 
-test("proposal validator rejects obligation delivery plane register leaks", () => {
+test("proposal validator warns on obligation delivery plane register leak phrases", () => {
   const change = "validator-obligation-delivery-register-leak-change";
   const root = makeSimplifiedObligationProposalFixture(change);
   updateProposalTrace(root, change, (trace) => {
@@ -235,8 +235,8 @@ test("proposal validator rejects obligation delivery plane register leaks", () =
 
   const result = validateProposalArtifact({ root, change });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-OBLIGATION-DELIVERY-002");
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-OBLIGATION-DELIVERY-002");
 });
 
 test("proposal validator passes minimal default proposal contract", () => {
@@ -259,6 +259,19 @@ test("proposal validator rejects default proposal obligation authority leaks", (
 
   assert.equal(result.ok, false);
   assertHasRule(result, "VAL-DEFAULT-DELIVERY-001");
+});
+
+test("proposal validator warns on default delivery plane trace leak phrases", () => {
+  const change = "validator-default-delivery-trace-phrase-change";
+  const root = makeDefaultFixture(change);
+  updateProposalTrace(root, change, (trace) => {
+    trace["delivery-plane"].why = ["- 错误描述 scope coverage。"];
+  });
+
+  const result = validateChange({ root, change });
+
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-DEFAULT-DELIVERY-003");
 });
 
 test("proposal validator ignores handwritten markdown drift", () => {
@@ -294,6 +307,32 @@ test("specs validator passes minimal obligation specs contract", () => {
   const result = validateChange({ root, change, artifact: "specs" });
 
   assert.equal(result.ok, true, formatErrors(result));
+});
+
+test("standalone specs validator warns on malformed upstream proposal register", () => {
+  const change = "validator-specs-malformed-upstream-register-change";
+  const root = makeObligationSpecsFixture(change);
+  updateProposalTrace(root, change, (trace) => {
+    delete trace["change-ga-register"];
+  });
+
+  const result = validateSpecsArtifact({ root, change });
+
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-SPECS-UPSTREAM-002");
+});
+
+test("standalone specs validator warns on duplicate upstream proposal IDs", () => {
+  const change = "validator-specs-duplicate-upstream-id-change";
+  const root = makeObligationSpecsFixture(change);
+  updateProposalTrace(root, change, (trace) => {
+    trace["change-ga-register"].push({ ...trace["change-ga-register"][0] });
+  });
+
+  const result = validateSpecsArtifact({ root, change });
+
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-SPECS-UPSTREAM-003");
 });
 
 test("standalone specs validator passes minimal obligation specs contract", () => {
@@ -738,7 +777,7 @@ test("design validator rejects detail basis outside parent IDR", () => {
   assertHasRule(result, "VAL-DESIGN-DETAIL-BASIS-005");
 });
 
-test("design validator rejects layer detail coverage gaps", () => {
+test("design validator leaves layer detail coverage gaps to reviewer", () => {
   const change = "validator-design-layer-detail-gap-change";
   const root = makeObligationDesignFixture(change);
   updateDesignTrace(root, change, (trace) => {
@@ -747,8 +786,7 @@ test("design validator rejects layer detail coverage gaps", () => {
 
   const result = validateChange({ root, change, artifact: "design" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-DESIGN-DETAIL-040");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("design validator rejects detail render order missing actual type", () => {
@@ -847,7 +885,7 @@ test("design validator rejects detail content arrays", () => {
   assertHasRule(result, "VAL-DESIGN-DETAIL-011");
 });
 
-test("design validator rejects one-line data model content", () => {
+test("design validator leaves one-line data model quality to reviewer", () => {
   const change = "validator-design-one-line-data-model-change";
   const root = makeObligationDesignFixture(change);
   updateDesignTrace(root, change, (trace) => {
@@ -868,9 +906,7 @@ test("design validator rejects one-line data model content", () => {
 
   const result = validateChange({ root, change, artifact: "design" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-DESIGN-DETAIL-050");
-  assertHasRule(result, "VAL-DESIGN-DETAIL-051");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("design validator rejects json shape without json code block", () => {
@@ -903,24 +939,48 @@ test("design validator rejects json shape without json code block", () => {
   assertHasRule(result, "VAL-DESIGN-DETAIL-052");
 });
 
-test("design validator rejects unstructured content for every detail type", () => {
+test("design validator rejects malformed json shape code block", () => {
+  const change = "validator-design-json-shape-malformed-code-change";
+  const root = makeObligationDesignFixture(change);
+  updateDesignTrace(root, change, (trace) => {
+    trace["implementation-design-register"][0]["implementation-details"].push({
+      "detail-id": "IDR-001-D002",
+      "detail-type": "json-shape",
+      owner: "DecisionFlowModule",
+      subject: "draft payload",
+      basis: {
+        "inherits-parent-spec-anchors": true,
+        "spec-anchors": [],
+        "design-inputs": [],
+      },
+      content: "```json\n{\"version\": }\n```",
+      "no-scope-expansion": "不新增执行日志。",
+    });
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "design" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-DESIGN-DETAIL-053");
+});
+
+test("design validator leaves non-json detail content quality to reviewer", () => {
   const cases = [
-    ["module-boundary", "VAL-DESIGN-DETAIL-058"],
-    ["data-model", "VAL-DESIGN-DETAIL-051"],
-    ["json-shape", "VAL-DESIGN-DETAIL-052"],
-    ["api-contract", "VAL-DESIGN-DETAIL-054"],
-    ["dto-contract", "VAL-DESIGN-DETAIL-056"],
-    ["frontend-contract", "VAL-DESIGN-DETAIL-059"],
-    ["validation-error-contract", "VAL-DESIGN-DETAIL-060"],
-    ["state-lifecycle", "VAL-DESIGN-DETAIL-061"],
-    ["integration-boundary", "VAL-DESIGN-DETAIL-062"],
-    ["migration-compatibility", "VAL-DESIGN-DETAIL-063"],
-    ["observability-ops", "VAL-DESIGN-DETAIL-064"],
-    ["rollout-compatibility", "VAL-DESIGN-DETAIL-065"],
-    ["non-applicable", "VAL-DESIGN-DETAIL-066"],
+    "module-boundary",
+    "data-model",
+    "api-contract",
+    "dto-contract",
+    "frontend-contract",
+    "validation-error-contract",
+    "state-lifecycle",
+    "integration-boundary",
+    "migration-compatibility",
+    "observability-ops",
+    "rollout-compatibility",
+    "non-applicable",
   ];
 
-  for (const [detailType, expectedRule] of cases) {
+  for (const detailType of cases) {
     const change = `validator-design-unstructured-${detailType}-change`;
     const root = makeObligationDesignFixture(change);
     updateDesignTrace(root, change, (trace) => {
@@ -941,9 +1001,7 @@ test("design validator rejects unstructured content for every detail type", () =
 
     const result = validateChange({ root, change, artifact: "design" });
 
-    assert.equal(result.ok, false, `${detailType} should reject unstructured content`);
-    assertHasRule(result, "VAL-DESIGN-DETAIL-050");
-    assertHasRule(result, expectedRule);
+    assert.equal(result.ok, true, `${detailType} should be reviewer-owned:\n${formatErrors(result)}`);
   }
 });
 
@@ -1021,6 +1079,19 @@ test("runtime validator rejects runtime fact required field missing", () => {
   assertHasRule(result, "VAL-RUNTIME-FACT-013");
 });
 
+test("runtime validator rejects unknown top-level runtime trace field", () => {
+  const change = "validator-runtime-unknown-top-level-field-change";
+  const root = makeObligationRuntimeFixture(change);
+  updateRuntimeTrace(root, change, (trace) => {
+    trace["unexpected-runtime-field"] = [];
+  });
+
+  const result = validateChange({ root, change, artifact: "runtime-acceptance" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-RUNTIME-TRACE-014");
+});
+
 test("runtime validator rejects source-interface markdown input", () => {
   const change = "validator-runtime-source-interface-markdown-change";
   const root = makeObligationRuntimeFixture(change);
@@ -1047,6 +1118,21 @@ test("runtime validator rejects source-interface proposal trace input", () => {
 
   assert.equal(result.ok, false);
   assertHasRule(result, "VAL-RUNTIME-SOURCE-INTERFACE-001");
+});
+
+test("runtime validator rejects source-interface object metadata", () => {
+  const change = "validator-runtime-source-interface-object-metadata-change";
+  const root = makeObligationRuntimeFixture(change);
+  updateRuntimeTrace(root, change, (trace) => {
+    trace["source-interface"].metadata = {
+      "design-trace": "trace/design.trace.json",
+    };
+  });
+
+  const result = validateChange({ root, change, artifact: "runtime-acceptance" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-RUNTIME-SOURCE-INTERFACE-012");
 });
 
 test("runtime validator rejects source-interface specs mode and trace set drift", () => {
@@ -1077,19 +1163,6 @@ test("runtime validator rejects proof proposal gate field", () => {
   assertHasRule(result, "VAL-RUNTIME-GATE-004");
 });
 
-test("runtime validator rejects default runtime GA leak", () => {
-  const change = "validator-default-runtime-ga-leak-change";
-  const root = makeDefaultRuntimeFixture(change);
-  updateRuntimeTrace(root, change, (trace) => {
-    trace["delivery-plane"]["runtime-acceptance-intent"]["source-basis"] = "错误泄漏 GA-0001。";
-  }, { render: true });
-
-  const result = validateChange({ root, change, artifact: "runtime-acceptance" });
-
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-RUNTIME-PROFILE-002");
-});
-
 test("runtime validator rejects proposal context source basis", () => {
   const change = "validator-runtime-proposal-context-source-basis-change";
   const root = makeObligationRuntimeFixture(change);
@@ -1116,8 +1189,8 @@ test("runtime validator rejects missing spec scenario fact", () => {
   assertHasRule(result, "VAL-RUNTIME-COVERAGE-SPEC-001");
 });
 
-test("runtime validator rejects missing design decision fact", () => {
-  const change = "validator-runtime-design-decision-coverage-gap-change";
+test("runtime validator leaves missing design decision runtime coverage to reviewer", () => {
+  const change = "validator-runtime-design-decision-coverage-reviewer-owned-change";
   const root = makeObligationRuntimeFixture(change);
   updateRuntimeTrace(root, change, (trace) => {
     trace["runtime-fact-register"][0]["source-basis"]["design-decisions"] = [];
@@ -1125,8 +1198,7 @@ test("runtime validator rejects missing design decision fact", () => {
 
   const result = validateChange({ root, change, artifact: "runtime-acceptance" });
 
-  assert.equal(result.ok, false);
-  assertHasRule(result, "VAL-RUNTIME-COVERAGE-DESIGN-001");
+  assert.equal(result.ok, true, formatErrors(result));
 });
 
 test("runtime validator rejects invalid source refs", () => {
@@ -1554,6 +1626,32 @@ test("tasks validator rejects source-interface markdown and verification trace i
   assertHasRule(result, "VAL-TASKS-SOURCE-011");
 });
 
+test("tasks validator rejects source-interface test and evidence path inputs", () => {
+  const change = "validator-tasks-source-interface-test-input-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["source-interface"]["spec-traces"].push("apps/control-api/minimal.test.ts");
+  });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-SOURCE-012");
+});
+
+test("tasks validator ignores non-input policy examples in source-interface input-policy", () => {
+  const change = "validator-tasks-input-policy-examples-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["source-interface"]["input-policy"] =
+      "tasks 不读取 proposal.md、trace/verification.trace.json、测试文件或 openspec-results/**。";
+  });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, true, formatErrors(result));
+});
+
 test("tasks validator rejects unknown runtime fact references", () => {
   const change = "validator-tasks-unknown-runtime-row-change";
   const root = makeObligationTasksFixture(change);
@@ -1667,6 +1765,32 @@ test("tasks validator rejects required runtime fact missing closing task contrib
   assertHasRule(result, "VAL-TASKS-RUNTIME-CLOSURE-001");
 });
 
+test("tasks validator rejects runtime schema mismatch", () => {
+  const change = "validator-tasks-runtime-schema-mismatch-change";
+  const root = makeObligationTasksFixture(change);
+  updateRuntimeTrace(root, change, (trace) => {
+    trace["schema-name"] = "production-default-acceptance-driven";
+  });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-RUNTIME-007");
+});
+
+test("tasks validator rejects runtime fact missing scope role", () => {
+  const change = "validator-tasks-runtime-missing-scope-role-change";
+  const root = makeObligationTasksFixture(change);
+  updateRuntimeTrace(root, change, (trace) => {
+    delete trace["runtime-fact-register"][0]["scope-role"];
+  });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-RUNTIME-008");
+});
+
 test("tasks validator rejects proof-only runtime fact targets", () => {
   const change = "validator-tasks-proof-only-target-change";
   const root = makeObligationTasksFixture(change);
@@ -1678,6 +1802,7 @@ test("tasks validator rejects proof-only runtime fact targets", () => {
 
   assert.equal(result.ok, false);
   assertHasRule(result, "VAL-TASKS-RUNTIME-LINK-006");
+  assertHasRule(result, "VAL-TASKS-RUNTIME-009");
 });
 
 test("tasks validator rejects old top-level tasks trace fields", () => {
@@ -1693,6 +1818,32 @@ test("tasks validator rejects old top-level tasks trace fields", () => {
 
   assert.equal(result.ok, false);
   assertHasRule(result, "VAL-TASKS-FORBIDDEN-001");
+});
+
+test("tasks validator rejects schema source coverage leaks", () => {
+  const change = "validator-tasks-source-coverage-leak-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0].tasks[0].work = "错误按 GA-0001 关闭 source coverage。";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-SOURCE-013");
+});
+
+test("tasks validator rejects default scope item leaks", () => {
+  const change = "validator-tasks-default-scope-item-leak-change";
+  const root = makeDefaultTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0].tasks[0].work = "错误按 SI-001 关闭 scope coverage。";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-SOURCE-013");
 });
 
 test("tasks validator rejects old step and task fields", () => {
@@ -1735,18 +1886,104 @@ test("tasks validator rejects AC dependency order violations", () => {
   assertHasRule(result, "VAL-TASKS-DEPENDENCY-001");
 });
 
-test("tasks validator rejects fixed command and evidence leaks", () => {
-  const change = "validator-tasks-command-evidence-leak-change";
+test("tasks validator rejects evidence and apply path leaks", () => {
+  const change = "validator-tasks-evidence-path-leak-change";
   const root = makeObligationTasksFixture(change);
   updateTasksTrace(root, change, (trace) => {
     trace["implementation-step-register"][0].tasks[0].work =
-      "运行 pnpm vitest apps/control-api/tests/api/minimal.test.ts 并写入 openspec-results/x/result.json。";
+      "写入 openspec-results/x/result.json 作为完成依据。";
   }, { render: true });
 
   const result = validateChange({ root, change, artifact: "tasks" });
 
   assert.equal(result.ok, false);
   assertHasRule(result, "VAL-TASKS-FORBIDDEN-002");
+});
+
+test("tasks validator warns on test command or test file in task text", () => {
+  const change = "validator-tasks-test-command-warning-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0].tasks[0].work =
+      "运行 vitest apps/control-api/tests/api/minimal.test.ts 验证行为。";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-TASKS-TEXT-001");
+});
+
+test("tasks validator allows production build and generation commands in task text", () => {
+  const change = "validator-tasks-production-command-text-change";
+  const root = makeObligationTasksFixture(change);
+  updateTasksTrace(root, change, (trace) => {
+    trace["implementation-step-register"][0].tasks[0].work =
+      "维护 pnpm workspace package graph，并通过 node scripts/generate-workspace.mjs 生成生产包边界。";
+  }, { render: true });
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, true, formatErrors(result));
+  assert.equal(result.warnings.some((warning) => warning.ruleId === "VAL-TASKS-TEXT-001"), false, formatWarnings(result));
+});
+
+test("standalone tasks validator does not own specs scenario prose completeness", () => {
+  const change = "validator-tasks-spec-scenario-prose-boundary-change";
+  const root = makeObligationTasksFixture(change);
+  updateSpecsTrace(root, change, "capability-a", (trace) => {
+    delete trace["spec-delta-register"][0].requirement;
+    delete trace["spec-delta-register"][0].scenarios[0].name;
+  });
+
+  const result = validateTasksArtifact({ root, change });
+
+  assert.equal(result.ok, true, formatErrors(result));
+});
+
+test("tasks validator warns on manifest trace metadata mismatch", () => {
+  const change = "validator-tasks-manifest-metadata-warning-change";
+  const root = makeObligationTasksFixture(change);
+  const manifestPath = path.join(root, "openspec", "changes", change, "trace", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest["trace-schema"] = "custom-trace-schema";
+  manifest["trace-contract-version"] = "custom-trace-contract";
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, true, formatErrors(result));
+  assertHasWarning(result, "VAL-TASKS-MANIFEST-010");
+});
+
+test("tasks validator rejects duplicate manifest tasks entries", () => {
+  const change = "validator-tasks-manifest-duplicate-entry-change";
+  const root = makeObligationTasksFixture(change);
+  const manifestPath = path.join(root, "openspec", "changes", change, "trace", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const tasksEntry = manifest.artifacts.find((entry) => entry["artifact-id"] === "tasks");
+  manifest.artifacts.push({ ...tasksEntry });
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-MANIFEST-005");
+});
+
+test("tasks validator rejects manifest tasks path drift", () => {
+  const change = "validator-tasks-manifest-path-drift-change";
+  const root = makeObligationTasksFixture(change);
+  const manifestPath = path.join(root, "openspec", "changes", change, "trace", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const tasksEntry = manifest.artifacts.find((entry) => entry["artifact-id"] === "tasks");
+  tasksEntry["trace-path"] = "trace/tasks-wrong.trace.json";
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = validateChange({ root, change, artifact: "tasks" });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-TASKS-MANIFEST-008");
 });
 
 test("complete validator passes apply-required runtime verification and tasks reconciliation", () => {
@@ -1767,6 +2004,30 @@ test("complete validator passes apply-required runtime verification and tasks re
   const result = validateChange({ root, change, artifact: "tasks", complete: true });
 
   assert.equal(result.ok, true, formatErrors(result));
+});
+
+test("complete validator applies runtime role-specific tasks closure", () => {
+  const change = "validator-complete-tasks-role-closure-change";
+  const root = makeObligationVerificationFixture(change);
+  writeTasksTrace(root, change, tasksTrace({
+    change,
+    schemaName: "production-obligation-atom-driven",
+    sourceItemId: "GA-0001",
+    sourceItemField: "ga-id",
+    projectionField: "projection",
+    projectionValue: "spec-requirement",
+    mainCoverageField: "obligation-atom-coverage",
+    designCoverageField: "design-obligation-coverage",
+  }));
+  renderChangeArtifact({ root, change, artifact: "tasks", write: true });
+  updateRuntimeTrace(root, change, (trace) => {
+    trace["runtime-fact-register"][0]["scope-role"] = "preserve boundary";
+  });
+
+  const result = validateChange({ root, change, artifact: "verification", complete: true });
+
+  assert.equal(result.ok, false);
+  assertHasRule(result, "VAL-COMPLETE-TASKS-ROWS-001");
 });
 
 test("complete validator rejects missing apply-required tasks trace", () => {
@@ -3255,6 +3516,17 @@ function assertHasRule(result, ruleId) {
   );
 }
 
+function assertHasWarning(result, ruleId) {
+  assert.ok(
+    result.warnings.some((warning) => warning.ruleId === ruleId),
+    `expected warning ${ruleId}, got:\n${formatWarnings(result)}`,
+  );
+}
+
 function formatErrors(result) {
   return result.errors.map((error) => `${error.ruleId} ${error.file}: ${error.message}`).join("\n");
+}
+
+function formatWarnings(result) {
+  return result.warnings.map((warning) => `${warning.ruleId} ${warning.file}: ${warning.message}`).join("\n");
 }

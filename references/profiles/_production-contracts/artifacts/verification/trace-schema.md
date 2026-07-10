@@ -1,17 +1,6 @@
-# Verification Artifact Contract
+# Verification Trace Schema Contract
 
-## 目的
-
-`verification.md` 是 independent test intent and oracle artifact。它的唯一语义源是 `trace/verification.trace.json#/verification-slice-register`。每个 `verification-slice-register[]` row 是一个原子 Proof Slice，描述一个可验证 runtime 分支、oracle、证明层级和持久/非持久 proof 方式。
-
-`runtime-acceptance` 是唯一 oracle 来源。Verification 不读取 proposal/specs/design 重新建立 source/scope mapping，也不得从这些上游 artifact 发明 runtime acceptance 之外的 oracle。`verification.md` 只是 renderer 从 register 投影的人类可读镜像，不定义测试执行计划、具体测试文件、固定命令、runner selector 或 evidence path。
-
-## 写入前
-
-- 读取 `trace/runtime-acceptance.trace.json` 的 `runtime-fact-register[]` 和 `runtime-gate`。
-- 对每个 `required behavior`、`preserve boundary` runtime fact，拆出所有独立可失败分支。
-- 每个可验证分支生成一个 `PS-###` row；无法验证或存在冲突时写入 `verification-gate.blockers`，不得伪造 slice。
-- Writer 只写严格 JSON `trace/verification.trace.json`；`verification.md`、Trace Appendix 和 manifest registry entry 必须由 renderer 生成。
+本文件定义 `trace/verification.trace.json` 的共享结构约束。它适用于 writer、repair-writer、reviewer、renderer 和 validator，但不定义 writer 的 Proof Slice 生成策略，也不替代 reviewer 的语义审查规则。
 
 ## JSON Trace Plane
 
@@ -28,7 +17,7 @@
 - `verification-gate`
 - `delivery-plane`
 
-旧字段必须视为 hard error：
+旧字段必须视为 hard error，防止多套 truth：
 
 - `proof-slice-model`
 - `proof-slice-summary`
@@ -117,13 +106,3 @@ Validator pass 要求上述数组全部为空。Coverage 由 validator 从 `runt
 - Markdown 主体只渲染 `Verification Intent` 和一张 `Proof Slice Matrix`。
 - `Proof Slice Matrix` 必须是 `verification-slice-register[]` 的完整镜像。
 - artifact 末尾只保留短 `## Trace Appendix` 指针块。
-
-## Reviewer Focus
-
-- 是否只从 `trace/runtime-acceptance.trace.json#/runtime-fact-register` 派生 oracle。
-- 每个 required / preserve runtime fact 是否至少被一个 Proof Slice 覆盖。
-- 每个 slice 是否原子，且未合并 operation、state、failure/retry、auth/security、layout、observability、fixture variant、viewport 或 redaction branch。
-- `proof-evidence-mode` 是否正确决定持久测试或非持久 proof。
-- durable slice 的 `planned-test-directory` 是否是合法目录级 glob，并匹配 `test-layer`。
-- non-durable slice 是否使用 `N/A` 和明确 `non-persistent-reason`。
-- 是否存在旧字段、多套 coverage truth、Markdown semantic input、source/scope 外 oracle、测试执行计划或 evidence 字段泄漏。

@@ -15,7 +15,8 @@
 - `Evidence Status`
 - `Deposit Status`
 - `Test IDs`
-- 具体测试文件路径、固定测试命令、runner selector、CI runnable、evidence/apply 产物路径
+- evidence/apply 产物路径、执行状态、deposit 状态
+- 具体测试文件路径、固定测试命令、runner selector 或 CI runnable 不得作为 implementation work 本身；若出现在 tasks 文本中，validator 只发 warning，reviewer/preflight 必须判断是否构成 proof/test/evidence-only task。
 
 ## Verification 边界
 

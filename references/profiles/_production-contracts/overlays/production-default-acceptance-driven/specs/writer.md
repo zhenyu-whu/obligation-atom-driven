@@ -1,10 +1,10 @@
-# Default Specs Overlay
+# Default Specs Writer Overlay
 
-- Specs writer 只能读取 `trace/proposal.trace.json` 的 `change-scope-coverage` 作为 scope-reading interface。
-- `trace/specs/**.trace.json` 中出现的所有 `SI-###` 都必须属于 `change-scope-coverage` exact set；default specs 不得出现 `GA-####`。
+本文件只适用于 `production-default-acceptance-driven` 的 `specs-writer` 和 `specs-repair-writer`。
 
 ## 上游输入权威
 
+- Specs writer 只能读取 `trace/proposal.trace.json` 的 `change-scope-coverage` 作为 scope-reading interface。
 - `change-scope-coverage` 是 specs writer 的唯一 SI coverage 权威。每个 normal specs trace row 必须可回溯到其中一条 scope row。
 - `capability` 是 capability 分组 canonical 字段。
 - `artifact-handling` 是 specs eligibility 权威。只有 `spec` 和 `guard` rows 能进入 `spec-delta-register[]`。

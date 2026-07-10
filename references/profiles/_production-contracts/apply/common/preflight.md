@@ -14,6 +14,7 @@ node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "
 
 - Validator hard error 是实现前 `Artifact Consistency Blocker`，必须在启动任何 implementation-worker 前停止。
 - Validator warning 必须纳入 Phase 0 人工/agent preflight 判断，不得静默忽略；Markdown renderer exact output drift 不再是 validator warning 或 hard blocker。
+- Tasks validator warning 中的测试文件或测试 runner 命令只表示语义风险；若 preflight 判定该 checkbox 以 proof/test/evidence 过程替代生产实现工作，必须升级为 `Artifact Consistency Blocker`。
 - Static validator 不替代本文档的 schema-aware preflight；validator pass 后仍需按 apply contract bundle 做人工/agent 审计。
 
 ## Common Index Set
@@ -61,11 +62,11 @@ node openspec/agent-runtime/scripts/validate-production-artifacts.mjs --change "
 - tasks 引用未定义 spec scenario 或 design detail。
 - tasks spec/design/runtime closure 不闭合。
 - required/preserve runtime fact 缺少 verification projection。
-- tasks trace 包含旧 coverage/runtime projection/AC-local proof-preserve 字段或 tasks 旧 `runtime-fact-ids[]`。
+- tasks trace 包含旧 coverage/runtime projection/AC-local proof-preserve 字段、schema source coverage 身份、evidence/apply path 或 tasks 旧 `runtime-fact-ids[]`。
 - Proof Slice `Production Owner` 是复合 owner / owner list。
 - Proof Slice 合并多个独立可失败分支。
 - durable slice placement 非法。
 - non-durable slice 未使用 `N/A` 或缺少 reason。
 - oracle 与 proposal/spec/design/runtime-acceptance 冲突。
 - oracle 引入 source/scope 外行为、要求测试 artifact/process、依赖 implementation detail，或只是检查 evidence、deposit、tasks 矩阵或 OpenSpec artifact 文本结构。
-- tasks/verification trace 使用被禁止的旧测试矩阵字段。
+- tasks/verification trace 使用被禁止的旧测试矩阵字段；tasks warning 指出的测试命令/测试文件若构成 proof/test/evidence-only task，也必须先修订 artifact。

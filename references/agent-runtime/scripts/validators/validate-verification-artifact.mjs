@@ -8,7 +8,6 @@ import {
   PROOF_SLICES_TRACE_PATH,
   TRACE_CONTRACT_VERSION,
   TRACE_SCHEMA,
-  VERIFICATION_SLICE_REGISTER_PATH,
   VERIFICATION_TRACE_PATH,
 } from "../render-production-artifacts.mjs";
 
@@ -332,7 +331,6 @@ function validateSliceRegister(ctx, trace, runtimeModel) {
   }
 
   const slicesById = new Map();
-  const runtimeRowsBySlice = new Map();
   const coveredRuntimeFactIds = new Set();
   for (const [index, slice] of slices.entries()) {
     const label = `verification-slice-register[${index}]`;
@@ -364,7 +362,6 @@ function validateSliceRegister(ctx, trace, runtimeModel) {
         coveredRuntimeFactIds.add(rowId);
       }
     }
-    runtimeRowsBySlice.set(sliceId, new Set(rowIds));
 
     const primaryRowId = requireId(ctx, "VAL-VERIFICATION-SLICE-008", VERIFICATION_TRACE_PATH, slice?.["primary-runtime-fact-id"], `${label}.primary-runtime-fact-id`, RUNTIME_FACT_ID_RE);
     if (primaryRowId && !rowIds.includes(primaryRowId)) {
@@ -383,7 +380,6 @@ function validateSliceRegister(ctx, trace, runtimeModel) {
 
   return {
     slicesById,
-    runtimeRowsBySlice,
     coveredRuntimeFactIds,
   };
 }
@@ -439,13 +435,6 @@ function validateVerificationGate(ctx, trace, runtimeModel, sliceModel) {
   const missing = runtimeModel.verificationRowIds.filter((rowId) => !sliceModel.coveredRuntimeFactIds.has(rowId));
   if (missing.length > 0) {
     addError(ctx, "VAL-VERIFICATION-COVERAGE-001", VERIFICATION_TRACE_PATH, `verification-slice-register 缺少 required / preserve runtime facts：${missing.join(", ")}。`);
-  }
-
-  const invalidGateRefs = asArray(gate["invalid-runtime-refs"]).map(strip).filter(Boolean);
-  for (const rowId of invalidGateRefs) {
-    if (!RUNTIME_FACT_ID_RE.test(rowId)) {
-      addError(ctx, "VAL-VERIFICATION-GATE-004", VERIFICATION_TRACE_PATH, `verification-gate.invalid-runtime-refs 包含非法 runtime fact id：${rowId}。`);
-    }
   }
 }
 

@@ -122,33 +122,29 @@ function buildExpectedSpecsModel(ctx, proposalTrace) {
   if (schemaName === DEFAULT_SCHEMA) {
     return buildDefaultExpectedSpecsModel(ctx, proposalTrace);
   }
-  addError(ctx, "VAL-SPECS-PROPOSAL-001", PROPOSAL_TRACE_PATH, `不支持的 proposal schema-name：${schemaName || "(empty)"}`);
+  addWarning(ctx, "VAL-SPECS-UPSTREAM-001", PROPOSAL_TRACE_PATH, `无法从 proposal schema-name 派生 specs 期望集合：${schemaName || "(empty)"}`);
   return null;
 }
 
 function buildObligationExpectedSpecsModel(ctx, proposalTrace) {
-  const register = requireArray(
-    ctx,
-    "VAL-SPECS-PROPOSAL-010",
-    PROPOSAL_TRACE_PATH,
-    proposalTrace["change-ga-register"],
-    "change-ga-register",
-  );
+  const register = readUpstreamArray(ctx, proposalTrace["change-ga-register"], "change-ga-register");
+  if (!register) return null;
+
   const rows = [];
   const rowsById = new Map();
   for (const [index, row] of register.entries()) {
     const specRoutes = getArtifactRoutes(row, "specs");
     if (specRoutes.length === 0) continue;
 
-    const id = requireId(ctx, "VAL-SPECS-PROPOSAL-011", PROPOSAL_TRACE_PATH, row?.["ga-id"], `change-ga-register[${index}].ga-id`, GA_ID_RE);
+    const id = readUpstreamId(ctx, row?.["ga-id"], `change-ga-register[${index}].ga-id`, GA_ID_RE);
     if (!id) continue;
     if (rowsById.has(id)) {
-      addError(ctx, "VAL-SPECS-PROPOSAL-012", PROPOSAL_TRACE_PATH, `change-ga-register ga-id 重复：${id}`);
+      addWarning(ctx, "VAL-SPECS-UPSTREAM-003", PROPOSAL_TRACE_PATH, `change-ga-register ga-id 重复；specs 期望集合使用首个有效 row：${id}`);
       continue;
     }
     const role = specRoutes[0]?.role;
     if (specRoutes.length > 1) {
-      addError(ctx, "VAL-SPECS-PROPOSAL-013", PROPOSAL_TRACE_PATH, `${id} 只能有一个 specs artifact route。`);
+      addWarning(ctx, "VAL-SPECS-UPSTREAM-004", PROPOSAL_TRACE_PATH, `${id} 存在多个 specs artifact route；specs 期望集合使用首个 route。`);
     }
     const routedRow = { ...row, "routing-role": role };
     rows.push(routedRow);
@@ -161,7 +157,6 @@ function buildObligationExpectedSpecsModel(ctx, proposalTrace) {
     idRegex: GA_ID_RE,
     capabilityField: "capability",
     projectionField: "routing-role",
-    requirementProjection: "spec-requirement",
     guardProjection: "spec-guard",
     rows,
     rowsById,
@@ -173,23 +168,19 @@ function getArtifactRoutes(row, artifact) {
 }
 
 function buildDefaultExpectedSpecsModel(ctx, proposalTrace) {
-  const scopeCoverage = requireArray(
-    ctx,
-    "VAL-SPECS-PROPOSAL-020",
-    PROPOSAL_TRACE_PATH,
-    proposalTrace["change-scope-coverage"],
-    "change-scope-coverage",
-  );
+  const scopeCoverage = readUpstreamArray(ctx, proposalTrace["change-scope-coverage"], "change-scope-coverage");
+  if (!scopeCoverage) return null;
+
   const rows = [];
   const rowsById = new Map();
   for (const [index, row] of scopeCoverage.entries()) {
     const handling = strip(row?.["artifact-handling"]);
     if (!DEFAULT_SPEC_HANDLINGS.has(handling)) continue;
 
-    const id = requireId(ctx, "VAL-SPECS-PROPOSAL-021", PROPOSAL_TRACE_PATH, row?.["scope-item-id"], `change-scope-coverage[${index}].scope-item-id`, SI_ID_RE);
+    const id = readUpstreamId(ctx, row?.["scope-item-id"], `change-scope-coverage[${index}].scope-item-id`, SI_ID_RE);
     if (!id) continue;
     if (rowsById.has(id)) {
-      addError(ctx, "VAL-SPECS-PROPOSAL-022", PROPOSAL_TRACE_PATH, `change-scope-coverage scope-item-id 重复：${id}`);
+      addWarning(ctx, "VAL-SPECS-UPSTREAM-003", PROPOSAL_TRACE_PATH, `change-scope-coverage scope-item-id 重复；specs 期望集合使用首个有效 row：${id}`);
       continue;
     }
     rows.push(row);
@@ -202,11 +193,29 @@ function buildDefaultExpectedSpecsModel(ctx, proposalTrace) {
     idRegex: SI_ID_RE,
     capabilityField: "capability",
     projectionField: "artifact-handling",
-    requirementProjection: "spec",
     guardProjection: "guard",
     rows,
     rowsById,
   });
+}
+
+function readUpstreamArray(ctx, value, label) {
+  if (Array.isArray(value)) return value;
+  addWarning(ctx, "VAL-SPECS-UPSTREAM-002", PROPOSAL_TRACE_PATH, `无法从 proposal.${label} 派生 specs 期望集合；该结构问题由 proposal validator 负责。`);
+  return null;
+}
+
+function readUpstreamId(ctx, value, label, regex) {
+  const id = strip(value);
+  if (!id) {
+    addWarning(ctx, "VAL-SPECS-UPSTREAM-005", PROPOSAL_TRACE_PATH, `跳过缺少 ${label} 的 proposal row；该结构问题由 proposal validator 负责。`);
+    return "";
+  }
+  if (!regex.test(id)) {
+    addWarning(ctx, "VAL-SPECS-UPSTREAM-006", PROPOSAL_TRACE_PATH, `跳过包含非法 ${label} 的 proposal row：${id}；该结构问题由 proposal validator 负责。`);
+    return "";
+  }
+  return id;
 }
 
 function buildExpectedModel(config) {
@@ -400,7 +409,6 @@ function validateExistingSpecState(ctx, trace, tracePath) {
 
 function validateSpecDeltaRegister(ctx, register, group, expected, existingState, tracePath) {
   const actualSourceIds = [];
-  const anchors = new Set();
   const registerRows = [];
   const seenDeltaIds = new Set();
   const existingStatus = strip(existingState?.status);
@@ -466,7 +474,6 @@ function validateSpecDeltaRegister(ctx, register, group, expected, existingState
         );
         actualSourceIds.push(...scenarioSourceIds);
         const pointer = `#/spec-delta-register/${index}/scenarios/${scenarioIndex}`;
-        anchors.add(anchorKey(requirement, scenarioName));
         registerRows.push({ deltaOp, requirement, scenario: scenarioName, pointer });
       }
     }
@@ -496,7 +503,6 @@ function validateSpecDeltaRegister(ctx, register, group, expected, existingState
 
   return {
     actualSourceIds,
-    anchors,
     registerRows,
   };
 }
@@ -745,11 +751,6 @@ function collectObjectKeys(value, keys = []) {
     collectObjectKeys(child, keys);
   }
   return keys;
-}
-
-function anchorKey(requirement, scenario) {
-  if (!requirement || !scenario) return "\u0000";
-  return `${requirement}\u0000${scenario}`;
 }
 
 function addError(ctx, ruleId, file, message) {

@@ -1,10 +1,10 @@
-# Obligation Specs Overlay
+# Obligation Specs Writer Overlay
 
-- Specs writer 只能读取 `trace/proposal.trace.json` 作为 proposal 语义输入；trace-backed `GA-####` source 只能来自 `change-ga-register` rows，并按这些 rows 的 `artifact-routes[]` 处理。
-- `trace/specs/**.trace.json` 中出现的所有 `GA-####` 都必须属于 `change-ga-register` direct set；不得传播 `non-direct-boundary-ref` 的 `GA-####`。
+本文件只适用于 `production-obligation-atom-driven` 的 `specs-writer` 和 `specs-repair-writer`。
 
 ## 上游输入权威
 
+- Specs writer 只能读取 `trace/proposal.trace.json` 作为 proposal 语义输入；trace-backed `GA-####` source 只能来自 `change-ga-register` rows，并按这些 rows 的 `artifact-routes[]` 处理。
 - `change-ga-register` 是 specs writer 的唯一 GA coverage 权威。每个 normal specs trace row 必须可回溯到其中一条 direct row。
 - `capability` 是 capability 分组 canonical 字段。
 - `artifact-routes[]` 是 specs eligibility 权威。只有存在 `artifact == "specs"` 且 `role` 为 `spec-requirement` 或 `spec-guard` 的 rows 能进入 `spec-delta-register[]`。
